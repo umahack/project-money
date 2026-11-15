@@ -11,6 +11,7 @@ export default function Admin() {
   const me = getUser();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
+  const [feedback, setFeedback] = useState([]);
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState('');
   const [err, setErr] = useState('');
@@ -19,11 +20,22 @@ export default function Admin() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [s, u] = await Promise.all([api('/admin/stats'), api('/admin/users')]);
+      const [s, u, f] = await Promise.all([
+        api('/admin/stats'),
+        api('/admin/users'),
+        api('/admin/feedback'),
+      ]);
       setStats(s);
       setUsers(u.users);
+      setFeedback(f.feedback);
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
+  }
+
+  async function deleteFeedback(id) {
+    if (!confirm('Delete this feedback entry?')) return;
+    await api(`/admin/feedback/${id}`, { method: 'DELETE' });
+    await loadAll();
   }
 
   async function openUser(id) {
@@ -105,13 +117,15 @@ export default function Admin() {
       {err && <div className="text-rose-300">{err}</div>}
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           <Stat label="Users" value={stats.users} />
           <Stat label="Admins" value={stats.admins} />
           <Stat label="Trips" value={stats.trips} />
           <Stat label="EMIs" value={stats.emis} />
           <Stat label="Total Income" value={money(stats.total_income)} />
           <Stat label="Total EMI" value={money(stats.total_emi)} />
+          <Stat label="Feedback" value={stats.feedback_count ?? 0} />
+          <Stat label="Avg Rating" value={stats.avg_rating ? `${stats.avg_rating} ★` : '—'} />
         </div>
       )}
 
@@ -147,7 +161,7 @@ export default function Admin() {
           </ul>
         </motion.div>
 
-        <motion.div className="card lg:col-span-3" whileHover={{ y: -2 }}>
+        <motion.div className="card lg:col-span-3 space-y-6" whileHover={{ y: -2 }}>
           {selected ? (
             <UserDetail
               data={selected}
@@ -163,6 +177,34 @@ export default function Admin() {
           )}
         </motion.div>
       </div>
+
+      <motion.div className="card" whileHover={{ y: -2 }}>
+        <h2 className="font-semibold text-white mb-3">User feedback</h2>
+        {feedback.length ? (
+          <ul className="divide-y divide-white/10">
+            {feedback.map((f) => (
+              <li key={f.id} className="py-3 flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber">{'★'.repeat(f.rating)}<span className="text-white/30">{'★'.repeat(5 - f.rating)}</span></span>
+                    <span className="text-white/70 text-sm">{f.email || 'anonymous'}</span>
+                    <span className="text-white/50 text-xs">· {f.created_at}</span>
+                  </div>
+                  {f.message && <div className="text-white mt-1 whitespace-pre-wrap">{f.message}</div>}
+                </div>
+                <button
+                  onClick={() => deleteFeedback(f.id)}
+                  className="text-rose-300 hover:text-white transition text-sm"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-white/70 text-sm">No feedback yet.</div>
+        )}
+      </motion.div>
     </div>
   );
 }

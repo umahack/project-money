@@ -80,6 +80,20 @@ router.delete('/trips/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+router.get('/feedback', (_req, res) => {
+  const rows = db
+    .prepare('SELECT id, user_id, email, rating, message, created_at FROM feedback ORDER BY id DESC LIMIT 500')
+    .all();
+  res.json({ feedback: rows });
+});
+
+router.delete('/feedback/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const info = db.prepare('DELETE FROM feedback WHERE id = ?').run(id);
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
 router.get('/stats', (_req, res) => {
   const stats = {
     users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -88,6 +102,9 @@ router.get('/stats', (_req, res) => {
     emis: db.prepare('SELECT COUNT(*) AS c FROM emis').get().c,
     total_income: db.prepare('SELECT COALESCE(SUM(amount),0) AS s FROM salary_entries').get().s,
     total_emi: db.prepare('SELECT COALESCE(SUM(amount),0) AS s FROM emis').get().s,
+    feedback_count: db.prepare('SELECT COUNT(*) AS c FROM feedback').get().c,
+    avg_rating:
+      db.prepare('SELECT ROUND(AVG(rating), 2) AS a FROM feedback').get().a ?? null,
   };
   res.json(stats);
 });

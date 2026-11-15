@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { api, getUser } from '../api/client.js';
+import Toast from '../components/Toast.jsx';
 
 const CATS = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'];
 const COLORS = ['#4ade80', '#a78bfa', '#fbbf24', '#fb7185', '#60a5fa', '#f472b6'];
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const [emis, setEmis] = useState([]);
   const [em, setEm] = useState({ label: '', amount: '', category: 'EMI' });
   const [err, setErr] = useState('');
+  const [toast, setToast] = useState('');
 
   async function load() {
     const [s, e, p] = await Promise.all([
@@ -30,6 +32,15 @@ export default function Dashboard() {
     setPlan(p);
   }
   useEffect(() => { load().catch((e) => setErr(e.message)); }, []);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('pm_feedback_thanks') === '1') {
+        setToast(`Welcome back, ${user?.name?.split(' ')[0] || 'friend'} — thanks for the feedback last time!`);
+        localStorage.removeItem('pm_feedback_thanks');
+      }
+    } catch {}
+  }, []);
 
   async function saveSalary(e) {
     e.preventDefault();
@@ -62,6 +73,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <Toast message={toast} onClose={() => setToast('')} />
       <motion.div
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
         className="card flex flex-wrap items-center justify-between gap-4"

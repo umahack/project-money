@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getToken, getUser, logout } from './api/client.js';
@@ -8,6 +9,7 @@ import Trips from './pages/Trips.jsx';
 import TripDetail from './pages/TripDetail.jsx';
 import Plan from './pages/Plan.jsx';
 import Admin from './pages/Admin.jsx';
+import FeedbackModal from './components/FeedbackModal.jsx';
 
 function Protected({ children }) {
   if (!getToken()) return <Navigate to="/login" replace />;
@@ -18,31 +20,39 @@ function Nav() {
   const user = getUser();
   const nav = useNavigate();
   const loc = useLocation();
+  const [showFeedback, setShowFeedback] = useState(false);
   if (!user || loc.pathname === '/login' || loc.pathname === '/register') return null;
+
+  const doLogout = () => { logout(); nav('/login'); };
+
   return (
-    <motion.header
-      initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-      className="sticky top-0 z-20 backdrop-blur bg-ink/60 border-b border-white/10"
-    >
-      <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
-        <Link to="/" className="flex items-center gap-2 group">
-          <span className="text-2xl group-hover:animate-float">₹</span>
-          <span className="font-bold tracking-tight bg-gradient-to-r from-mint via-orchid to-amber bg-clip-text text-transparent">
-            Project Money
-          </span>
-        </Link>
-        <nav className="flex items-center gap-1 text-sm">
-          <NavLink to="/">Dashboard</NavLink>
-          <NavLink to="/plan">Plan</NavLink>
-          <NavLink to="/trips">Trips</NavLink>
-          {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
-          <button
-            className="btn-ghost ml-2"
-            onClick={() => { logout(); nav('/login'); }}
-          >Logout</button>
-        </nav>
-      </div>
-    </motion.header>
+    <>
+      <motion.header
+        initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        className="sticky top-0 z-20 backdrop-blur bg-ink/60 border-b border-white/10"
+      >
+        <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
+          <Link to="/" className="flex items-center gap-2 group">
+            <span className="text-2xl group-hover:animate-float">₹</span>
+            <span className="font-bold tracking-tight bg-gradient-to-r from-mint via-orchid to-amber bg-clip-text text-transparent">
+              Project Money
+            </span>
+          </Link>
+          <nav className="flex items-center gap-1 text-sm">
+            <NavLink to="/">Dashboard</NavLink>
+            <NavLink to="/plan">Plan</NavLink>
+            <NavLink to="/trips">Trips</NavLink>
+            {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
+            <button className="btn-ghost ml-2" onClick={() => setShowFeedback(true)}>Logout</button>
+          </nav>
+        </div>
+      </motion.header>
+      <FeedbackModal
+        open={showFeedback}
+        onClose={() => { setShowFeedback(false); doLogout(); }}
+        onSubmitted={() => { setShowFeedback(false); doLogout(); }}
+      />
+    </>
   );
 }
 
@@ -93,7 +103,7 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-      <footer className="text-center text-xs text-white/40 py-6">
+      <footer className="text-center text-xs text-white/70 py-6">
         Built with care · Your data stays on your machine.
       </footer>
     </div>
