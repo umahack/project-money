@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  color: #f4f4f5;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(167,139,250,0.25), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(74,222,128,0.18), transparent 60%),
+    radial-gradient(800px 500px at 50% 110%, rgba(251,113,133,0.18), transparent 60%),
+    #0a0f1c;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white/5 backdrop-blur border border-white/10 shadow-glow p-5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-semibold
+      transition-all duration-200 active:scale-95;
+  }
+  .btn-primary {
+    @apply btn text-ink;
+    background: linear-gradient(120deg, #4ade80, #a78bfa, #fbbf24);
+    background-size: 200% 200%;
+    animation: shimmer 6s linear infinite;
+  }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-ghost { @apply btn bg-white/5 hover:bg-white/10 border border-white/10; }
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white
+      focus:outline-none focus:ring-2 focus:ring-orchid/70 focus:border-transparent
+      placeholder-white/50 transition;
+  }
+  .input::placeholder { color: rgba(255,255,255,0.55); }
+  .label { @apply block text-sm font-medium text-white/85 mb-1; }
+  .pill { @apply inline-flex px-2.5 py-0.5 text-xs rounded-full bg-white/15 border border-white/20 text-white; }
+  .link { @apply text-orchid hover:text-mint transition underline-offset-2 hover:underline; }
+}
+
+.scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 8px; }
+
+.bg-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+select.input { color: #ffffff; }
+select.input option { color: #0a0f1c; background: #ffffff; }
+
+/* Ensure muted utility classes still clear WCAG AA on this background */
+.text-white\/40 { color: rgba(255,255,255,0.65) !important; }
+.text-white\/50 { color: rgba(255,255,255,0.72) !important; }
+.text-white\/60 { color: rgba(255,255,255,0.78) !important; }
