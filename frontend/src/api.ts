@@ -41,7 +41,7 @@ export function clearAuth(): void {
 }
 
 interface Opts {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   auth?: boolean;
 }
@@ -86,5 +86,6 @@ export const api = {
   get: <T>(p: string) => request<T>(p),
   post: <T>(p: string, body?: unknown, auth = true) => request<T>(p, { method: 'POST', body: body ?? {}, auth }),
   put: <T>(p: string, body?: unknown) => request<T>(p, { method: 'PUT', body: body ?? {} }),
+  patch: <T>(p: string, body?: unknown) => request<T>(p, { method: 'PATCH', body: body ?? {} }),
   del: <T>(p: string) => request<T>(p, { method: 'DELETE' }),
 };

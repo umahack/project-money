@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { adminEmails } from '../middleware/admin.js';
+import { authRequired } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -76,6 +77,44 @@ router.post(
     const is_admin = row.is_admin || (await promoteIfConfigured(row.id, row.email));
     const user = { id: row.id, email: row.email, name: row.name, is_admin: !!is_admin };
     res.json({ token: sign(user), user });
+  }
+);
+
+// ---------- Password change (authenticated) ----------
+const pwChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password-change attempts, slow down.' },
+});
+
+router.post(
+  '/password',
+  authRequired,
+  pwChangeLimiter,
+  [
+    body('currentPassword').isString().isLength({ min: 1 }),
+    body('newPassword')
+      .isString()
+      .isLength({ min: 8, max: 128 })
+      .withMessage('New password must be at least 8 characters'),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const { currentPassword, newPassword } = req.body;
+    if (currentPassword === newPassword)
+      return res.status(400).json({ error: 'New password must be different from the current one.' });
+    const row = await db
+      .prepare('SELECT password_hash FROM users WHERE id = ?')
+      .get(req.user.id);
+    if (!row) return res.status(401).json({ error: 'Session expired' });
+    const ok = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user.id);
+    res.json({ ok: true });
   }
 );
 

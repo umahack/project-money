@@ -24,15 +24,23 @@ interface ExpensesResponse {
 export function SpendingTracker({ disposable, onChange }: { disposable: number; onChange?: () => void }) {
   const { toast } = useToast();
   const [data, setData] = useState<ExpensesResponse | null>(null);
+  const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('Food');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<number | null>(null);
+  const [editingBudget, setEditingBudget] = useState<string | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
-      setData(await api.get<ExpensesResponse>('/finance/expenses'));
+      const [exp, bud] = await Promise.all([
+        api.get<ExpensesResponse>('/finance/expenses'),
+        api.get<{ budgets: Record<string, number> }>('/finance/budgets'),
+      ]);
+      setData(exp);
+      setBudgets(bud.budgets);
     } catch (e) {
       toast('err', errText(e));
     }
@@ -41,6 +49,24 @@ export function SpendingTracker({ disposable, onChange }: { disposable: number; 
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function saveBudget(cat: string) {
+    const n = parseAmount(budgetDraft);
+    if (n == null || n < 0) return toast('err', 'Enter a valid amount');
+    try {
+      if (n === 0) {
+        await api.del(`/finance/budgets/${cat}`);
+      } else {
+        await api.put(`/finance/budgets/${cat}`, { amount: n });
+      }
+      setEditingBudget(null);
+      setBudgetDraft('');
+      await load();
+      toast('ok', n === 0 ? `Removed ${cat} budget` : `Set ${cat} budget to ${inr(n)}`);
+    } catch (err) {
+      toast('err', errText(err));
+    }
+  }
 
   const total = useMemo(() => data?.expenses.reduce((s, e) => s + e.amount, 0) ?? 0, [data]);
   const byCategory = useMemo(() => {
@@ -146,15 +172,58 @@ export function SpendingTracker({ disposable, onChange }: { disposable: number; 
         </button>
       </form>
 
-      {byCategory.length > 0 && (
+      {(byCategory.length > 0 || Object.keys(budgets).length > 0) && (
         <ul className="list" style={{ marginTop: '0.8rem' }}>
-          {byCategory.map(([cat, sum]) => (
-            <li key={cat} className="list-item">
-              <span className="pill info">{cat}</span>
-              <div className="grow" />
-              <b className="mono">{inr(sum)}</b>
-            </li>
-          ))}
+          {Array.from(new Set([...byCategory.map(([c]) => c), ...Object.keys(budgets)])).map((cat) => {
+            const sum = byCategory.find(([c]) => c === cat)?.[1] ?? 0;
+            const budget = budgets[cat] ?? 0;
+            const over = budget > 0 && sum > budget;
+            const isEditing = editingBudget === cat;
+            return (
+              <li key={cat} className="list-item" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
+                <span className="pill info">{cat}</span>
+                <div className="grow">
+                  <span className="cat-budget-inline">
+                    {budget > 0 ? (
+                      <>
+                        {inr(sum)} / {inr(budget)}
+                        {over ? <span className="over">· over by {inr(sum - budget)}</span>
+                          : <span className="under">· {inr(budget - sum)} left</span>}
+                      </>
+                    ) : (
+                      <>No budget set</>
+                    )}
+                  </span>
+                </div>
+                {isEditing ? (
+                  <div className="row-sm" style={{ gap: '0.3rem' }}>
+                    <input
+                      value={budgetDraft}
+                      onChange={(e) => setBudgetDraft(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="0 = remove"
+                      style={{ width: 110 }}
+                      autoFocus
+                    />
+                    <button className="btn sm" onClick={() => void saveBudget(cat)}>Save</button>
+                    <button className="btn sm ghost" onClick={() => { setEditingBudget(null); setBudgetDraft(''); }}>Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <b className="mono">{inr(sum)}</b>
+                    <button
+                      className="btn sm ghost"
+                      onClick={() => { setEditingBudget(cat); setBudgetDraft(budget > 0 ? String(budget) : ''); }}
+                      title={budget > 0 ? 'Edit budget' : 'Set budget'}
+                      aria-label={budget > 0 ? 'Edit budget' : 'Set budget'}
+                    >
+                      {budget > 0 ? '✏️' : '➕'}
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

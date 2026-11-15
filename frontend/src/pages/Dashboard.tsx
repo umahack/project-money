@@ -9,6 +9,9 @@ import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
 import { SpendingTracker } from '../components/SpendingTracker';
+import { MonthlyHistoryChart } from '../components/MonthlyHistoryChart';
+import { SavingsGoals } from '../components/SavingsGoals';
+import { ChangePassword } from '../components/ChangePassword';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -250,6 +253,9 @@ export function Dashboard() {
       </div>
 
       <SpendingTracker disposable={plan.afterFixed} onChange={() => void load()} />
+      <MonthlyHistoryChart />
+      <SavingsGoals />
+      <ChangePassword />
     </>
   );
 }

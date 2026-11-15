@@ -1,0 +1,26 @@
+{
+  "name": "Project Money",
+  "short_name": "Project Money",
+  "description": "Plan your salary, track spending, split trips. Built by Umakanth.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0b1a",
+  "theme_color": "#0b0b1a",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ]
+}

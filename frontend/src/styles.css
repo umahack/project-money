@@ -459,3 +459,27 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   .bottom-tabs { gap: 0; }
   .modal { padding: 1.1rem; }
 }
+
+/* ---- Monthly history chart ---- */
+.history-chart {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  height: 160px;
+  margin: 0.6rem 0 0.2rem;
+}
+.hc-col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+.hc-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255,255,255,0.03); border-radius: 6px; overflow: hidden; }
+.hc-bar { width: 100%; border-radius: 6px 6px 0 0; }
+.hc-label { font-size: 0.65rem; color: var(--muted); font-variant: tabular-nums; }
+@media (max-width: 520px) {
+  .history-chart { gap: 3px; height: 120px; }
+  .hc-label { font-size: 0.55rem; }
+}
+
+/* ---- Goal row & budget inline ---- */
+.goal-progress-track { height: 8px; border-radius: 8px; background: rgba(255,255,255,0.06); margin-top: 6px; overflow: hidden; }
+.goal-progress-fill { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #7c6cff, #4ade80, #fbbf24); }
+.cat-budget-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); }
+.cat-budget-inline .over { color: var(--danger); font-weight: 700; }
+.cat-budget-inline .under { color: var(--mint, #4ade80); font-weight: 600; }

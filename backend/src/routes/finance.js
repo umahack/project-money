@@ -168,4 +168,155 @@ router.delete('/expenses/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Monthly history (last 12 months, including months with no spend) ----------
+router.get('/history', async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT month, category, COALESCE(SUM(amount), 0) AS total
+         FROM expense_log
+        WHERE user_id = ?
+        GROUP BY month, category
+        ORDER BY month ASC`
+    )
+    .all(req.user.id);
+  // Fill the trailing 12-month window so the chart always shows a stable X-axis.
+  const now = new Date();
+  const monthKeys = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const totalsByMonth = new Map(monthKeys.map((m) => [m, { total: 0, byCategory: {} }]));
+  for (const r of rows) {
+    const bucket = totalsByMonth.get(r.month);
+    if (!bucket) continue;
+    bucket.byCategory[r.category] = Number(r.total);
+    bucket.total += Number(r.total);
+  }
+  res.json({
+    months: monthKeys.map((m) => ({ month: m, ...totalsByMonth.get(m) })),
+  });
+});
+
+// ---------- Category budgets ----------
+router.get('/budgets', async (req, res) => {
+  const rows = await db
+    .prepare('SELECT category, amount FROM category_budgets WHERE user_id = ? ORDER BY category')
+    .all(req.user.id);
+  res.json({ budgets: Object.fromEntries(rows.map((r) => [r.category, Number(r.amount)])) });
+});
+
+router.put(
+  '/budgets/:category',
+  [body('amount').isFloat({ min: 0, max: 1e12 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const category = String(req.params.category);
+    if (!EXPENSE_CATEGORIES.includes(category))
+      return res.status(400).json({ error: 'Invalid category' });
+    await db
+      .prepare(
+        `INSERT INTO category_budgets (user_id, category, amount) VALUES (?, ?, ?)
+         ON CONFLICT(user_id, category) DO UPDATE
+           SET amount = excluded.amount, updated_at = CURRENT_TIMESTAMP`
+      )
+      .run(req.user.id, category, Number(req.body.amount));
+    res.json({ ok: true, category, amount: Number(req.body.amount) });
+  }
+);
+
+router.delete('/budgets/:category', async (req, res) => {
+  const info = await db
+    .prepare('DELETE FROM category_budgets WHERE user_id = ? AND category = ?')
+    .run(req.user.id, String(req.params.category));
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+// ---------- Savings goals ----------
+router.get('/goals', async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT id, name, target_amount, saved_amount, target_date, created_at, updated_at
+         FROM savings_goals
+        WHERE user_id = ?
+        ORDER BY id DESC`
+    )
+    .all(req.user.id);
+  res.json({ goals: rows });
+});
+
+router.post(
+  '/goals',
+  [
+    body('name').isString().trim().isLength({ min: 1, max: 60 }),
+    body('targetAmount').isFloat({ gt: 0, max: 1e12 }),
+    body('targetDate').optional({ nullable: true }).matches(/^\d{4}-\d{2}-\d{2}$/),
+    body('savedAmount').optional().isFloat({ min: 0 }),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const info = await db
+      .prepare(
+        `INSERT INTO savings_goals (user_id, name, target_amount, saved_amount, target_date)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(
+        req.user.id,
+        String(req.body.name).trim(),
+        Number(req.body.targetAmount),
+        Number(req.body.savedAmount || 0),
+        req.body.targetDate || null
+      );
+    res.json({ id: info.lastInsertRowid });
+  }
+);
+
+router.patch(
+  '/goals/:id',
+  [
+    body('name').optional().isString().trim().isLength({ min: 1, max: 60 }),
+    body('targetAmount').optional().isFloat({ gt: 0, max: 1e12 }),
+    body('targetDate').optional({ nullable: true }),
+    body('addToSaved').optional().isFloat(),
+    body('setSaved').optional().isFloat({ min: 0 }),
+  ],
+  async (req, res) => {
+    const id = Number(req.params.id);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const existing = await db
+      .prepare('SELECT id, saved_amount FROM savings_goals WHERE id = ? AND user_id = ?')
+      .get(id, req.user.id);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const sets = [];
+    const args = [];
+    if (req.body.name !== undefined) { sets.push('name = ?'); args.push(String(req.body.name).trim()); }
+    if (req.body.targetAmount !== undefined) { sets.push('target_amount = ?'); args.push(Number(req.body.targetAmount)); }
+    if (req.body.targetDate !== undefined) { sets.push('target_date = ?'); args.push(req.body.targetDate || null); }
+    if (req.body.setSaved !== undefined) { sets.push('saved_amount = ?'); args.push(Number(req.body.setSaved)); }
+    if (req.body.addToSaved !== undefined) {
+      const next = Math.max(0, Number(existing.saved_amount) + Number(req.body.addToSaved));
+      sets.push('saved_amount = ?');
+      args.push(next);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+    sets.push('updated_at = CURRENT_TIMESTAMP');
+    args.push(id, req.user.id);
+    await db.prepare(`UPDATE savings_goals SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...args);
+    res.json({ ok: true });
+  }
+);
+
+router.delete('/goals/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const info = await db
+    .prepare('DELETE FROM savings_goals WHERE id = ? AND user_id = ?')
+    .run(id, req.user.id);
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
 export default router;
