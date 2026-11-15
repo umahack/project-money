@@ -1,259 +1,401 @@
 # Project Money — Handoff Notes
 
-A summary for the next AI agent (or human teammate) picking up this project.
+Last updated: 2026-11-16 · HEAD: `7c61c7c` on `main`
+
+This document is the single source of truth for anyone (human or AI) picking
+the project up. Read it alongside the repo.
 
 ---
 
 ## What this is
 
-A full-stack web app for personal budgeting + shared trip-expense splitting.
-Hosted at **https://project-money-web.onrender.com**, source at
-**https://github.com/umahack/project-money**.
+A full-stack personal-finance web app:
 
-**Owner:** umahack (GitHub). Primary admin email seeded in `ADMIN_EMAILS`.
+- **Plan** a monthly salary into 50 % needs / 30 % wants / 20 % save after
+  fixed EMIs.
+- **Track** daily spending with per-category budgets and smart insights.
+- **Save** towards named goals with live progress.
+- **Split** trips Splitwise-style, invite registered friends, share a
+  read-only link with anyone.
+
+Hosted at **https://project-money-web.onrender.com** (static) + API at
+**https://project-money-api.onrender.com**. Source at
+**https://github.com/umahack/project-money**. Owner: `umahack`. Primary
+admin via `ADMIN_EMAILS` env var — currently `admin@pord.com`.
 
 ---
 
 ## Tech stack
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Frontend (**UI v2**, current) | React 18 + Vite 5 + TypeScript + plain CSS + Framer Motion + React Router | "Midnight vault" glass theme, light/dark toggle, bottom tab bar on phones, Arcade games. No Tailwind, no Recharts, fonts self-hosted. See **UI v2 and rollback** below |
-| Frontend (UI v1, classic) | React 18 + Vite + Tailwind + Recharts | Kept in `frontend-v1/` and git tag `ui-v1-classic` for rollback |
-| Backend | Node 20 + Express 4 (ESM) | `express-async-errors` patches async middleware |
-| Database | **Turso (libsql)** | SQLite-compatible, hosted at `project-money-umahack.aws-ap-south-1.turso.io` |
-| Auth | JWT (7-day) + bcrypt (cost 12) | Tokens in browser `sessionStorage` |
-| Hosting | Render.com | Blueprint via `render.yaml` — one web service (Node) + one static site |
+| Layer | Choice |
+|---|---|
+| Frontend | React 18 + Vite 8 + TypeScript + Framer Motion + Recharts |
+| Backend | Node 20 + Express 4 (ESM) + `express-async-errors` |
+| DB | **Turso (libsql)** — SQLite-compatible, serverless, free tier |
+| Auth | HS256 JWT (30-min expiry) + bcrypt (cost 12) |
+| Hosting | Render.com — one web service (Node) + one static site; `render.yaml` blueprint |
 
-The DB client has a thin adapter (`backend/src/db/index.js`) that mimics
-`better-sqlite3`'s `prepare(sql).get/all/run` API over libsql so route code
-stays readable. All DB calls are **async** — `await db.prepare(...).run(...)`.
+**DB adapter** (`backend/src/db/index.js`) wraps `@libsql/client` with a
+`prepare().get/all/run` shape so the route code reads like better-sqlite3
+but every call is async.
 
 ---
 
-## UI v2 and rollback
+## Current feature list
 
-The whole frontend was redesigned (branch `ui-v2`). **Backend, database and API are unchanged.** The new UI
-talks to the same endpoints and uses the same `sessionStorage` keys (`pm_token`, `pm_user`), so signed-in
-users survive a switch in either direction.
+### User-facing
+- **Auth** — register, login, 30-min JWT session, change password, edit
+  profile (name + email), per-account 5-fail lockout.
+- **Device management** — only one session active per account; new login
+  revokes the old with a specific 401 message. Devices panel in Settings
+  with per-device sign-out.
+- **Home** — enter salary + fixed EMIs → auto 50/30/20 donut + insights +
+  recommendations.
+- **Spending** — daily log, inline category budgets, 12-month history bar
+  chart, smart insights (MoM delta, weekday pattern, category spike).
+- **Plan** — line-by-line expense generator by category with a 6-month
+  emergency-fund target.
+- **Recurring** — Netflix / rent / gym; backend materializes them into
+  `expense_log` on the configured day of month.
+- **Goals** — savings goals with target amount, target date,
+  contributions (positive or negative), progress bar.
+- **Trips** — budget + members + Splitwise-style settle-up; invite
+  registered friends by email; public read-only share links; TripDetail
+  is a 4-tab layout (Expenses · Balances · People · Share).
+- **Settings** — Profile · Devices · Custom categories · Change password
+  · Export CSV.
+- **Feedback** — logout-time modal with 5-star rating + optional message;
+  thank-you toast on next login.
+- **Onboarding** — 5-step first-visit modal; flag in localStorage.
+- **PWA** — installable with manifest + maskable SVG icon.
+- **Theme** — auto-follows OS `prefers-color-scheme` on first visit; manual
+  toggle overrides and persists.
+- **Landing preview** — on `/login`, a gradient hero + feature grid +
+  testimonials, so visitors understand the app before signing up.
+- **Session warning** — toast appears 5 min before token expiry with a
+  "Stay signed in" button that calls `/auth/refresh`.
+- **429 UX** — rate-limit errors show "Try again in N seconds" using the
+  `Retry-After` header.
 
-### Switch back to the classic UI (any of these)
-1. **Render, no code change to the app:** in `render.yaml` set the `project-money-web` service
-   `rootDir: frontend-v1` (it was `frontend`), commit, push, then **Clear build cache & deploy** on the web
-   service. `frontend-v1/` is the complete old UI and builds on its own (`npm install && npm run build`).
-2. **Git:** `git checkout ui-v1-classic` (tag on the last commit before the redesign) or
-   `git revert` the v2 commit(s) on `main`.
-3. Return to v2 any time: set `rootDir: frontend` again, or `git checkout ui-v2`.
-
-### What each old page became
-| Old page | v2 page | Notes |
-|---|---|---|
-| Login / Register | `/login`, `/register` (`AuthPage.tsx`) | Same routes, show/hide password, password checklist, friendly errors |
-| Dashboard | Home `/` | Salary, EMI CRUD, donut, health, daily spend, recommendations. Recharts replaced by an SVG donut |
-| Plan | `/plan` | Same line-by-line 50/30/20 generator plus emergency-fund target |
-| Trips / TripDetail | `/trips`, `/trips/:id` | Equal or custom split, balances, settle-up, "Mark paid", "Add me" |
-| Admin | `/admin` | Same actions; `prompt()`/`confirm()` replaced by dialogs; stats, search, per-user drill-down, feedback |
-| Feedback modal on Logout | Sign out opens the same modal | Closing it (✕, Esc) now keeps you signed in; "Skip & sign out" leaves |
-| (removed earlier) mini-game | `/arcade` | Coin Catcher and Snake Saver. Delete the route/tab in `App.tsx` and `Shell.tsx` if unwanted |
-
-### Behaviours worth knowing (all because the API is unchanged)
-- **Settlements** ("Mark paid") are saved as a normal expense whose description starts with
-  `↔ Settlement: `, paid by the person paying back and split 100% to the receiver. The UI shows them as
-  payments and leaves them out of "Spent". The classic UI shows them as ordinary expenses with that text.
-- Trip members are still **names only**. The email field is a label, not an invite. The owner is not a member
-  until added (v2 has an **Add me** button).
-- The API only returns the **latest** salary entry, so v2 has no month switcher. It shows which month is on file.
-- No API for editing/deleting trips, expenses or members, so v2 has no such buttons.
-- The recommendation list = the API's tips plus extra insights computed in the browser (`insights.ts`).
-  Amounts always come from the API.
-- Production CSP is injected into `index.html` at build time by `vite.config.ts` (`script-src 'self'`, no
-  inline script, no Google Fonts). `connect-src` allows only this site and the exact origin in `VITE_API_BASE`,
-  so **VITE_API_BASE must be set at build time** or the browser will block API calls.
-
-## Features implemented
-
-1. **Auth** — register/login/logout, bcrypt + JWT, timing-equalized login,
-   15-min rate limit on auth, 120 req/min global limit, body size cap 64 KB.
-2. **Dashboard** — monthly salary input, 50/30/20 allocation chart (Recharts
-   pie), EMI/Rent/Utility CRUD, personalized tips.
-3. **Plan page** — line-by-line expense generator (rent, groceries, SIPs,
-   emergency fund target) with per-item tips and a 6-month EF target.
-4. **Trips** — budget + members + weighted splits + Splitwise-style greedy
-   settle-up computed server-side.
-5. **Feedback** — 5-star modal shown on Logout; one-time thank-you toast on
-   next login (flag in localStorage); admin can view + delete.
-6. **Admin dashboard** — users list w/ search, per-user drill-down (salaries,
-   EMIs, trips), override salary, promote/demote admin, delete user / EMI /
-   trip / feedback, aggregate stats including avg feedback rating.
-
-### Admin bootstrap
-Env var `ADMIN_EMAILS` (comma-separated, lowercase) on the API. Any user who
-registers or logs in with a matching email is auto-promoted to admin.
-Currently set to `admin@pord.com` (note the typo — kept intentionally so
-existing registered user still matches).
+### Admin (`/admin` sub-routes)
+- **Overview** — eight stat tiles (users, admins, trips, EMIs, totals,
+  feedback count, avg rating) + nav cards to each section.
+- **Users** — searchable list + drill-down with reset-password, promote /
+  demote, salary override, user delete.
+- **Feedback** — list and delete.
+- **Traffic** — 14-day visitor bar chart (daily salted IP hash — no raw
+  IPs stored), top paths, latest 25 views, append-only audit log of
+  privileged actions.
+- **Broadcast** — write a banner (info / warn / ok) shown at the top of
+  every page for all users and on the public login page.
 
 ---
 
 ## Deployed services (Render)
 
-| Service | URL | What it runs |
+| Service | URL | Notes |
 |---|---|---|
 | `project-money-api` | https://project-money-api.onrender.com | Node Express API |
 | `project-money-web` | https://project-money-web.onrender.com | Vite static build |
 
-Blueprint-managed from `render.yaml`. **Static-site plan field is omitted**
-(Render static sites are always free). Node service is `plan: free`.
-
 ### Required env vars on `project-money-api`
-- `JWT_SECRET` — generated by Render
-- `NODE_ENV = production`
-- `CORS_ORIGIN` — set to the web URL (currently `*` for simplicity)
-- `ADMIN_EMAILS` — admin bootstrap list
-- `TURSO_DATABASE_URL` — `libsql://project-money-umahack.aws-ap-south-1.turso.io`
-- `TURSO_AUTH_TOKEN` — long `eyJ…` JWT from Turso dashboard
+| Key | Notes |
+|---|---|
+| `JWT_SECRET` | Render-generated |
+| `NODE_ENV` | **must be `production`** |
+| `CORS_ORIGIN` | **must be set to a non-wildcard** (e.g. the web URL) — the server refuses to boot in prod otherwise |
+| `ADMIN_EMAILS` | Comma-separated emails promoted to admin on login/register |
+| `TURSO_DATABASE_URL` | `libsql://project-money-umahack.aws-ap-south-1.turso.io` |
+| `TURSO_AUTH_TOKEN` | Long `eyJ…` — rotate periodically |
 
 ### Required env vars on `project-money-web`
-- `VITE_API_BASE = https://project-money-api.onrender.com` (baked at build
-  time; **Clear build cache & deploy** after any change)
+| Key | Notes |
+|---|---|
+| `VITE_API_BASE` | `https://project-money-api.onrender.com` (baked at build time; **Clear build cache & deploy** after changes) |
 
-### Known Render quirks encountered
-- Blueprint services don't always auto-deploy on git push — use **Manual
-  Deploy** on the service page.
-- Free tier does **not** support persistent disks; disk block in
-  `render.yaml` is commented out. Data lives in Turso instead.
+### Known Render quirks
+- Blueprint services don't always auto-deploy on push; use **Manual Deploy**.
 - Static sites bake env vars at build time; must redeploy with cache cleared
-  after an env change.
+  after any env change.
+- Free tier has no persistent disk — SQLite file is ephemeral, so Turso is
+  used for all persistence.
 
 ---
 
 ## Database (Turso)
 
-- **URL:** `libsql://project-money-umahack.aws-ap-south-1.turso.io`
-- **Plan:** Free (9 GB, no expiry)
-- **Dashboard:** https://app.turso.tech — use the **Edit Data** tab to
-  browse rows, or `turso db shell project-money` from CLI.
+- URL: `libsql://project-money-umahack.aws-ap-south-1.turso.io`
+- Plan: Free (9 GB, no expiry)
+- Browse: https://app.turso.tech → database → **Edit Data** tab, or
+  `turso db shell project-money` from CLI.
 
 ### Schema (auto-created on API boot)
-`users (id, email, name, password_hash, is_admin, created_at)`
-`salary_entries (id, user_id, month, amount, created_at, UNIQUE(user_id, month))`
-`emis (id, user_id, label, amount, category, created_at)`
-`trips (id, user_id, name, destination, budget, start_date, end_date, created_at)`
-`trip_members (id, trip_id, name, email, UNIQUE(trip_id, name))`
-`trip_expenses (id, trip_id, payer, description, amount, split_json, created_at)`
-`feedback (id, user_id, email, rating, message, created_at)` — `user_id` can
-be `NULL` (used on FK fallback or if user is deleted)
 
-All child tables have `ON DELETE CASCADE` to users/trips. Idempotent
-migration for the `is_admin` column handles pre-admin DBs.
+**Core**
+```
+users              (id, email UNIQUE, name, password_hash, is_admin,
+                    token_version, created_at)
+salary_entries     (user_id, month, amount; UNIQUE(user_id, month))
+emis               (user_id, label, amount, category)
+```
+
+**Spending**
+```
+expense_log        (user_id, month, category, amount, note, spent_on)
+category_budgets   (user_id, category, amount; UNIQUE)
+recurring_expenses (user_id, label, amount, category, day_of_month,
+                    active, last_logged_month)
+user_categories    (user_id, name; UNIQUE)
+```
+
+**Trips**
+```
+trips          (user_id, name, destination, budget, start_date, end_date,
+                public_token UNIQUE, public_enabled)
+trip_members   (trip_id, user_id FK NULL, name, email; UNIQUE(trip_id, name))
+trip_expenses  (trip_id, payer, description, amount, split_json)
+trip_invites   (trip_id, inviter_id, invitee_id, status; UNIQUE(trip_id, invitee_id))
+```
+
+**Goals, security, admin**
+```
+savings_goals        (user_id, name, target_amount, saved_amount, target_date)
+sessions             (user_id, device_label, ip_hash, user_agent,
+                      last_seen_at, revoked_at, revoked_reason)
+audit_log            (actor_id, actor_email, action, target, details, ip_hash)
+visits               (user_id FK NULL, path, ip_hash, user_agent)
+feedback             (user_id FK NULL, email, rating, message)
+announcements        (message, kind, is_active, actor_email)
+```
+
+Child tables use `ON DELETE CASCADE` to users/trips. Idempotent migrations
+in `db/index.js` handle existing DBs when columns are added.
 
 ---
 
 ## API routes
 
-All non-auth routes require `Authorization: Bearer <jwt>`.
+All non-public, non-auth routes require `Authorization: Bearer <jwt>`.
 
 ```
+# public (no auth)
+GET    /api/health
+GET    /api/public/announcement
+GET    /api/public/trips/:token
+POST   /api/track
+
+# auth
 POST   /api/auth/register
 POST   /api/auth/login
+POST   /api/auth/password          (change own password)
+PATCH  /api/auth/profile           (edit name / email)
+POST   /api/auth/refresh           (slide the 30-min window)
+GET    /api/auth/sessions
+DELETE /api/auth/sessions/:id      (revoke one)
+DELETE /api/auth/sessions          (sign out everywhere else)
+
+# money
 GET    /api/finance/salary
 POST   /api/finance/salary
 GET    /api/finance/emis
 POST   /api/finance/emis
 DELETE /api/finance/emis/:id
 GET    /api/finance/plan
+GET    /api/finance/insights
+GET    /api/finance/history
+GET    /api/finance/categories
+POST   /api/finance/categories
+DELETE /api/finance/categories/:id
+GET    /api/finance/expenses
+POST   /api/finance/expenses
+DELETE /api/finance/expenses/:id
+GET    /api/finance/budgets
+PUT    /api/finance/budgets/:category
+DELETE /api/finance/budgets/:category
+GET    /api/finance/recurring
+POST   /api/finance/recurring
+PATCH  /api/finance/recurring/:id   (toggle active)
+DELETE /api/finance/recurring/:id
+GET    /api/finance/goals
+POST   /api/finance/goals
+PATCH  /api/finance/goals/:id       (partial + addToSaved/setSaved)
+DELETE /api/finance/goals/:id
+GET    /api/finance/export.csv
+
+# trips
 GET    /api/trips
 POST   /api/trips
-GET    /api/trips/:id              (returns settlement too)
+GET    /api/trips/:id
 POST   /api/trips/:id/members
 POST   /api/trips/:id/expenses
+GET    /api/trips/:id/share         (owner)
+POST   /api/trips/:id/share         (create / rotate)
+DELETE /api/trips/:id/share
+POST   /api/trips/:id/invite        (owner)
+GET    /api/invites
+POST   /api/invites/:id/accept
+POST   /api/invites/:id/decline
+
+# feedback
 POST   /api/feedback
-GET    /api/admin/stats            (admin)
-GET    /api/admin/users            (admin)
-GET    /api/admin/users/:id        (admin)
-PUT    /api/admin/users/:id/salary (admin)
-PUT    /api/admin/users/:id/admin  (admin)
-DELETE /api/admin/users/:id        (admin)
-DELETE /api/admin/emis/:id         (admin)
-DELETE /api/admin/trips/:id        (admin)
-GET    /api/admin/feedback         (admin)
-DELETE /api/admin/feedback/:id     (admin)
-GET    /api/health
+
+# admin
+GET    /api/admin/stats
+GET    /api/admin/users
+GET    /api/admin/users/:id
+PUT    /api/admin/users/:id/salary
+PUT    /api/admin/users/:id/password
+PUT    /api/admin/users/:id/admin
+DELETE /api/admin/users/:id
+DELETE /api/admin/emis/:id
+DELETE /api/admin/trips/:id
+GET    /api/admin/feedback
+DELETE /api/admin/feedback/:id
+GET    /api/admin/audit
+GET    /api/admin/visits/stats
+GET    /api/admin/announcements
+POST   /api/admin/announcements
+PUT    /api/admin/announcements/:id/active
+DELETE /api/admin/announcements/:id
 ```
 
----
-
-## Session history / why we did what
-
-1. **Initial scaffold.** Built React + Express + SQLite from scratch with
-   auth, dashboard, trips, splits, and an animated mini-game.
-2. **Removed the mini-game** and added a detailed Plan page per request.
-3. **Fixed text contrast** across the dark theme (bumped `text-white/40–60`
-   utilities and tightened pill/input colors).
-4. **Pushed to GitHub** `umahack/project-money` (public), using the
-   `umahack@users.noreply.github.com` email to keep the Amazon work email
-   out of a public repo.
-5. **Set up Render blueprint deploy.** Two false starts: (a) free tier
-   doesn't allow `disk:` — removed; (b) static sites don't take `plan:` —
-   removed.
-6. **Debugged "Failed to fetch"** — root cause was `CORS_ORIGIN=*` being
-   split into `['*']` array (literal match), not treated as wildcard. Fixed
-   server-side.
-7. **Hardened auth UX** — password checklist, show/hide toggle, mapped
-   common server errors to friendly copy, friendly network-error message.
-8. **Added admin dashboard** — `ADMIN_EMAILS` env var bootstraps admins on
-   login/register. First confusion: user logged in before the admin-feature
-   deploy, so JWT lacked flag. Fix: logout → login re-issues JWT.
-9. **Added feedback modal + welcome-back toast + admin feedback panel.**
-10. **Stale JWT bug** after Render redeploy wiped SQLite — tokens pointed
-    to non-existent users, causing FK failures. Fixed by having
-    `authRequired` verify the user still exists and returning 401
-    "Session expired"; client auto-logs-out on 401. Feedback endpoint
-    additionally falls back to anonymous insert on FK failure.
-11. **Migrated to Turso** so data survives all future deploys. All route
-    handlers and middleware converted to async; `express-async-errors`
-    added. Verified end-to-end locally against production Turso DB.
-
-12. **UI v2 redesign** (branch `ui-v2`). Replaced the Tailwind UI with a TypeScript, plain-CSS "midnight
-    vault" UI across every page including Admin. Classic UI kept in `frontend-v1/` plus tag `ui-v1-classic`.
-    Tested in headless Chrome against a throwaway local backend, never the production Turso DB.
+Mount order matters: `/api/public` and `/api` (visits/invites) are
+registered **before** auth-blanket routers so `/api/track` and the
+public endpoints are reachable without a token.
 
 ---
 
-## Known caveats / what the next agent should know
+## Security posture
 
-- **Turso token was pasted in chat during setup.** Rotate it in the Turso
-  dashboard and update `TURSO_AUTH_TOKEN` on Render.
-- **One stray test user** `turso-test@example.com` may still exist in Turso
-  from local smoke test — clean up with
-  `DELETE FROM users WHERE email = 'turso-test@example.com';`
-  (cascade handles salary/EMI/trip/feedback).
-- **Admin email typo (`admin@pord.com`)** — kept intentionally so the
-  existing admin user still matches. Change `ADMIN_EMAILS` on Render + log
-  out/in if you want to switch.
-- **No password reset flow.** If a user forgets their password, an admin
-  must delete and recreate them, or build the flow.
-- **Bundle size warning** — frontend >500 KB after minify (Recharts +
-  Framer). Not blocking; use dynamic imports if you want to shrink.
-- **`npm audit` warnings** from bcrypt's old `tar` dep. Runtime-safe; worth
-  cleaning if hardening.
-- **Render free tier cold starts** add ~30 s to first request after idle.
-  Starter ($7/mo) removes this.
+- JWT signed and verified with **HS256 only** (algorithm pinned to prevent
+  `alg: none` and confusion attacks).
+- JWT payload: `{ sub, email, name, is_admin, tv, sid }` with 30-min
+  `expiresIn`. `tv` is `users.token_version`; `sid` is `sessions.id`.
+- `authRequired` middleware verifies: valid signature, user row exists,
+  `tv` matches current column, session row exists and is not revoked.
+  Touches `sessions.last_seen_at` on every call.
+- **Single-active-session**: every successful login revokes all prior
+  sessions for the user with reason `another_device`.
+- Password change bumps `token_version` + revokes every session except
+  the current one.
+- Admin password reset also bumps `token_version` (user gets booted on
+  every device).
+- Per-account login throttle: 5 bad passwords in 15 min = 15-min lock,
+  independent of per-IP rate limits.
+- Global rate limiter: 120 req/min; auth routes 20 / 15 min; password
+  change 10 / 15 min; feedback 20 / h; alias OTP sends 10 / h (feature
+  currently disabled — see "Deferred").
+- Helmet in strict mode: CSP `default-src 'none'`, HSTS 1 y with
+  `includeSubDomains; preload`, `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer`, COOP
+  `same-origin`.
+- CORS strictly allowlisted in production (refuses to boot without
+  `CORS_ORIGIN`).
+- Prepared statements everywhere; no string interpolation of user input
+  into SQL.
+- Audit log for destructive admin actions: password resets, user delete,
+  promote / demote, announcement create / delete, self password change,
+  profile edits.
+- All visitor and audit IPs are stored as `sha256(day:salt:ip)[0:24]` —
+  no raw IPs persisted.
+
+### Known deferred security items
+- **Email verification on signup / email change** — intentionally off.
+  The UI copy explicitly promises an OTP sprint next. Code can trust the
+  user to type their own email honestly today, since the next OTP sprint
+  will claim ownership for real.
+- **Password reset self-service** — currently admin-driven. Needs
+  email delivery; waiting on the OTP sprint.
 
 ---
 
-## Suggested next improvements
+## Session / decision history (chronological, consolidated)
 
-1. **Password reset** via email magic-link (needs an email provider like
-   Resend; free tier available).
-2. **Export my data** button on Dashboard (JSON download of own records).
-3. **Multi-month salary history view** instead of only the latest entry.
-4. **Trip invites by email** that create real user accounts (currently
-   `trip_members` are just name labels on an owner's trip).
-5. **PWA manifest + service worker** so it installs on mobile.
-6. **E2E tests** — Playwright against a Turso branch DB.
-7. **Code-split the frontend** — dynamic `import()` the Admin and Trip
-   pages so the auth bundle stays small.
-8. **Rotate Turso token** (see caveat).
+The project went through several iterations. Entries here describe
+decisions, especially reverts, so future agents don't re-litigate them.
+
+1. **Initial scaffold** — React + Express + SQLite. One-shot auth, basic
+   dashboard, trips, Splitwise splits, mini-game. Deployed to Render.
+2. **Removed the mini-game** and added a line-by-line Plan page.
+3. **Fixed contrast** across the dark theme.
+4. **Switched to Turso** (libsql) after Render free tier wiped the
+   ephemeral SQLite on every redeploy. Codebase went async end-to-end
+   with a thin adapter.
+5. **Admin feature + bootstrap via `ADMIN_EMAILS` env var.**
+6. **Trip invites + public read-only share links.**
+7. **Email aliases + OTP verification** — shipped, then **fully
+   reverted** per user request. The AliasManager UI, `/api/aliases`
+   routes, `mailer.js`, `otp.js`, Resend dependency were all removed.
+   OTP-based auth will come back in a planned future sprint; a stub
+   mention remains in UI copy (profile edit page).
+8. **Feedback-driven feature pack**: expense log + budgets + 12-month
+   history chart + savings goals + CSV export + onboarding tour +
+   recurring expenses + admin password reset.
+9. **Visitor tracking + landing preview**: anonymous page-view tracker
+   with hashed-per-day IP; marketing landing section on `/login`.
+10. **Security hardening**: HS256 pin, `token_version`, admin audit log,
+    per-account throttle, strict CSP + HSTS 1y, strict CORS in prod,
+    bcrypt 6, vite 8 (both audits now 0 vulnerabilities).
+11. **Device management**: `sessions` table, single-active-session,
+    device panel.
+12. **Sidebar + page split**: Dashboard split into Spending, Recurring,
+    Goals, Settings; Admin split into Overview, Users, Feedback,
+    Traffic, Broadcast; TripDetail into 4 URL-synced tabs.
+13. **Session timeout toast** (`/auth/refresh`), **auto theme**,
+    **custom expense categories**, **admin broadcast banner**, **429
+    UX with retry-seconds**.
+14. **Profile editor** — Settings now lets users change name and email;
+    audited; a fresh JWT is minted so changes land live without a
+    re-login. Email changes are **not yet verified** — flagged as
+    pending the OTP sprint.
+15. **Instagram story PNGs + LinkedIn / WhatsApp copy** generated
+    locally for marketing; story PNGs are gitignored at
+    `instagram-stories/`.
+
+---
+
+## Deferred (planned, not shipped)
+
+Priority order:
+
+1. **OTP sprint** — restore the email-verification flow for:
+   - Signup (replace one-shot `/register` with
+     `register-start → register-verify-code → register-finish` using a
+     unique handle; UX already prototyped and reverted at commit
+     `11e02c6`).
+   - Email change in `PATCH /auth/profile` — send OTP to the new address
+     and only swap once verified.
+   - Self-service password reset (forgot-password flow).
+   - Requires Resend (or similar) + `MAIL_FROM`.
+2. **Weekly email summary** — "You spent ₹X last week" digest.
+   Needs Resend + a Monday cron (GitHub Action hitting an internal
+   endpoint is the simplest trigger).
+3. **Trip chat (polling v1)** — `trip_messages` table + 4-s poll + unread
+   count on the Trips tab.
+4. **Capacitor Android wrapper** — covered earlier; scaffolded plan only.
+   Wait for 20+ MAU before investing.
+5. **Receipt photo upload** — needs object storage (Cloudinary / Supabase).
+6. **Shared / joint accounts** — large refactor to a workspace model.
+   Wait for explicit tester asks.
+
+---
+
+## Caveats / gotchas
+
+- Rendering `authRequired` early in the request pipeline matters: public
+  routes (`/api/public`, `/api/track`) must be mounted **before** the
+  invites router (which has a blanket `authRequired`). See `server.js`.
+- Blueprint-managed Render services don't always auto-deploy on git push;
+  use **Manual Deploy** when a commit doesn't show up.
+- Admin dashboard `/admin/broadcast` writes to a shared table — be careful
+  when smoke-testing that endpoint; previous test runs posted real banners
+  that showed up for every user until cleaned up.
+- `instagram-stories/` is gitignored but exists locally for marketing.
+- All tokens live in `sessionStorage` (per-tab, cleared on tab close).
+  Never `localStorage` — do not change this without rethinking XSS risk.
+- `/auth/refresh` is called by the "Stay signed in" toast. It validates
+  the current token's session + token_version, so stale tokens still get
+  401'd rather than silently refreshed.
 
 ---
 
@@ -262,29 +404,94 @@ GET    /api/health
 ```
 Project Money/
 ├─ render.yaml                     Blueprint for both services
-├─ README.md                       Public-facing setup & security notes
+├─ README.md                       Public setup notes
 ├─ HANDOFF.md                      ← this file
+├─ USER_GUIDE.md                   Beta-tester guide
+├─ Project-Money-User-Guide.pdf    Printable version of the guide
+├─ instagram-stories/              Local-only marketing drafts (gitignored)
 ├─ backend/
 │  ├─ package.json                 @libsql/client, express, bcrypt, …
 │  ├─ .env.example                 Required env vars
 │  └─ src/
-│     ├─ server.js                 Express app wiring + CORS + helmet
-│     ├─ db/index.js               libsql adapter + schema init
+│     ├─ server.js                 Express wiring, helmet, CORS, mounts
+│     ├─ audit.js                  shared audit() helper
+│     ├─ sessions.js               session helpers + daily IP hash
+│     ├─ db/index.js               libsql adapter + schema + migrations
 │     ├─ middleware/{auth,admin}.js
-│     └─ routes/{auth,finance,trips,admin,feedback}.js
-├─ frontend/                       UI v2 (current)
-│  ├─ package.json                 vite 5, react 18, react-router 6, framer-motion 11, typescript
-│  ├─ vite.config.ts               dev/preview proxy (loopback) + build-time CSP injection
-│  └─ src/
-│     ├─ main.tsx, App.tsx         routes (public: /login /register; private: everything else)
-│     ├─ api.ts                    fetch wrapper, Bearer token in sessionStorage, 401 auto-logout
-│     ├─ state.tsx                 AuthProvider + toasts
-│     ├─ insights.ts               derived health / daily spend / recommendations
-│     ├─ money.ts, types.ts, styles.css
-│     ├─ components/               Shell (nav), FeedbackModal, ui (Card, Modal, Donut, ...)
-│     ├─ games/                    CoinCatcher, Snake
-│     └─ pages/                    AuthPage, Dashboard, Plan, Trips, TripDetail, Arcade, Admin
-└─ frontend-v1/                    UI v1 classic (Tailwind) kept for rollback
+│     └─ routes/
+│        ├─ auth.js                register, login, refresh, password,
+│        │                         profile, sessions
+│        ├─ finance.js             salary, emis, plan, insights, history,
+│        │                         expenses, budgets, categories,
+│        │                         recurring, goals, export.csv
+│        ├─ trips.js               trips + members + expenses + share
+│        ├─ invites.js             trip invites
+│        ├─ feedback.js            POST feedback
+│        ├─ admin.js               users, feedback, audit, visits/stats,
+│        │                         announcements
+│        ├─ visits.js              POST /track
+│        └─ public.js              /public/announcement, /public/trips/:token
+└─ frontend/
+   ├─ package.json                 vite 8, react, react-router, framer-motion
+   ├─ vite.config.ts
+   ├─ index.html                   PWA meta tags
+   ├─ public/
+   │  ├─ favicon.svg, pwa-icon.svg, pwa-icon-maskable.svg
+   │  └─ manifest.webmanifest
+   └─ src/
+      ├─ main.tsx
+      ├─ App.tsx                   Routing (public + private + admin)
+      ├─ api.ts                    fetch wrapper, 401 auto-logout,
+      │                            429 retry-after
+      ├─ state.tsx                 AuthProvider + ToastProvider,
+      │                            listens for auth:changed
+      ├─ money.ts                  inr(), parseAmount, currentMonth, fmtDate
+      ├─ insights.ts               buildInsights() helper
+      ├─ types.ts
+      ├─ styles.css                single stylesheet (dark + light)
+      ├─ hooks/
+      │  ├─ useVisitTracker.ts     fire POST /track on route change
+      │  └─ useSessionWarning.ts   fires 5 min before JWT exp
+      ├─ components/
+      │  ├─ Shell.tsx              Sidebar + topbar + bottom-tabs (mobile)
+      │  ├─ AnnouncementBanner.tsx Top-of-shell banner
+      │  ├─ SessionWarning.tsx     "Stay signed in" toast
+      │  ├─ ProfileSettings.tsx    Name + email editor
+      │  ├─ CategoryManager.tsx    Add/remove custom categories
+      │  ├─ DevicesPanel.tsx       Active sessions + revoke
+      │  ├─ ChangePassword.tsx     Self-service password change
+      │  ├─ ExportData.tsx         CSV download button
+      │  ├─ SpendingTracker.tsx    Log + inline budgets + category totals
+      │  ├─ MonthlyHistoryChart.tsx 12-month CSS bar chart
+      │  ├─ SmartInsights.tsx      MoM, weekday, spike detector
+      │  ├─ RecurringExpenses.tsx  Create / pause / resume / delete
+      │  ├─ SavingsGoals.tsx       Create / contribute / delete goals
+      │  ├─ InvitesInbox.tsx       Dashboard trip-invites card
+      │  ├─ TripShareLink.tsx      Owner's share-link control
+      │  ├─ VisitorsPanel.tsx      Admin traffic widget
+      │  ├─ AuditLogPanel.tsx      Admin audit widget
+      │  ├─ LandingPreview.tsx     Hero + features on /login
+      │  ├─ OnboardingModal.tsx    5-step first-visit tour
+      │  ├─ FeedbackModal.tsx      Logout-time rating prompt
+      │  └─ ui.tsx                 Card, Field, Donut, ProgressBar, Modal, …
+      └─ pages/
+         ├─ AuthPage.tsx           /login + /register with landing preview
+         ├─ Dashboard.tsx          /    (salary + plan hero)
+         ├─ Spending.tsx           /spending
+         ├─ Plan.tsx               /plan   (line-by-line budget)
+         ├─ Recurring.tsx          /recurring
+         ├─ Goals.tsx              /goals
+         ├─ Settings.tsx           /settings
+         ├─ Trips.tsx              /trips  (list)
+         ├─ TripDetail.tsx         /trips/:id?tab=…  (4 URL-synced tabs)
+         ├─ PublicTrip.tsx         /share/trip/:token  (no auth)
+         ├─ Arcade.tsx             /arcade
+         └─ admin/
+            ├─ AdminOverview.tsx   /admin
+            ├─ AdminUsers.tsx      /admin/users
+            ├─ AdminFeedback.tsx   /admin/feedback
+            ├─ AdminTraffic.tsx    /admin/traffic
+            └─ AdminBroadcast.tsx  /admin/broadcast
 ```
 
 ---
@@ -294,17 +501,60 @@ Project Money/
 ```bash
 # backend
 cd backend
-cp .env.example .env
-# edit .env — set JWT_SECRET, TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
+cp .env.example .env         # set JWT_SECRET, TURSO_DATABASE_URL,
+                             # TURSO_AUTH_TOKEN. CORS_ORIGIN can stay * for dev.
 npm install
-npm run dev            # http://localhost:4000
+npm run dev                  # http://localhost:4000
 
-# frontend (second terminal)
+# frontend (new terminal)
 cd frontend
 npm install
-npm run dev            # http://localhost:5173
+npm run dev                  # http://localhost:5173
 ```
 
-Both talk to the same Turso DB as production unless you point
-`TURSO_DATABASE_URL` at a branch (`turso db create project-money-dev` →
-copy its URL into `.env`).
+Both talk to the same **production** Turso DB. For a safer dev loop,
+create a branch DB in Turso and point `TURSO_DATABASE_URL` at that in
+your local `.env`.
+
+### Smoke-test checklist after any backend change
+
+```bash
+# Health
+curl -s http://localhost:4000/api/health
+
+# Register + round-trip a token
+curl -s -X POST http://localhost:4000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@test.com","name":"Dev","password":"supersecret1"}'
+```
+
+### Build before pushing
+```bash
+cd frontend && npm run build       # must emit "✓ built"
+```
+
+### Deploy on Render after push
+1. **project-money-api → Manual Deploy → Deploy latest commit**.
+   Watch logs: `API listening on http://localhost:10000` and
+   `Your service is live 🎉`.
+2. **project-money-web → Manual Deploy → Clear build cache & deploy**.
+   This matters when any env var or Vite config changed.
+
+---
+
+## When continuing this project
+
+- Keep **features on their own pages** with a `PageTitle`. Never pile
+  new sections onto `/` — add a sidebar entry.
+- Keep **destructive admin actions audited** (`audit(req, { action: ... })`).
+- Keep **auth tokens in `sessionStorage`**; do not switch to localStorage
+  without rethinking XSS.
+- When shipping a new table, add it to the schema array in
+  `db/index.js` and add an idempotent `try { SELECT } catch { ALTER }`
+  migration block if you touch an existing table.
+- When adding a new mutation endpoint, pick between `authRequired` +
+  `adminRequired` as needed and consider auditing it.
+- Smoke-test against Turso with a one-shot Node script before pushing;
+  pattern used throughout the chat history.
+
+Owner / point of contact: **Umakanth** (GitHub `umahack`).
