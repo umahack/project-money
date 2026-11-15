@@ -308,7 +308,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                       autoComplete="off"
                       autoCapitalize="off"
                       spellCheck={false}
-                      placeholder="umasai, suj, hasi …"
+                      placeholder="e.g. uma, kiran, priya"
                     />
                   </Field>
                   {error && <ErrorBox msg={error} />}
