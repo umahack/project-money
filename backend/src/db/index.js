@@ -145,6 +145,11 @@ try {
 } catch {
   await raw.execute('ALTER TABLE trip_members ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 }
+try { await raw.execute('SELECT public_token FROM trips LIMIT 1'); }
+catch { await raw.execute('ALTER TABLE trips ADD COLUMN public_token TEXT'); }
+try { await raw.execute('SELECT public_enabled FROM trips LIMIT 1'); }
+catch { await raw.execute('ALTER TABLE trips ADD COLUMN public_enabled INTEGER NOT NULL DEFAULT 0'); }
+await raw.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_public_token ON trips(public_token) WHERE public_token IS NOT NULL');
 
 function wrapRun(result) {
   return {

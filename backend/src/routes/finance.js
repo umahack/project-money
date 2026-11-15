@@ -211,6 +211,149 @@ router.delete('/expenses/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Smart insights (derived from expense_log) ----------
+router.get('/insights', async (req, res) => {
+  await materializeRecurring(req.user.id);
+  const now = new Date();
+  const thisMonth = monthKey(now);
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonth = monthKey(prev);
+
+  // Per-category totals this month + last month
+  const rows = await db
+    .prepare(
+      `SELECT month, category, COALESCE(SUM(amount), 0) AS total
+         FROM expense_log
+        WHERE user_id = ? AND month IN (?, ?)
+        GROUP BY month, category`
+    )
+    .all(req.user.id, thisMonth, prevMonth);
+  const totals = { [thisMonth]: {}, [prevMonth]: {} };
+  for (const r of rows) totals[r.month][r.category] = Number(r.total);
+  const sumFor = (m) => Object.values(totals[m] || {}).reduce((a, b) => a + b, 0);
+  const thisTotal = sumFor(thisMonth);
+  const prevTotal = sumFor(prevMonth);
+
+  // 90-day weekday pattern
+  const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90)
+    .toISOString()
+    .slice(0, 10);
+  const weekdayRows = await db
+    .prepare(
+      `SELECT COALESCE(spent_on, substr(created_at, 1, 10)) AS d, SUM(amount) AS t
+         FROM expense_log
+        WHERE user_id = ? AND COALESCE(spent_on, substr(created_at, 1, 10)) >= ?
+        GROUP BY d`
+    )
+    .all(req.user.id, since);
+  const byWeekday = [0, 0, 0, 0, 0, 0, 0];
+  const countByWeekday = [0, 0, 0, 0, 0, 0, 0];
+  for (const r of weekdayRows) {
+    const w = new Date(r.d).getDay(); // 0 = Sun
+    byWeekday[w] += Number(r.t);
+    countByWeekday[w]++;
+  }
+  const avgByWeekday = byWeekday.map((s, i) => (countByWeekday[i] ? s / countByWeekday[i] : 0));
+  const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const topWeekdayIdx =
+    avgByWeekday.some((v) => v > 0)
+      ? avgByWeekday.reduce((best, v, i) => (v > avgByWeekday[best] ? i : best), 0)
+      : -1;
+
+  // Trailing 3-month average per category for spike detection
+  const threeStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const spikeRows = await db
+    .prepare(
+      `SELECT month, category, COALESCE(SUM(amount), 0) AS total
+         FROM expense_log
+        WHERE user_id = ? AND month >= ?
+        GROUP BY month, category`
+    )
+    .all(req.user.id, monthKey(threeStart));
+  const sumByCat = {}; // category -> {months: Set, total: n}
+  for (const r of spikeRows) {
+    if (r.month === thisMonth) continue;
+    sumByCat[r.category] = sumByCat[r.category] || { months: new Set(), total: 0 };
+    sumByCat[r.category].months.add(r.month);
+    sumByCat[r.category].total += Number(r.total);
+  }
+
+  const insights = [];
+  if (prevTotal > 0 && thisTotal > 0) {
+    const diffPct = Math.round(((thisTotal - prevTotal) / prevTotal) * 100);
+    if (Math.abs(diffPct) >= 5) {
+      insights.push({
+        id: 'mom-total',
+        kind: diffPct > 0 ? 'warn' : 'ok',
+        title: `${diffPct > 0 ? '📈' : '📉'} ${Math.abs(diffPct)}% ${diffPct > 0 ? 'more' : 'less'} spent vs last month`,
+        text: `This month: ${Math.round(thisTotal)}. Last month: ${Math.round(prevTotal)}.`,
+      });
+    }
+  }
+
+  // Per-category deltas (top 1 up, top 1 down)
+  const catDelta = [];
+  const allCats = new Set([...Object.keys(totals[thisMonth]), ...Object.keys(totals[prevMonth])]);
+  for (const c of allCats) {
+    const a = totals[thisMonth][c] || 0;
+    const b = totals[prevMonth][c] || 0;
+    if (b >= 100) {
+      catDelta.push({ cat: c, delta: a - b, pct: ((a - b) / b) * 100, a, b });
+    }
+  }
+  catDelta.sort((x, y) => Math.abs(y.pct) - Math.abs(x.pct));
+  const biggest = catDelta[0];
+  if (biggest && Math.abs(biggest.pct) >= 25) {
+    insights.push({
+      id: `mom-cat-${biggest.cat}`,
+      kind: biggest.delta > 0 ? 'warn' : 'ok',
+      title: `${biggest.cat}: ${biggest.delta > 0 ? '↑' : '↓'} ${Math.round(Math.abs(biggest.pct))}% vs last month`,
+      text: `This month ${Math.round(biggest.a)}, last month ${Math.round(biggest.b)}.`,
+    });
+  }
+
+  // Category spike (vs 3-month average, excluding current)
+  for (const [cat, agg] of Object.entries(sumByCat)) {
+    if (agg.months.size < 2) continue;
+    const avg = agg.total / agg.months.size;
+    const cur = totals[thisMonth][cat] || 0;
+    if (avg > 500 && cur > avg * 1.5) {
+      insights.push({
+        id: `spike-${cat}`,
+        kind: 'warn',
+        title: `${cat} is spiking this month`,
+        text: `You've already spent ${Math.round(cur)} vs a 3-month average of ${Math.round(avg)}.`,
+      });
+      break;
+    }
+  }
+
+  if (topWeekdayIdx >= 0 && avgByWeekday[topWeekdayIdx] > 100) {
+    insights.push({
+      id: 'weekday',
+      kind: 'info',
+      title: `${weekdayNames[topWeekdayIdx]}s are your heaviest day`,
+      text: `Average ${Math.round(avgByWeekday[topWeekdayIdx])} on ${weekdayNames[topWeekdayIdx]}s over the last 90 days.`,
+    });
+  }
+
+  // Positive affirmation when nothing is wrong
+  if (insights.length === 0) {
+    const tip = thisTotal > 0
+      ? "You're on steady spending so far — keep logging to unlock sharper comparisons."
+      : 'No expenses logged this month yet. Log a few and insights will appear here.';
+    insights.push({ id: 'affirm', kind: 'info', title: 'Nothing unusual', text: tip });
+  }
+
+  res.json({
+    thisMonth,
+    prevMonth,
+    totals: { thisMonth: thisTotal, prevMonth: prevTotal },
+    weekdayAvg: avgByWeekday.map((v, i) => ({ day: weekdayNames[i], avg: Math.round(v) })),
+    insights,
+  });
+});
+
 // ---------- Monthly history (last 12 months, including months with no spend) ----------
 router.get('/history', async (req, res) => {
   const rows = await db

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
@@ -167,5 +168,34 @@ function settle(members, expenses) {
   }
   return { balances: bal, transactions: txns };
 }
+
+// ---------- Owner-only: enable / rotate / disable a public share link ----------
+router.post('/:id/share', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
+  const token = crypto.randomBytes(16).toString('hex'); // 32 chars
+  await db
+    .prepare('UPDATE trips SET public_token = ?, public_enabled = 1 WHERE id = ?')
+    .run(token, id);
+  res.json({ token });
+});
+
+router.delete('/:id/share', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
+  await db
+    .prepare('UPDATE trips SET public_token = NULL, public_enabled = 0 WHERE id = ?')
+    .run(id);
+  res.json({ ok: true });
+});
+
+router.get('/:id/share', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
+  const row = await db
+    .prepare('SELECT public_token, public_enabled FROM trips WHERE id = ?')
+    .get(id);
+  res.json({ enabled: !!row?.public_enabled, token: row?.public_enabled ? row.public_token : null });
+});
 
 export default router;

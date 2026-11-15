@@ -6,6 +6,7 @@ import { Card, Empty, Field, Money, ProgressBar, Spinner, burst } from '../compo
 import { fmtDate, inr, parseAmount, toPaise } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { TripDetailData } from '../types';
+import { TripShareLink } from '../components/TripShareLink';
 
 /**
  * The API has no separate "settlement" record. A settlement is stored as a normal expense paid by the
@@ -56,6 +57,7 @@ export function TripDetail() {
         <div className="stack">
           <Balances d={d} reload={load} />
           <People d={d} reload={load} />
+          {d.role === 'owner' && <TripShareLink tripId={d.trip.id} />}
         </div>
       </div>
     </>

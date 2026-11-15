@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Plan } from './pages/Plan';
 import { TripDetail } from './pages/TripDetail';
 import { Trips } from './pages/Trips';
+import { PublicTrip } from './pages/PublicTrip';
 import { useAuth } from './state';
 
 /** Signed-in users go straight to the app; everyone else sees the login or register page. */
@@ -27,6 +28,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Guest><AuthPage mode="login" /></Guest>} />
       <Route path="/register" element={<Guest><AuthPage mode="register" /></Guest>} />
+      <Route path="/share/trip/:token" element={<PublicTrip />} />
       <Route element={<Private />}>
         <Route index element={<Dashboard />} />
         <Route path="plan" element={<Plan />} />
