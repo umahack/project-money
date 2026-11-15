@@ -5,6 +5,7 @@ import { Card, ConfirmDialog, Empty, Field, Modal, PageTitle, Spinner, type Conf
 import { currentMonth, fmtDate, inr, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { AdminStats, AdminUserDetail, AdminUserRow, FeedbackRow } from '../types';
+import { VisitorsPanel } from '../components/VisitorsPanel';
 
 export function Admin() {
   const { user: me } = useAuth();
@@ -231,6 +232,8 @@ export function Admin() {
           </Card>
         </div>
       </div>
+
+      <VisitorsPanel />
 
       <Card>
         <h2>⭐ User feedback</h2>

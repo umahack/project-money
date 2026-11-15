@@ -122,6 +122,63 @@ router.delete('/feedback/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+router.get('/visits/stats', async (_req, res) => {
+  const total = Number((await db.prepare('SELECT COUNT(*) AS c FROM visits').get()).c);
+  const uniqueVisitors = Number(
+    (await db.prepare('SELECT COUNT(DISTINCT ip_hash) AS c FROM visits').get()).c
+  );
+  const uniqueToday = Number(
+    (
+      await db
+        .prepare(
+          "SELECT COUNT(DISTINCT ip_hash) AS c FROM visits WHERE substr(created_at, 1, 10) = date('now')"
+        )
+        .get()
+    ).c
+  );
+  const todayVisits = Number(
+    (
+      await db
+        .prepare("SELECT COUNT(*) AS c FROM visits WHERE substr(created_at, 1, 10) = date('now')")
+        .get()
+    ).c
+  );
+  const perDayRows = await db
+    .prepare(
+      `SELECT substr(created_at, 1, 10) AS day,
+              COUNT(*) AS visits,
+              COUNT(DISTINCT ip_hash) AS visitors
+         FROM visits
+        WHERE created_at >= date('now', '-13 days')
+        GROUP BY day
+        ORDER BY day ASC`
+    )
+    .all();
+  const topPaths = await db
+    .prepare(
+      `SELECT path, COUNT(*) AS c FROM visits
+        GROUP BY path ORDER BY c DESC LIMIT 10`
+    )
+    .all();
+  const latest = await db
+    .prepare(
+      `SELECT v.path, v.user_agent, v.created_at, u.email, u.name
+         FROM visits v
+         LEFT JOIN users u ON u.id = v.user_id
+         ORDER BY v.id DESC LIMIT 25`
+    )
+    .all();
+  res.json({
+    total,
+    unique_visitors: uniqueVisitors,
+    today_visits: todayVisits,
+    today_visitors: uniqueToday,
+    per_day: perDayRows.map((r) => ({ ...r, visits: Number(r.visits), visitors: Number(r.visitors) })),
+    top_paths: topPaths.map((r) => ({ path: r.path, count: Number(r.c) })),
+    latest,
+  });
+});
+
 router.get('/stats', async (_req, res) => {
   const [users, admins, trips, emis, income, emi, feedback, rating] = await Promise.all([
     db.prepare('SELECT COUNT(*) AS c FROM users').get(),

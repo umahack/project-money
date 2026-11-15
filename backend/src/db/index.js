@@ -151,6 +151,18 @@ try { await raw.execute('SELECT public_enabled FROM trips LIMIT 1'); }
 catch { await raw.execute('ALTER TABLE trips ADD COLUMN public_enabled INTEGER NOT NULL DEFAULT 0'); }
 await raw.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_public_token ON trips(public_token) WHERE public_token IS NOT NULL');
 
+// Lightweight page-visit log for the admin analytics panel.
+await raw.execute(`CREATE TABLE IF NOT EXISTS visits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  path TEXT NOT NULL,
+  ip_hash TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`);
+await raw.execute('CREATE INDEX IF NOT EXISTS idx_visits_created_at ON visits(created_at)');
+await raw.execute('CREATE INDEX IF NOT EXISTS idx_visits_ip_hash ON visits(ip_hash)');
+
 function wrapRun(result) {
   return {
     changes: Number(result.rowsAffected ?? 0),

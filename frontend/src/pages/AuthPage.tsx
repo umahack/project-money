@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
+import { LandingPreview } from '../components/LandingPreview';
 import { errText, useAuth } from '../state';
 
 const RULES = [
@@ -58,7 +59,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     <>
       <Background />
       <div className="auth-wrap">
-        <motion.div initial={{ opacity: 0, y: 30, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', damping: 20 }}>
+        <LandingPreview />
+        <motion.div id="auth-card" initial={{ opacity: 0, y: 30, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', damping: 20 }}>
           <Card className="auth-card" tilt>
             <div className="auth-logo">
               <motion.span className="brand-mark big" animate={{ rotateY: 360 }} transition={{ repeat: Infinity, duration: 5, ease: 'linear' }}>₹</motion.span>

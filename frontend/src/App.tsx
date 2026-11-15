@@ -10,6 +10,7 @@ import { TripDetail } from './pages/TripDetail';
 import { Trips } from './pages/Trips';
 import { PublicTrip } from './pages/PublicTrip';
 import { useAuth } from './state';
+import { useVisitTracker } from './hooks/useVisitTracker';
 
 /** Signed-in users go straight to the app; everyone else sees the login or register page. */
 function Guest({ children }: { children: ReactNode }) {
@@ -24,6 +25,7 @@ function Private() {
 }
 
 export default function App() {
+  useVisitTracker();
   return (
     <Routes>
       <Route path="/login" element={<Guest><AuthPage mode="login" /></Guest>} />
