@@ -1,69 +1,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { api } from '../api';
-import { Card, ConfirmDialog, Empty, Field, Modal, PageTitle, Spinner, type ConfirmState } from '../components/ui';
-import { currentMonth, fmtDate, inr, parseAmount } from '../money';
-import { errText, useAuth, useToast } from '../state';
-import type { AdminStats, AdminUserDetail, AdminUserRow, FeedbackRow } from '../types';
-import { VisitorsPanel } from '../components/VisitorsPanel';
-import { AuditLogPanel } from '../components/AuditLogPanel';
+import { api } from '../../api';
+import { Card, ConfirmDialog, Empty, Field, Modal, PageTitle, Spinner, type ConfirmState } from '../../components/ui';
+import { currentMonth, fmtDate, inr, parseAmount } from '../../money';
+import { errText, useAuth, useToast } from '../../state';
+import type { AdminUserDetail, AdminUserRow } from '../../types';
 
-export function Admin() {
+export function AdminUsers() {
   const { user: me } = useAuth();
   const { toast } = useToast();
-  const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUserRow[]>([]);
-  const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [selected, setSelected] = useState<AdminUserDetail | null>(null);
   const [q, setQ] = useState('');
-  const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [salaryFor, setSalaryFor] = useState<AdminUserRow | AdminUserDetail['user'] | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
 
-  const loadAll = useCallback(async () => {
+  const loadUsers = useCallback(async () => {
     try {
-      const [s, u, f] = await Promise.all([
-        api.get<AdminStats>('/admin/stats'),
-        api.get<{ users: AdminUserRow[] }>('/admin/users'),
-        api.get<{ feedback: FeedbackRow[] }>('/admin/feedback'),
-      ]);
-      setStats(s);
+      const u = await api.get<{ users: AdminUserRow[] }>('/admin/users');
       setUsers(u.users);
-      setFeedback(f.feedback);
-      setErr('');
-    } catch (e) {
-      setErr(errText(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    } catch (e) { toast('err', errText(e)); }
+    finally { setLoading(false); }
+  }, [toast]);
 
   useEffect(() => {
-    if (me?.is_admin) void loadAll();
+    if (me?.is_admin) void loadUsers();
     else setLoading(false);
-  }, [loadAll, me?.is_admin]);
+  }, [loadUsers, me?.is_admin]);
 
   async function openUser(id: number) {
     try {
       setSelected(await api.get<AdminUserDetail>(`/admin/users/${id}`));
       if (window.innerWidth < 820) setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-    } catch (e) {
-      toast('err', errText(e));
-    }
+    } catch (e) { toast('err', errText(e)); }
   }
 
-  /** Runs an admin action, then refreshes the lists (and the open user, if still there). */
   async function act(fn: () => Promise<unknown>, okMsg: string, refreshUser?: number) {
     try {
       await fn();
       toast('ok', okMsg);
-      await loadAll();
+      await loadUsers();
       if (refreshUser) await openUser(refreshUser);
-    } catch (e) {
-      toast('err', errText(e));
-    }
+    } catch (e) { toast('err', errText(e)); }
   }
 
   const filtered = useMemo(() => {
@@ -71,11 +51,7 @@ export function Admin() {
     return users.filter((u) => !needle || u.email.toLowerCase().includes(needle) || u.name.toLowerCase().includes(needle));
   }, [users, q]);
 
-  if (!me?.is_admin) {
-    return (
-      <Card><Empty emoji="🔒" title="Admins only" text="Your account does not have admin access." /></Card>
-    );
-  }
+  if (!me?.is_admin) return <Card><Empty emoji="🔒" title="Admins only" /></Card>;
   if (loading) return <Spinner />;
 
   const selUser = selected?.user;
@@ -84,28 +60,14 @@ export function Admin() {
   return (
     <>
       <PageTitle
-        title="Admin 🛡️"
-        sub="Manage users, override salaries and clean up data."
+        title="Users 👥"
+        sub="Search, override salaries, promote / demote, reset passwords, delete."
         right={<input className="search" placeholder="Search by name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users" />}
       />
-      {err && <Card><p className="form-error">{err}</p><button className="btn" onClick={() => void loadAll()}>Retry</button></Card>}
-
-      {stats && (
-        <div className="grid stats8">
-          <Stat label="Users" value={String(stats.users)} />
-          <Stat label="Admins" value={String(stats.admins)} />
-          <Stat label="Trips" value={String(stats.trips)} />
-          <Stat label="EMIs" value={String(stats.emis)} />
-          <Stat label="Total income" value={inr(stats.total_income)} />
-          <Stat label="Total EMI" value={inr(stats.total_emi)} />
-          <Stat label="Feedback" value={String(stats.feedback_count ?? 0)} />
-          <Stat label="Avg rating" value={stats.avg_rating ? `${stats.avg_rating} ★` : '—'} />
-        </div>
-      )}
 
       <div className="grid admin-split">
         <Card>
-          <h2>👥 Users <small className="muted">({filtered.length})</small></h2>
+          <h2>Users <small className="muted">({filtered.length})</small></h2>
           <ul className="list scroll">
             <AnimatePresence initial={false}>
               {filtered.map((u) => (
@@ -142,7 +104,7 @@ export function Admin() {
                     <button
                       className="btn ghost sm"
                       onClick={() => {
-                        const next = prompt(`Set a new password for ${selUser.email}. Minimum 8 characters.\n\nShare it with them privately; they can change it themselves after signing in.`);
+                        const next = prompt(`Set a new password for ${selUser.email}. Minimum 8 characters.`);
                         if (next == null) return;
                         if (next.length < 8) { alert('Password must be at least 8 characters.'); return; }
                         void act(() => api.put(`/admin/users/${selUser.id}/password`, { newPassword: next }), 'Password reset', selUser.id);
@@ -220,7 +182,7 @@ export function Admin() {
                         <button
                           className="icon-btn danger"
                           aria-label={`Delete trip ${t.name}`}
-                          onClick={() => setConfirm({ title: 'Delete this trip?', text: `“${t.name}” and all of its members and expenses will be removed.`, confirmLabel: 'Delete trip', danger: true, onConfirm: () => act(() => api.del(`/admin/trips/${t.id}`), 'Trip deleted', selUser.id) })}
+                          onClick={() => setConfirm({ title: 'Delete this trip?', text: `"${t.name}" and all of its members and expenses will be removed.`, confirmLabel: 'Delete trip', danger: true, onConfirm: () => act(() => api.del(`/admin/trips/${t.id}`), 'Trip deleted', selUser.id) })}
                         >🗑️</button>
                       </li>
                     ))}
@@ -234,33 +196,6 @@ export function Admin() {
         </div>
       </div>
 
-      <VisitorsPanel />
-      <AuditLogPanel />
-
-      <Card>
-        <h2>⭐ User feedback</h2>
-        {feedback.length ? (
-          <ul className="list">
-            {feedback.map((f) => (
-              <li key={f.id} className="list-item top">
-                <div className="grow">
-                  <div className="row wrap">
-                    <span className="stars-static" aria-label={`${f.rating} out of 5`}>{'★'.repeat(f.rating)}<span className="dim">{'★'.repeat(5 - f.rating)}</span></span>
-                    <span className="muted small">{f.email || 'anonymous'} · {fmtDate(f.created_at, true)}</span>
-                  </div>
-                  {f.message && <p className="fb-msg">{f.message}</p>}
-                </div>
-                <button
-                  className="icon-btn danger"
-                  aria-label="Delete feedback"
-                  onClick={() => setConfirm({ title: 'Delete this feedback?', text: 'This entry will be removed for good.', confirmLabel: 'Delete', danger: true, onConfirm: () => act(() => api.del(`/admin/feedback/${f.id}`), 'Feedback deleted') })}
-                >🗑️</button>
-              </li>
-            ))}
-          </ul>
-        ) : <Empty emoji="💬" title="No feedback yet" />}
-      </Card>
-
       <SalaryDialog
         target={salaryFor}
         onClose={() => setSalaryFor(null)}
@@ -268,15 +203,6 @@ export function Admin() {
       />
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <motion.div whileHover={{ y: -3 }} className="stat-tile">
-      <span className="muted">{label}</span>
-      <strong className="mono">{value}</strong>
-    </motion.div>
   );
 }
 

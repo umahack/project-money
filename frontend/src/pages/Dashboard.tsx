@@ -8,14 +8,6 @@ import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../mo
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
-import { SpendingTracker } from '../components/SpendingTracker';
-import { MonthlyHistoryChart } from '../components/MonthlyHistoryChart';
-import { SmartInsights } from '../components/SmartInsights';
-import { SavingsGoals } from '../components/SavingsGoals';
-import { ChangePassword } from '../components/ChangePassword';
-import { DevicesPanel } from '../components/DevicesPanel';
-import { RecurringExpenses } from '../components/RecurringExpenses';
-import { ExportData } from '../components/ExportData';
 import { OnboardingModal } from '../components/OnboardingModal';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
@@ -257,14 +249,6 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <SpendingTracker disposable={plan.afterFixed} onChange={() => void load()} />
-      <SmartInsights />
-      <MonthlyHistoryChart />
-      <RecurringExpenses onChange={() => void load()} />
-      <SavingsGoals />
-      <ExportData />
-      <DevicesPanel />
-      <ChangePassword />
       <OnboardingModal />
     </>
   );

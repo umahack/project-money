@@ -26,11 +26,15 @@ export function Background() {
 }
 
 const TABS = [
-  { to: '/', label: 'Home', icon: '💰', end: true },
+  { to: '/', label: 'Home', icon: '🏠', end: true },
+  { to: '/spending', label: 'Spending', icon: '📊', end: false },
   { to: '/plan', label: 'Plan', icon: '🧾', end: false },
+  { to: '/recurring', label: 'Recurring', icon: '🔁', end: false },
+  { to: '/goals', label: 'Goals', icon: '🎯', end: false },
   { to: '/trips', label: 'Trips', icon: '✈️', end: false },
-  { to: '/arcade', label: 'Arcade', icon: '🎮', end: false },
+  { to: '/settings', label: 'Settings', icon: '⚙️', end: false },
 ];
+// Admin + Arcade are appended conditionally below. Keep this list focused.
 
 export function Shell() {
   const { user, logout } = useAuth();
@@ -45,7 +49,22 @@ export function Shell() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0b1a' : '#f3f1ff');
   }, [theme]);
 
-  const tabs = user?.is_admin ? [...TABS, { to: '/admin', label: 'Admin', icon: '🛡️', end: false }] : TABS;
+  const tabs = [
+    ...TABS,
+    { to: '/arcade', label: 'Arcade', icon: '🎮', end: false },
+  ];
+  const adminTabs = user?.is_admin
+    ? [
+        { to: '/admin', label: 'Overview', icon: '🛡️', end: true },
+        { to: '/admin/users', label: 'Users', icon: '👥', end: false },
+        { to: '/admin/feedback', label: 'Feedback', icon: '⭐', end: false },
+        { to: '/admin/traffic', label: 'Traffic', icon: '👀', end: false },
+      ]
+    : [];
+  // Mobile bottom bar: keep the primary tabs plus an Admin shortcut.
+  const mobileTabs = user?.is_admin
+    ? [...tabs, { to: '/admin', label: 'Admin', icon: '🛡️', end: false }]
+    : tabs;
   const inviteCount = usePendingInvitesCount();
 
   const finishLogout = () => {
@@ -69,18 +88,6 @@ export function Shell() {
             BETA
           </span>
         </NavLink>
-        <nav className="tabs desktop-only" aria-label="Primary">
-          {tabs.map((t) => (
-            <NavLink key={t.to} to={t.to} end={t.end} className="tab">
-              <span>{t.icon}</span> {t.label}
-              {t.to === '/trips' && inviteCount > 0 && (
-                <span className="pill info" style={{ marginLeft: 6 }} aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
-                  {inviteCount}
-                </span>
-              )}
-            </NavLink>
-          ))}
-        </nav>
         <div className="top-actions">
           <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme" title="Toggle theme">
             {theme === 'dark' ? '☀️' : '🌙'}
@@ -90,19 +97,48 @@ export function Shell() {
         </div>
       </header>
 
-      <main className="container">
-        <AnimatePresence mode="wait">
-          <motion.div key={loc.pathname} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
-        <footer className="foot muted tiny center">
-          Project Money · UI v2 · Crafted with ♥ by <span className="signature">Umakanth</span>
-        </footer>
-      </main>
+      <div className="app-shell">
+        <aside className="sidebar desktop-only" aria-label="Primary">
+          <nav className="side-nav">
+            {tabs.map((t) => (
+              <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
+                <span className="side-icon">{t.icon}</span>
+                <span className="side-label">{t.label}</span>
+                {t.to === '/trips' && inviteCount > 0 && (
+                  <span className="pill info" style={{ marginLeft: 'auto' }} aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
+                    {inviteCount}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+            {adminTabs.length > 0 && (
+              <>
+                <div className="side-group">Admin</div>
+                {adminTabs.map((t) => (
+                  <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
+                    <span className="side-icon">{t.icon}</span>
+                    <span className="side-label">{t.label}</span>
+                  </NavLink>
+                ))}
+              </>
+            )}
+          </nav>
+        </aside>
+
+        <main className="container with-sidebar">
+          <AnimatePresence mode="wait">
+            <motion.div key={loc.pathname} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
+          <footer className="foot muted tiny center">
+            Project Money · UI v2 · Crafted with ♥ by <span className="signature">Umakanth</span>
+          </footer>
+        </main>
+      </div>
 
       <nav className="bottom-tabs mobile-only" aria-label="Primary mobile">
-        {tabs.map((t) => (
+        {mobileTabs.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end} className="btab">
             <span className="btab-icon" style={{ position: 'relative' }}>
               {t.icon}
