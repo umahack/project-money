@@ -6,3 +6,6 @@ data.sqlite-wal
 data.sqlite-shm
 dist
 .DS_Store
+
+# Local-only drafts (Instagram story mockups etc.)
+instagram-stories/
