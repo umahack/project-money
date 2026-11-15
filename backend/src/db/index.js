@@ -76,22 +76,6 @@ const SCHEMA = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
-    label TEXT,
-    verified INTEGER NOT NULL DEFAULT 0,
-    verify_code_hash TEXT,
-    verify_expires_at TEXT,
-    verify_attempts INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    verified_at TEXT
-  )`,
-  `CREATE TABLE IF NOT EXISTS pending_registrations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    verify_code_hash TEXT NOT NULL,
-    verify_expires_at TEXT NOT NULL,
-    verify_attempts INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS feedback (
@@ -119,39 +103,6 @@ try {
 } catch {
   await raw.execute('ALTER TABLE trip_members ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 }
-for (const col of [
-  "ADD COLUMN verified INTEGER NOT NULL DEFAULT 1",      // existing aliases pre-verification stay trusted
-  "ADD COLUMN verify_code_hash TEXT",
-  "ADD COLUMN verify_expires_at TEXT",
-  "ADD COLUMN verify_attempts INTEGER NOT NULL DEFAULT 0",
-  "ADD COLUMN verified_at TEXT",
-  "ADD COLUMN label TEXT",
-]) {
-  const probe = col.match(/ADD COLUMN (\w+)/)[1];
-  try {
-    await raw.execute(`SELECT ${probe} FROM user_aliases LIMIT 1`);
-  } catch {
-    await raw.execute(`ALTER TABLE user_aliases ${col}`);
-  }
-}
-
-// Normalize legacy labels (lowercase, strip anything that isn't a valid handle),
-// then enforce global uniqueness via a partial unique index.
-await raw.execute(
-  `UPDATE user_aliases
-      SET label = NULL
-    WHERE label IS NOT NULL
-      AND (
-        length(label) < 3
-        OR length(label) > 30
-        OR label GLOB '*[^A-Za-z0-9._-]*'
-      )`
-);
-await raw.execute(`UPDATE user_aliases SET label = lower(label) WHERE label IS NOT NULL`);
-await raw.execute(
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_aliases_label_unique
-     ON user_aliases(label) WHERE label IS NOT NULL`
-);
 
 function wrapRun(result) {
   return {

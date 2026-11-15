@@ -49,10 +49,7 @@ export const errText = (e: unknown): string => (e instanceof ApiError ? e.messag
 interface AuthState {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  registerStart: (name: string, email: string, password: string) => Promise<{ fallback: boolean }>;
-  registerVerifyCode: (email: string, code: string) => Promise<void>;
-  registerFinish: (email: string, code: string, handle: string) => Promise<void>;
-  registerResend: (email: string) => Promise<{ fallback: boolean }>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 const AuthCtx = createContext<AuthState | null>(null);
@@ -85,33 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuth(r.token, r.user);
         setUser(r.user);
       },
-      async registerStart(name, email, password) {
-        const r = await api.post<{ ok: true; mail?: { fallback?: boolean } }>(
-          '/auth/register-start',
-          { name, email, password },
-          false,
-        );
-        return { fallback: !!r.mail?.fallback };
-      },
-      async registerVerifyCode(email, code) {
-        await api.post('/auth/register-verify-code', { email, code }, false);
-      },
-      async registerFinish(email, code, handle) {
-        const r = await api.post<AuthResponse>(
-          '/auth/register-finish',
-          { email, code, handle },
-          false,
-        );
+      async register(name, email, password) {
+        const r = await api.post<AuthResponse>('/auth/register', { name, email, password }, false);
         setAuth(r.token, r.user);
         setUser(r.user);
-      },
-      async registerResend(email) {
-        const r = await api.post<{ ok: true; mail?: { fallback?: boolean } }>(
-          '/auth/register-resend',
-          { email },
-          false,
-        );
-        return { fallback: !!r.mail?.fallback };
       },
       logout() {
         clearAuth();

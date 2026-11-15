@@ -20,10 +20,6 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: MAIL_FROM
-        sync: false
     # NOTE: Render's free tier does not support persistent disks.
     # SQLite lives on ephemeral storage — data resets on container restart/redeploy.
     # To keep data permanently: upgrade this service to Starter plan ($7/mo) and

@@ -7,17 +7,13 @@ import { errText, useToast } from '../state';
 interface Alias {
   id: number;
   email: string;
-  label: string | null;
-  verified: boolean;
   created_at: string;
-  verified_at: string | null;
 }
 
 export function AliasManager() {
   const { toast } = useToast();
   const [items, setItems] = useState<Alias[] | null>(null);
   const [email, setEmail] = useState('');
-  const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<number | null>(null);
 
@@ -38,15 +34,12 @@ export function AliasManager() {
   async function add(e: FormEvent) {
     e.preventDefault();
     const em = email.trim();
-    const lb = label.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return toast('err', 'Enter a valid email');
-    if (lb.length > 40) return toast('err', 'Label must be 40 characters or fewer');
     setBusy(true);
     try {
-      const res = await api.post<{ mail?: { fallback?: boolean } }>('/aliases', { email: em, label: lb || undefined });
+      await api.post('/aliases', { email: em });
       setEmail('');
-      setLabel('');
-      toast('ok', res.mail?.fallback ? 'Verification code sent (check the server log in dev)' : `Verification code sent to ${em}`);
+      toast('ok', `Linked ${em}`);
       await load();
     } catch (err) {
       toast('err', errText(err));
@@ -71,39 +64,43 @@ export function AliasManager() {
 
   return (
     <Card>
-      <h2>🔗 Linked emails & nicknames</h2>
+      <h2>🔗 Linked emails</h2>
       <p className="muted small">
-        Add up to five email addresses. We'll email a 6-digit code to each one — only after you
-        verify it can it be used to sign in. A short lowercase nickname (3–30 chars; letters,
-        digits, <code>. _ -</code>) is <b>globally unique</b> and lets you log in using the nickname
-        instead of the email.
+        Add up to five email addresses that can log in to this account. Trip invites sent to any of
+        these show up on your Home page too.
       </p>
       {items && items.length > 0 && (
         <ul className="list">
           <AnimatePresence>
             {items.map((a) => (
-              <AliasRow key={a.id} alias={a} onChange={load} onRemove={() => void remove(a.id)} removing={removing === a.id} />
+              <motion.li
+                key={a.id}
+                className="list-item"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                layout
+              >
+                <span className="avatar">@</span>
+                <div className="grow">
+                  <strong>{a.email}</strong>
+                  <small className="muted">linked {a.created_at.slice(0, 10)}</small>
+                </div>
+                <button
+                  className="btn sm ghost"
+                  disabled={removing === a.id}
+                  onClick={() => void remove(a.id)}
+                >
+                  {removing === a.id ? '…' : 'Remove'}
+                </button>
+              </motion.li>
             ))}
           </AnimatePresence>
         </ul>
       )}
       {items && items.length === 0 && <p className="muted small">No linked emails yet.</p>}
       <form onSubmit={add} className="stack-sm" style={{ marginTop: '0.6rem' }}>
-        <Field
-          label="Nickname (optional)"
-          hint="Globally unique. 3–30 chars, lowercase letters/digits/./_/-. Once verified, you can log in with this instead of the email."
-        >
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value.toLowerCase())}
-            maxLength={30}
-            placeholder="e.g. uma, kiran, priya"
-            autoCapitalize="off"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </Field>
-        <Field label="Email" hint="We'll email a 6-digit confirmation code before it's active.">
+        <Field label="Add an email" hint="You'll be able to log in with this email + your current password.">
           <input
             type="email"
             value={email}
@@ -113,146 +110,9 @@ export function AliasManager() {
           />
         </Field>
         <button className="btn" type="submit" disabled={busy}>
-          {busy ? 'Sending code…' : 'Link this email'}
+          {busy ? 'Linking…' : 'Link this email'}
         </button>
       </form>
     </Card>
-  );
-}
-
-function AliasRow({ alias, onChange, onRemove, removing }: {
-  alias: Alias;
-  onChange: () => Promise<void>;
-  onRemove: () => void;
-  removing: boolean;
-}) {
-  const { toast } = useToast();
-  const [code, setCode] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [editingLabel, setEditingLabel] = useState(false);
-  const [labelDraft, setLabelDraft] = useState(alias.label ?? '');
-  const [savingLabel, setSavingLabel] = useState(false);
-
-  async function saveLabel() {
-    const next = labelDraft.trim();
-    if (next.length > 40) return toast('err', 'Label must be 40 characters or fewer');
-    setSavingLabel(true);
-    try {
-      await api.put(`/aliases/${alias.id}`, { label: next || null });
-      toast('ok', 'Label updated');
-      setEditingLabel(false);
-      await onChange();
-    } catch (err) {
-      toast('err', errText(err));
-    } finally {
-      setSavingLabel(false);
-    }
-  }
-
-  async function verify(e: FormEvent) {
-    e.preventDefault();
-    if (!/^\d{6}$/.test(code)) return toast('err', 'Enter the 6-digit code.');
-    setVerifying(true);
-    try {
-      await api.post(`/aliases/${alias.id}/verify`, { code });
-      toast('ok', `${alias.email} verified`);
-      setCode('');
-      await onChange();
-    } catch (err) {
-      toast('err', errText(err));
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  async function resend() {
-    setResending(true);
-    try {
-      const res = await api.post<{ mail?: { fallback?: boolean } }>(`/aliases/${alias.id}/resend`, {});
-      toast('ok', res.mail?.fallback ? 'New code sent (check server log in dev)' : 'New code sent');
-    } catch (err) {
-      toast('err', errText(err));
-    } finally {
-      setResending(false);
-    }
-  }
-
-  return (
-    <motion.li
-      className="list-item"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -16 }}
-      layout
-    >
-      <span className="avatar">@</span>
-      <div className="grow">
-        {editingLabel ? (
-          <div className="row-sm" style={{ gap: 6 }}>
-            <input
-              value={labelDraft}
-              onChange={(e) => setLabelDraft(e.target.value.toLowerCase())}
-              maxLength={30}
-              placeholder="nickname (3–30 chars)"
-              autoCapitalize="off"
-              autoComplete="off"
-              spellCheck={false}
-              style={{ flex: 1 }}
-            />
-            <button className="btn sm" disabled={savingLabel} onClick={() => void saveLabel()}>
-              {savingLabel ? '…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              className="btn sm ghost"
-              disabled={savingLabel}
-              onClick={() => { setEditingLabel(false); setLabelDraft(alias.label ?? ''); }}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <strong>
-            {alias.label || <span className="muted">(no nickname)</span>}
-            <button
-              type="button"
-              onClick={() => setEditingLabel(true)}
-              style={{ marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.8em' }}
-              aria-label="Edit nickname"
-              title="Edit nickname"
-            >
-              ✏️
-            </button>
-          </strong>
-        )}
-        <small className="muted">
-          {alias.email}
-          {' · '}
-          {alias.verified ? `verified ${alias.verified_at?.slice(0, 10) ?? ''}` : 'pending — enter the code we emailed to confirm'}
-        </small>
-        {!alias.verified && (
-          <form onSubmit={verify} className="row-sm" style={{ marginTop: '0.4rem' }}>
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputMode="numeric"
-              placeholder="123456"
-              maxLength={6}
-              style={{ width: 110, letterSpacing: '0.3em', textAlign: 'center' }}
-            />
-            <button className="btn sm" type="submit" disabled={verifying || code.length !== 6}>
-              {verifying ? '…' : 'Verify'}
-            </button>
-            <button type="button" className="btn sm ghost" disabled={resending} onClick={() => void resend()}>
-              {resending ? '…' : 'Resend'}
-            </button>
-          </form>
-        )}
-      </div>
-      <button className="btn sm ghost" disabled={removing} onClick={onRemove}>
-        {removing ? '…' : 'Remove'}
-      </button>
-    </motion.li>
   );
 }
