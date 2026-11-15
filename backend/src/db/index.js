@@ -76,7 +76,12 @@ const SCHEMA = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    verified INTEGER NOT NULL DEFAULT 0,
+    verify_code_hash TEXT,
+    verify_expires_at TEXT,
+    verify_attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    verified_at TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +107,20 @@ try {
   await raw.execute('SELECT user_id FROM trip_members LIMIT 1');
 } catch {
   await raw.execute('ALTER TABLE trip_members ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
+for (const col of [
+  "ADD COLUMN verified INTEGER NOT NULL DEFAULT 1",      // existing aliases pre-verification stay trusted
+  "ADD COLUMN verify_code_hash TEXT",
+  "ADD COLUMN verify_expires_at TEXT",
+  "ADD COLUMN verify_attempts INTEGER NOT NULL DEFAULT 0",
+  "ADD COLUMN verified_at TEXT",
+]) {
+  const probe = col.match(/ADD COLUMN (\w+)/)[1];
+  try {
+    await raw.execute(`SELECT ${probe} FROM user_aliases LIMIT 1`);
+  } catch {
+    await raw.execute(`ALTER TABLE user_aliases ${col}`);
+  }
 }
 
 function wrapRun(result) {
