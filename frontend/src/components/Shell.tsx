@@ -61,6 +61,13 @@ export function Shell() {
         <NavLink to="/" className="brand" aria-label="Project Money home">
           <span className="brand-mark">₹</span>
           <span>Project&nbsp;Money</span>
+          <span
+            className="beta-badge"
+            title="This app is in active development — features may change and bugs are expected."
+            aria-label="Beta — under development"
+          >
+            BETA
+          </span>
         </NavLink>
         <nav className="tabs desktop-only" aria-label="Primary">
           {tabs.map((t) => (

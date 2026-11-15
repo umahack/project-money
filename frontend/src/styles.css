@@ -107,6 +107,21 @@ a { color: var(--accent); }
   box-shadow: 0 0 22px rgba(124, 92, 255, 0.55);
 }
 .brand-mark.big { width: 64px; height: 64px; font-size: 2rem; border-radius: 20px; }
+.beta-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.08em;
+  background: linear-gradient(135deg, #fbbf24, #fb7185);
+  color: #0b0b1a;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.45);
+  animation: betaPulse 2.4s ease-in-out infinite;
+  cursor: help;
+}
+@keyframes betaPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(251, 191, 36, 0.35); }
+  50%      { box-shadow: 0 0 18px rgba(251, 113, 133, 0.65); }
+}
+@media (prefers-reduced-motion: reduce) { .beta-badge { animation: none; } }
 .tabs { display: none; gap: 0.35rem; }
 .tab { position: relative; padding: 0.5rem 1rem; border-radius: 999px; color: var(--muted); text-decoration: none; font-weight: 500; transition: all 0.2s; }
 .tab:hover { color: var(--text); background: var(--glass); transform: translateY(-1px); }
