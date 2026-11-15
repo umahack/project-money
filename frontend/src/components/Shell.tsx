@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../state';
 import { FeedbackModal } from './FeedbackModal';
+import { usePendingInvitesCount } from './InvitesInbox';
 
 export function Background() {
   return (
@@ -45,6 +46,7 @@ export function Shell() {
   }, [theme]);
 
   const tabs = user?.is_admin ? [...TABS, { to: '/admin', label: 'Admin', icon: '🛡️', end: false }] : TABS;
+  const inviteCount = usePendingInvitesCount();
 
   const finishLogout = () => {
     setFeedback(false);
@@ -64,6 +66,11 @@ export function Shell() {
           {tabs.map((t) => (
             <NavLink key={t.to} to={t.to} end={t.end} className="tab">
               <span>{t.icon}</span> {t.label}
+              {t.to === '/trips' && inviteCount > 0 && (
+                <span className="pill info" style={{ marginLeft: 6 }} aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
+                  {inviteCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -88,7 +95,22 @@ export function Shell() {
       <nav className="bottom-tabs mobile-only" aria-label="Primary mobile">
         {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end} className="btab">
-            <span className="btab-icon">{t.icon}</span>
+            <span className="btab-icon" style={{ position: 'relative' }}>
+              {t.icon}
+              {t.to === '/trips' && inviteCount > 0 && (
+                <span
+                  aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}
+                  style={{
+                    position: 'absolute', top: -4, right: -8,
+                    minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8,
+                    background: 'var(--accent, #7c6cff)', color: '#fff', fontSize: 10,
+                    fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {inviteCount}
+                </span>
+              )}
+            </span>
             <small>{t.label}</small>
           </NavLink>
         ))}

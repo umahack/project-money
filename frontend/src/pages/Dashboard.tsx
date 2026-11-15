@@ -7,6 +7,7 @@ import { buildInsights } from '../insights';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
+import { InvitesInbox } from '../components/InvitesInbox';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -134,6 +135,8 @@ export function Dashboard() {
         sub="Enter this month's credited salary and your fixed payments. We'll plan the rest."
         right={salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Salary on file: {monthLabel(salaryMonth)}</span> : undefined}
       />
+
+      <InvitesInbox />
 
       <div className="grid two">
         <Card tilt>

@@ -307,7 +307,10 @@ function People({ d, reload }: { d: TripDetailData; reload: () => Promise<void> 
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const isOwner = d.role === 'owner';
 
   async function add(memberName: string, memberEmail?: string) {
     setBusy(true);
@@ -334,7 +337,23 @@ function People({ d, reload }: { d: TripDetailData; reload: () => Promise<void> 
     }
   }
 
-  const meMissing = !!user && !d.members.some((m) => m.name.toLowerCase() === user.name.toLowerCase());
+  async function sendInvite(e: FormEvent) {
+    e.preventDefault();
+    const em = inviteEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return toast('err', 'Enter a valid email');
+    setInviting(true);
+    try {
+      await api.post(`/trips/${d.trip.id}/invite`, { email: em });
+      toast('ok', `Invite sent to ${em}`);
+      setInviteEmail('');
+    } catch (err) {
+      toast('err', errText(err));
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  const meMissing = !!user && !d.members.some((m) => m.email?.toLowerCase() === user.email.toLowerCase() || m.name.toLowerCase() === user.name.toLowerCase());
 
   return (
     <Card>
@@ -359,10 +378,37 @@ function People({ d, reload }: { d: TripDetailData; reload: () => Promise<void> 
           + Add me ({user!.name.split(' ')[0]})
         </button>
       )}
-      <form onSubmit={submit} className="stack-sm">
-        <Field label="Friend's name"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Ravi" /></Field>
-        <Field label="Email (optional)" hint="Saved as a label on the trip. Friends are tracked by name for now."><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="ravi@example.com" /></Field>
-        <button className="btn" type="submit" disabled={busy}>Add friend</button>
+
+      {isOwner && (
+        <form onSubmit={sendInvite} className="stack-sm" style={{ marginTop: '1rem' }}>
+          <h3 style={{ margin: 0 }}>✉️ Invite a registered friend</h3>
+          <Field
+            label="Friend's email"
+            hint="They need an account. On their next login they'll see the invite and can accept to join this trip."
+          >
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              maxLength={254}
+              placeholder="friend@example.com"
+            />
+          </Field>
+          <button className="btn" type="submit" disabled={inviting}>
+            {inviting ? 'Sending…' : 'Send invite'}
+          </button>
+        </form>
+      )}
+
+      <form onSubmit={submit} className="stack-sm" style={{ marginTop: '1rem' }}>
+        <h3 style={{ margin: 0 }}>➕ Add an offline friend (label only)</h3>
+        <Field label="Friend's name" hint="Use this when they don't have an account — they appear in splits by name.">
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Ravi" />
+        </Field>
+        <Field label="Email (optional)">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="ravi@example.com" />
+        </Field>
+        <button className="btn ghost" type="submit" disabled={busy}>Add label</button>
       </form>
     </Card>
   );

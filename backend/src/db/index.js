@@ -48,9 +48,20 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS trip_members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     email TEXT,
     UNIQUE(trip_id, name)
+  )`,
+  `CREATE TABLE IF NOT EXISTS trip_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trip_id INTEGER NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    inviter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    invitee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined')),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    responded_at TEXT,
+    UNIQUE(trip_id, invitee_id)
   )`,
   `CREATE TABLE IF NOT EXISTS trip_expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,11 +86,16 @@ for (const stmt of SCHEMA) {
   await raw.execute(stmt);
 }
 
-// Idempotent migration for the is_admin column on legacy DBs
+// Idempotent migrations for columns added to pre-existing tables
 try {
   await raw.execute('SELECT is_admin FROM users LIMIT 1');
 } catch {
   await raw.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0');
+}
+try {
+  await raw.execute('SELECT user_id FROM trip_members LIMIT 1');
+} catch {
+  await raw.execute('ALTER TABLE trip_members ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 }
 
 function wrapRun(result) {

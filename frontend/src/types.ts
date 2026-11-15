@@ -49,12 +49,24 @@ export interface TripExpense {
 
 export interface TripDetailData {
   trip: Trip;
+  role?: 'owner' | 'member';
   members: TripMember[];
   expenses: TripExpense[];
   settlement: {
     balances: Record<string, number>;
     transactions: Array<{ from: string; to: string; amount: number }>;
   };
+}
+
+export interface Invite {
+  id: number;
+  trip_id: number;
+  created_at: string;
+  trip_name: string;
+  destination: string | null;
+  budget: number;
+  inviter_name: string;
+  inviter_email: string;
 }
 
 export interface AdminStats {
