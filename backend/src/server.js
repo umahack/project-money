@@ -24,12 +24,12 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN?.split(',') || true,
-    credentials: false,
-  })
-);
+const rawOrigin = process.env.CORS_ORIGIN?.trim();
+const corsOrigin =
+  !rawOrigin || rawOrigin === '*'
+    ? true
+    : rawOrigin.split(',').map((s) => s.trim()).filter(Boolean);
+app.use(cors({ origin: corsOrigin, credentials: false }));
 app.use(express.json({ limit: '64kb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
