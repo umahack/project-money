@@ -642,3 +642,36 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 }
 .admin-card h3 { margin: 0 0 0.3rem; }
 [data-theme='light'] .admin-card { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+
+/* ---- Trip-detail sub-tabs ---- */
+.trip-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0.6rem 0 0.4rem;
+  padding: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+[data-theme='light'] .trip-tabs { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+.trip-tab {
+  appearance: none;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  padding: 0.5rem 0.95rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.trip-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.trip-tab.on {
+  color: var(--text);
+  background: linear-gradient(90deg, rgba(124,108,255,0.3), rgba(74,222,128,0.18));
+  box-shadow: inset 0 0 0 1px rgba(124,108,255,0.4);
+}
+[data-theme='light'] .trip-tab:hover { background: rgba(0,0,0,0.05); }

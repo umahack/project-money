@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '../api';
 import { Card, Empty, Field, Money, ProgressBar, Spinner, burst } from '../components/ui';
@@ -16,11 +16,23 @@ import { TripShareLink } from '../components/TripShareLink';
 export const SETTLE_PREFIX = '↔ Settlement: ';
 const isSettlement = (description: string) => description.startsWith(SETTLE_PREFIX);
 
+type TripTab = 'expenses' | 'balances' | 'people' | 'share';
+const TAB_LABELS: Record<TripTab, string> = {
+  expenses: '🧾 Expenses',
+  balances: '⚖️ Balances',
+  people: '👥 People',
+  share: '🔗 Share',
+};
+
 export function TripDetail() {
   const { id } = useParams();
   const { toast } = useToast();
   const [d, setD] = useState<TripDetailData | null>(null);
   const [missing, setMissing] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const raw = params.get('tab');
+  const tab: TripTab = raw === 'balances' || raw === 'people' || raw === 'share' ? raw : 'expenses';
+  const setTab = (next: TripTab) => setParams({ tab: next }, { replace: true });
 
   const load = useCallback(async () => {
     try {
@@ -45,20 +57,41 @@ export function TripDetail() {
   }
   if (!d) return <Spinner />;
 
+  const isOwner = d.role === 'owner';
+  const availableTabs: TripTab[] = isOwner
+    ? ['expenses', 'balances', 'people', 'share']
+    : ['expenses', 'balances', 'people'];
+  const activeTab: TripTab = availableTabs.includes(tab) ? tab : 'expenses';
+
   return (
     <>
       <div className="crumbs"><Link to="/trips">← All trips</Link></div>
       <Header d={d} />
-      <div className="grid two">
-        <div className="stack">
-          <AddExpense d={d} reload={load} />
-          <Ledger d={d} />
-        </div>
-        <div className="stack">
-          <Balances d={d} reload={load} />
-          <People d={d} reload={load} />
-          {d.role === 'owner' && <TripShareLink tripId={d.trip.id} />}
-        </div>
+
+      <nav className="trip-tabs" role="tablist" aria-label="Trip sections">
+        {availableTabs.map((t) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={activeTab === t}
+            className={`trip-tab ${activeTab === t ? 'on' : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {TAB_LABELS[t]}
+          </button>
+        ))}
+      </nav>
+
+      <div className="stack">
+        {activeTab === 'expenses' && (
+          <>
+            <AddExpense d={d} reload={load} />
+            <Ledger d={d} />
+          </>
+        )}
+        {activeTab === 'balances' && <Balances d={d} reload={load} />}
+        {activeTab === 'people' && <People d={d} reload={load} />}
+        {activeTab === 'share' && isOwner && <TripShareLink tripId={d.trip.id} />}
       </div>
     </>
   );
