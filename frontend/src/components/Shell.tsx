@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../state';
 import { FeedbackModal } from './FeedbackModal';
 import { usePendingInvitesCount } from './InvitesInbox';
+import { SessionWarning } from './SessionWarning';
+import { AnnouncementBanner } from './AnnouncementBanner';
 
 export function Background() {
   return (
@@ -41,13 +43,38 @@ export function Shell() {
   const nav = useNavigate();
   const loc = useLocation();
   const [feedback, setFeedback] = useState(false);
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('theme') === 'light' ? 'light' : 'dark'));
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    // No manual choice yet — follow the OS.
+    return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches
+      ? 'light'
+      : 'dark';
+  });
+  const [userPickedTheme, setUserPickedTheme] = useState<boolean>(() => {
+    const stored = localStorage.getItem('theme');
+    return stored === 'light' || stored === 'dark';
+  });
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem('theme', theme);
+    if (userPickedTheme) localStorage.setItem('theme', theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0b1a' : '#f3f1ff');
-  }, [theme]);
+  }, [theme, userPickedTheme]);
+
+  // If the user hasn't manually overridden, follow OS theme changes live.
+  useEffect(() => {
+    if (userPickedTheme) return;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => setTheme(mq.matches ? 'light' : 'dark');
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, [userPickedTheme]);
+
+  const toggleTheme = () => {
+    setUserPickedTheme(true);
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  };
 
   const tabs = [
     ...TABS,
@@ -59,6 +86,7 @@ export function Shell() {
         { to: '/admin/users', label: 'Users', icon: '👥', end: false },
         { to: '/admin/feedback', label: 'Feedback', icon: '⭐', end: false },
         { to: '/admin/traffic', label: 'Traffic', icon: '👀', end: false },
+        { to: '/admin/broadcast', label: 'Broadcast', icon: '📢', end: false },
       ]
     : [];
   // Mobile bottom bar: keep the primary tabs plus an Admin shortcut.
@@ -89,7 +117,7 @@ export function Shell() {
           </span>
         </NavLink>
         <div className="top-actions">
-          <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme" title="Toggle theme">
+          <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
           <span className="hello desktop-only">Hi, {user?.name.split(' ')[0]}</span>
@@ -97,6 +125,8 @@ export function Shell() {
         </div>
       </header>
 
+      <AnnouncementBanner />
+      <SessionWarning />
       <div className="app-shell">
         <aside className="sidebar desktop-only" aria-label="Primary">
           <nav className="side-nav">

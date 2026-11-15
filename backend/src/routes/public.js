@@ -15,6 +15,17 @@ const publicLimiter = rateLimit({
  * Share-link read-only trip view. No auth; token must be exactly 32 hex chars.
  * Returns a sanitized shape — no owner id, no raw member emails leaked.
  */
+/**
+ * The currently-active banner, if any. No auth so the login page can show it.
+ * Response: { announcement: { id, message, kind } | null }
+ */
+router.get('/announcement', publicLimiter, async (_req, res) => {
+  const row = await db
+    .prepare('SELECT id, message, kind FROM announcements WHERE is_active = 1 ORDER BY id DESC LIMIT 1')
+    .get();
+  res.json({ announcement: row || null });
+});
+
 router.get('/trips/:token', publicLimiter, async (req, res) => {
   const token = String(req.params.token || '');
   if (!/^[a-f0-9]{32}$/.test(token)) return res.status(404).json({ error: 'Not found' });

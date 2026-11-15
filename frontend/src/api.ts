@@ -33,6 +33,8 @@ export function getUser(): User | null {
 export function setAuth(token: string, user: User): void {
   sessionStorage.setItem(TOKEN_KEY, token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  // Signal to any hook watching session expiry (e.g. "stay signed in" toast).
+  window.dispatchEvent(new Event('auth:changed'));
 }
 
 export function clearAuth(): void {
@@ -71,18 +73,21 @@ async function request<T>(path: string, { method = 'GET', body, auth = true }: O
   if (!res.ok) {
     if (res.status === 401 && auth) {
       clearAuth();
-      // Pass the server message along so the UI can surface context like
-      // "Signed out because this account was used on another device."
       const detail =
         typeof data?.error === 'string'
           ? data.error
           : 'Your session has ended. Please sign in again.';
       window.dispatchEvent(new CustomEvent('auth:expired', { detail }));
     }
-    const fallback =
-      res.status === 429 ? 'Too many requests. Please wait a moment and try again.'
-      : res.status >= 500 ? 'The server had a problem. Please try again shortly.'
-      : `Request failed (${res.status})`;
+    let fallback: string;
+    if (res.status === 429) {
+      const retry = Number(res.headers.get('retry-after')) || 60;
+      fallback = `Too many requests. Try again in ${retry} seconds.`;
+    } else if (res.status >= 500) {
+      fallback = 'The server had a problem. Please try again shortly.';
+    } else {
+      fallback = `Request failed (${res.status})`;
+    }
     throw new ApiError(res.status, typeof data?.error === 'string' ? data.error : fallback);
   }
   return data as T;

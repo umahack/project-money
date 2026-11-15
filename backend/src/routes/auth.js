@@ -209,6 +209,21 @@ router.post(
   }
 );
 
+// ---------- Session refresh ----------
+// authRequired already validated the token + session row; we just mint a new
+// JWT so the client's 30-min window slides forward. Used by the "stay signed
+// in" prompt that fires at the 25-min mark.
+router.post('/refresh', authRequired, async (req, res) => {
+  const u = await db
+    .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
+    .get(req.user.id);
+  if (!u) return res.status(401).json({ error: 'Session expired' });
+  res.json({
+    token: sign(u, req.user.sid),
+    user: { id: u.id, email: u.email, name: u.name, is_admin: !!u.is_admin },
+  });
+});
+
 // ---------- Device sessions ----------
 router.get('/sessions', authRequired, async (req, res) => {
   const rows = await db

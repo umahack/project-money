@@ -132,6 +132,50 @@ router.delete('/feedback/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Announcement banners ----
+router.get('/announcements', async (_req, res) => {
+  const rows = await db
+    .prepare('SELECT id, message, kind, is_active, created_at, actor_email FROM announcements ORDER BY id DESC LIMIT 50')
+    .all();
+  res.json({ announcements: rows.map((r) => ({ ...r, is_active: !!r.is_active })) });
+});
+
+router.post(
+  '/announcements',
+  [body('message').isString().trim().isLength({ min: 1, max: 240 }), body('kind').optional().isIn(['info', 'warn', 'ok'])],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    // Only one active at a time — deactivate the rest.
+    await db.prepare('UPDATE announcements SET is_active = 0 WHERE is_active = 1').run();
+    const info = await db
+      .prepare('INSERT INTO announcements (message, kind, is_active, actor_email) VALUES (?, ?, 1, ?)')
+      .run(String(req.body.message).trim(), req.body.kind || 'info', req.user.email);
+    await audit(req, { action: 'admin.announcement_create', target: `announcement:${info.lastInsertRowid}` });
+    res.json({ id: info.lastInsertRowid });
+  }
+);
+
+router.delete('/announcements/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const info = await db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  await audit(req, { action: 'admin.announcement_delete', target: `announcement:${id}` });
+  res.json({ ok: true });
+});
+
+router.put('/announcements/:id/active', [body('is_active').isBoolean()], async (req, res) => {
+  const id = Number(req.params.id);
+  if (req.body.is_active) {
+    await db.prepare('UPDATE announcements SET is_active = 0 WHERE is_active = 1').run();
+  }
+  const info = await db
+    .prepare('UPDATE announcements SET is_active = ? WHERE id = ?')
+    .run(req.body.is_active ? 1 : 0, id);
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
 router.get('/audit', async (_req, res) => {
   const rows = await db
     .prepare(

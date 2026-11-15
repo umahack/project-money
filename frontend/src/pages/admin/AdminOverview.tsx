@@ -58,6 +58,10 @@ export function AdminOverview() {
           <h3>👀 Traffic & audit</h3>
           <p className="muted small">Daily visitor counts + append-only log of privileged actions.</p>
         </Link>
+        <Link to="/admin/broadcast" className="admin-card">
+          <h3>📢 Broadcast</h3>
+          <p className="muted small">Post a short banner that every signed-in user sees at the top of the app.</p>
+        </Link>
       </div>
     </>
   );

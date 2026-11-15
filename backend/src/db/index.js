@@ -196,6 +196,25 @@ await raw.execute(`CREATE TABLE IF NOT EXISTS sessions (
 await raw.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
 await raw.execute('CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(user_id, revoked_at)');
 
+// Custom expense categories (per-user, on top of built-in defaults)
+await raw.execute(`CREATE TABLE IF NOT EXISTS user_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, name)
+)`);
+
+// Admin-authored announcement banners (one active row at a time)
+await raw.execute(`CREATE TABLE IF NOT EXISTS announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'info',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  actor_email TEXT
+)`);
+
 function wrapRun(result) {
   return {
     changes: Number(result.rowsAffected ?? 0),

@@ -164,17 +164,29 @@ router.get('/plan', async (req, res) => {
 // ---------- Expense log ----------
 const EXPENSE_CATEGORIES = ['Food', 'Groceries', 'Transport', 'Shopping', 'Entertainment', 'Bills', 'Health', 'Travel', 'Education', 'Other'];
 
+async function allowedCategoriesFor(userId) {
+  const rows = await db
+    .prepare('SELECT name FROM user_categories WHERE user_id = ? ORDER BY id ASC')
+    .all(userId);
+  return [...EXPENSE_CATEGORIES, ...rows.map((r) => r.name)];
+}
+
+const CATEGORY_NAME_RE = /^[A-Za-z0-9 &/+()-]{1,24}$/;
+
 router.post(
   '/expenses',
   [
     body('amount').isFloat({ min: 0, max: 1e12 }),
-    body('category').isIn(EXPENSE_CATEGORIES),
+    body('category').isString().isLength({ min: 1, max: 24 }),
     body('note').optional().isString().trim().isLength({ max: 120 }),
     body('spentOn').optional().matches(/^\d{4}-\d{2}-\d{2}$/),
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const allowed = await allowedCategoriesFor(req.user.id);
+    if (!allowed.includes(req.body.category))
+      return res.status(400).json({ error: 'Unknown category — add it in Settings first.' });
     const spentOn = req.body.spentOn || new Date().toISOString().slice(0, 10);
     const month = spentOn.slice(0, 7);
     const info = await db
@@ -198,7 +210,47 @@ router.get('/expenses', async (req, res) => {
         LIMIT 500`
     )
     .all(req.user.id, month);
-  res.json({ month, categories: EXPENSE_CATEGORIES, expenses: rows });
+  const categories = await allowedCategoriesFor(req.user.id);
+  res.json({ month, categories, expenses: rows });
+});
+
+// GET/POST/DELETE user-defined categories (on top of the 10 defaults).
+router.get('/categories', async (req, res) => {
+  const custom = await db
+    .prepare('SELECT id, name FROM user_categories WHERE user_id = ? ORDER BY id ASC')
+    .all(req.user.id);
+  res.json({ defaults: EXPENSE_CATEGORIES, custom });
+});
+
+router.post(
+  '/categories',
+  [body('name').isString()],
+  async (req, res) => {
+    const name = String(req.body.name || '').trim();
+    if (!CATEGORY_NAME_RE.test(name))
+      return res.status(400).json({ error: 'Up to 24 chars; letters, digits, spaces, & / + ( ) -' });
+    if (EXPENSE_CATEGORIES.map((c) => c.toLowerCase()).includes(name.toLowerCase()))
+      return res.status(409).json({ error: 'That matches a built-in category.' });
+    try {
+      const info = await db
+        .prepare('INSERT INTO user_categories (user_id, name) VALUES (?, ?)')
+        .run(req.user.id, name);
+      res.json({ id: info.lastInsertRowid, name });
+    } catch (e) {
+      if (/UNIQUE/i.test(e.message)) return res.status(409).json({ error: 'You already have this category.' });
+      throw e;
+    }
+  }
+);
+
+router.delete('/categories/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
+  const info = await db
+    .prepare('DELETE FROM user_categories WHERE id = ? AND user_id = ?')
+    .run(id, req.user.id);
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 router.delete('/expenses/:id', async (req, res) => {
