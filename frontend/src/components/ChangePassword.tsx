@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { api } from '../api';
+import { api, setAuth } from '../api';
+import type { User } from '../types';
 import { Card, Field } from './ui';
 import { errText, useToast } from '../state';
 
@@ -31,10 +32,14 @@ export function ChangePassword() {
     }
     setBusy(true);
     try {
-      await api.post('/auth/password', { currentPassword: current, newPassword: next });
+      const res = await api.post<{ ok: true; token?: string; user?: User }>('/auth/password', {
+        currentPassword: current,
+        newPassword: next,
+      });
+      if (res.token && res.user) setAuth(res.token, res.user);
       setCurrent(''); setNext('');
       setOpen(false);
-      toast('ok', 'Password updated. Your current session stays signed in on this device.');
+      toast('ok', 'Password updated. Other devices have been signed out.');
     } catch (err) {
       toast('err', errText(err));
     } finally { setBusy(false); }

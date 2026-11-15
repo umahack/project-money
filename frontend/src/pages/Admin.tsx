@@ -6,6 +6,7 @@ import { currentMonth, fmtDate, inr, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { AdminStats, AdminUserDetail, AdminUserRow, FeedbackRow } from '../types';
 import { VisitorsPanel } from '../components/VisitorsPanel';
+import { AuditLogPanel } from '../components/AuditLogPanel';
 
 export function Admin() {
   const { user: me } = useAuth();
@@ -234,6 +235,7 @@ export function Admin() {
       </div>
 
       <VisitorsPanel />
+      <AuditLogPanel />
 
       <Card>
         <h2>⭐ User feedback</h2>

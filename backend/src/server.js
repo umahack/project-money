@@ -23,17 +23,48 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
+// Strict security headers. The API itself only serves JSON, so CSP is very
+// locked down — no scripts, no inline, no frames.
 app.use(
   helmet({
-    contentSecurityPolicy: false, // CSP handled on frontend host
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        'default-src': ["'none'"],
+        'frame-ancestors': ["'none'"],
+        'base-uri': ["'none'"],
+        'form-action': ["'none'"],
+      },
+    },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    crossOriginEmbedderPolicy: false, // JSON API; we don't need COEP
+    referrerPolicy: { policy: 'no-referrer' },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   })
 );
+
+// Strict CORS: in production, CORS_ORIGIN MUST be a comma-separated allowlist.
+// We refuse the wildcard fallback (`*`) in production so a misconfig can't
+// expose the API to any origin.
 const rawOrigin = process.env.CORS_ORIGIN?.trim();
-const corsOrigin =
-  !rawOrigin || rawOrigin === '*'
-    ? true
-    : rawOrigin.split(',').map((s) => s.trim()).filter(Boolean);
+const isProd = process.env.NODE_ENV === 'production';
+let corsOrigin;
+if (!rawOrigin || rawOrigin === '*') {
+  if (isProd) {
+    console.error('CORS_ORIGIN must be set to a specific allowlist in production. Refusing to boot.');
+    process.exit(1);
+  }
+  corsOrigin = true; // dev convenience only
+} else {
+  const list = rawOrigin.split(',').map((s) => s.trim()).filter(Boolean);
+  corsOrigin = (origin, cb) => {
+    // Allow curl / server-to-server (no Origin header)
+    if (!origin) return cb(null, true);
+    if (list.includes(origin)) return cb(null, true);
+    return cb(new Error('CORS: origin not allowed'));
+  };
+}
 app.use(cors({ origin: corsOrigin, credentials: false }));
 app.use(express.json({ limit: '64kb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));

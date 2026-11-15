@@ -163,6 +163,23 @@ await raw.execute(`CREATE TABLE IF NOT EXISTS visits (
 await raw.execute('CREATE INDEX IF NOT EXISTS idx_visits_created_at ON visits(created_at)');
 await raw.execute('CREATE INDEX IF NOT EXISTS idx_visits_ip_hash ON visits(ip_hash)');
 
+// token_version lets us invalidate every outstanding JWT for a user by bumping it (e.g. on password change).
+try { await raw.execute('SELECT token_version FROM users LIMIT 1'); }
+catch { await raw.execute('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1'); }
+
+// Audit log: destructive admin actions get a row here. Append-only (no DELETE from code).
+await raw.execute(`CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  actor_email TEXT,
+  action TEXT NOT NULL,
+  target TEXT,
+  details TEXT,
+  ip_hash TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`);
+await raw.execute('CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)');
+
 function wrapRun(result) {
   return {
     changes: Number(result.rowsAffected ?? 0),

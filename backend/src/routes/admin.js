@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
 import { adminRequired } from '../middleware/admin.js';
+import { audit } from '../audit.js';
 
 const router = Router();
 router.use(authRequired, adminRequired);
@@ -70,7 +71,11 @@ router.put(
     if (!user) return res.status(404).json({ error: 'Not found' });
     const bcrypt = (await import('bcrypt')).default;
     const hash = await bcrypt.hash(req.body.newPassword, 12);
-    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+    // Bump token_version to boot anyone currently signed into this account.
+    await db
+      .prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?')
+      .run(hash, id);
+    await audit(req, { action: 'admin.password_reset', target: `user:${id}` });
     res.json({ ok: true });
   }
 );
@@ -83,6 +88,10 @@ router.put('/users/:id/admin', [body('is_admin').isBoolean()], async (req, res) 
   const exists = await db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(id);
   if (!exists) return res.status(404).json({ error: 'Not found' });
   await db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(req.body.is_admin ? 1 : 0, id);
+  await audit(req, {
+    action: req.body.is_admin ? 'admin.promote' : 'admin.demote',
+    target: `user:${id}`,
+  });
   res.json({ ok: true });
 });
 
@@ -91,6 +100,7 @@ router.delete('/users/:id', async (req, res) => {
   if (id === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
   const info = await db.prepare('DELETE FROM users WHERE id = ?').run(id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  await audit(req, { action: 'admin.user_delete', target: `user:${id}` });
   res.json({ ok: true });
 });
 
@@ -120,6 +130,16 @@ router.delete('/feedback/:id', async (req, res) => {
   const info = await db.prepare('DELETE FROM feedback WHERE id = ?').run(id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
+});
+
+router.get('/audit', async (_req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT id, actor_id, actor_email, action, target, details, created_at
+         FROM audit_log ORDER BY id DESC LIMIT 200`
+    )
+    .all();
+  res.json({ audit: rows });
 });
 
 router.get('/visits/stats', async (_req, res) => {
