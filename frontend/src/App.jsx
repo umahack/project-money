@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import Trips from './pages/Trips.jsx';
 import TripDetail from './pages/TripDetail.jsx';
 import Plan from './pages/Plan.jsx';
+import Admin from './pages/Admin.jsx';
 
 function Protected({ children }) {
   if (!getToken()) return <Navigate to="/login" replace />;
@@ -34,6 +35,7 @@ function Nav() {
           <NavLink to="/">Dashboard</NavLink>
           <NavLink to="/plan">Plan</NavLink>
           <NavLink to="/trips">Trips</NavLink>
+          {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
           <button
             className="btn-ghost ml-2"
             onClick={() => { logout(); nav('/login'); }}
@@ -85,6 +87,7 @@ export default function App() {
               <Route path="/plan" element={<Protected><Plan /></Protected>} />
               <Route path="/trips" element={<Protected><Trips /></Protected>} />
               <Route path="/trips/:id" element={<Protected><TripDetail /></Protected>} />
+              <Route path="/admin" element={<Protected><Admin /></Protected>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.div>

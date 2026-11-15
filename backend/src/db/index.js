@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  is_admin INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -65,5 +66,12 @@ CREATE TABLE IF NOT EXISTS trip_expenses (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 `);
+
+// Idempotent migration for existing DBs that pre-date the is_admin column
+try {
+  db.prepare('SELECT is_admin FROM users LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0');
+}
 
 export default db;

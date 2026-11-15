@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
+import { adminEmails } from '../middleware/admin.js';
 
 const router = Router();
 
@@ -17,10 +18,17 @@ const authLimiter = rateLimit({
 
 function sign(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email, name: user.name },
+    { sub: user.id, email: user.email, name: user.name, is_admin: !!user.is_admin },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
+}
+
+function promoteIfConfigured(userId, email) {
+  const admins = adminEmails();
+  const shouldBeAdmin = admins.has(String(email).toLowerCase()) ? 1 : 0;
+  if (shouldBeAdmin) db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(userId);
+  return shouldBeAdmin;
 }
 
 router.post(
@@ -44,7 +52,8 @@ router.post(
     const info = db
       .prepare('INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)')
       .run(email, name, hash);
-    const user = { id: info.lastInsertRowid, email, name };
+    const is_admin = promoteIfConfigured(info.lastInsertRowid, email);
+    const user = { id: info.lastInsertRowid, email, name, is_admin: !!is_admin };
     res.json({ token: sign(user), user });
   }
 );
@@ -64,7 +73,9 @@ router.post(
     }
     const ok = await bcrypt.compare(password, row.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const user = { id: row.id, email: row.email, name: row.name };
+    // Allow promoting an existing user by adding their email to ADMIN_EMAILS later.
+    const is_admin = row.is_admin || promoteIfConfigured(row.id, row.email);
+    const user = { id: row.id, email: row.email, name: row.name, is_admin: !!is_admin };
     res.json({ token: sign(user), user });
   }
 );
