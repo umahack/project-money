@@ -483,3 +483,10 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 .cat-budget-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); }
 .cat-budget-inline .over { color: var(--danger); font-weight: 700; }
 .cat-budget-inline .under { color: var(--mint, #4ade80); font-weight: 600; }
+
+/* ---- Onboarding modal extras ---- */
+.onb-dots { display: flex; gap: 6px; margin-bottom: 10px; }
+.onb-dot { width: 24px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); transition: background 0.25s; }
+.onb-dot.on { background: linear-gradient(90deg, #7c6cff, #4ade80); }
+.onb-dot.done { background: rgba(124,108,255,0.6); }
+.onb-emoji { font-size: 44px; margin: 0.4rem 0; }

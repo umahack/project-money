@@ -59,6 +59,22 @@ router.put(
   }
 );
 
+router.put(
+  '/users/:id/password',
+  [body('newPassword').isString().isLength({ min: 8, max: 128 })],
+  async (req, res) => {
+    const id = Number(req.params.id);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const user = await db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    const bcrypt = (await import('bcrypt')).default;
+    const hash = await bcrypt.hash(req.body.newPassword, 12);
+    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+    res.json({ ok: true });
+  }
+);
+
 router.put('/users/:id/admin', [body('is_admin').isBoolean()], async (req, res) => {
   const id = Number(req.params.id);
   const errors = validationResult(req);

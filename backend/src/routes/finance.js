@@ -10,6 +10,47 @@ function monthKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function todayISO(d = new Date()) {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Materialize this month's auto-logs for every active recurring entry whose
+ * day-of-month has arrived. Idempotent via last_logged_month on the row.
+ * Called on finance endpoints that read current-month state so the ledger
+ * stays correct without any cron.
+ */
+async function materializeRecurring(userId) {
+  const now = new Date();
+  const month = monthKey(now);
+  const dayToday = now.getDate();
+  const rows = await db
+    .prepare(
+      `SELECT id, label, amount, category, day_of_month, last_logged_month
+         FROM recurring_expenses
+        WHERE user_id = ? AND active = 1`
+    )
+    .all(userId);
+  for (const r of rows) {
+    if (r.last_logged_month === month) continue;
+    if (Number(r.day_of_month) > dayToday) continue;
+    const spentOn = `${month}-${String(Math.min(Number(r.day_of_month), 28)).padStart(2, '0')}`;
+    try {
+      await db
+        .prepare(
+          `INSERT INTO expense_log (user_id, month, category, amount, note, spent_on)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .run(userId, month, r.category, Number(r.amount), `${r.label} (recurring)`, spentOn);
+      await db
+        .prepare('UPDATE recurring_expenses SET last_logged_month = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(month, r.id);
+    } catch (e) {
+      console.error('[recurring-materialize] skipped id', r.id, e?.message);
+    }
+  }
+}
+
 router.post(
   '/salary',
   [
@@ -71,6 +112,7 @@ router.delete('/emis/:id', async (req, res) => {
 });
 
 router.get('/plan', async (req, res) => {
+  await materializeRecurring(req.user.id);
   const salary = await db
     .prepare('SELECT amount FROM salary_entries WHERE user_id = ? ORDER BY month DESC LIMIT 1')
     .get(req.user.id);
@@ -145,6 +187,7 @@ router.post(
 );
 
 router.get('/expenses', async (req, res) => {
+  await materializeRecurring(req.user.id);
   const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? String(req.query.month) : monthKey();
   const rows = await db
     .prepare(
@@ -317,6 +360,98 @@ router.delete('/goals/:id', async (req, res) => {
     .run(id, req.user.id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
+});
+
+// ---------- Recurring expenses ----------
+router.get('/recurring', async (req, res) => {
+  await materializeRecurring(req.user.id);
+  const rows = await db
+    .prepare(
+      `SELECT id, label, amount, category, day_of_month, active, last_logged_month, created_at
+         FROM recurring_expenses WHERE user_id = ? ORDER BY day_of_month ASC, id DESC`
+    )
+    .all(req.user.id);
+  res.json({
+    categories: EXPENSE_CATEGORIES,
+    recurring: rows.map((r) => ({ ...r, active: !!r.active })),
+  });
+});
+
+router.post(
+  '/recurring',
+  [
+    body('label').isString().trim().isLength({ min: 1, max: 60 }),
+    body('amount').isFloat({ min: 0, max: 1e12 }),
+    body('category').isIn(EXPENSE_CATEGORIES),
+    body('dayOfMonth').isInt({ min: 1, max: 31 }),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const info = await db
+      .prepare(
+        `INSERT INTO recurring_expenses (user_id, label, amount, category, day_of_month)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(
+        req.user.id,
+        String(req.body.label).trim(),
+        Number(req.body.amount),
+        req.body.category,
+        Number(req.body.dayOfMonth)
+      );
+    await materializeRecurring(req.user.id);
+    res.json({ id: info.lastInsertRowid });
+  }
+);
+
+router.patch(
+  '/recurring/:id',
+  [body('active').optional().isBoolean()],
+  async (req, res) => {
+    const id = Number(req.params.id);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    if (req.body.active === undefined) return res.status(400).json({ error: 'Nothing to update' });
+    const info = await db
+      .prepare('UPDATE recurring_expenses SET active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+      .run(req.body.active ? 1 : 0, id, req.user.id);
+    if (!info.changes) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  }
+);
+
+router.delete('/recurring/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const info = await db
+    .prepare('DELETE FROM recurring_expenses WHERE id = ? AND user_id = ?')
+    .run(id, req.user.id);
+  if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+// ---------- CSV export ----------
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+router.get('/export.csv', async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT COALESCE(spent_on, substr(created_at, 1, 10)) AS date, month, category, amount, note
+         FROM expense_log WHERE user_id = ? ORDER BY date ASC, id ASC`
+    )
+    .all(req.user.id);
+  const header = ['date', 'month', 'category', 'amount', 'note'];
+  const lines = [header.join(',')];
+  for (const r of rows) lines.push(header.map((h) => csvEscape(r[h])).join(','));
+  const filename = `project-money-expenses-${todayISO()}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(lines.join('\n') + '\n');
 });
 
 export default router;

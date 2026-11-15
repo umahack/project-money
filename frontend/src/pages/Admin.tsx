@@ -139,6 +139,17 @@ export function Admin() {
                     <button className="btn ghost sm" onClick={() => setSalaryFor(selUser)}>Override salary</button>
                     <button
                       className="btn ghost sm"
+                      onClick={() => {
+                        const next = prompt(`Set a new password for ${selUser.email}. Minimum 8 characters.\n\nShare it with them privately; they can change it themselves after signing in.`);
+                        if (next == null) return;
+                        if (next.length < 8) { alert('Password must be at least 8 characters.'); return; }
+                        void act(() => api.put(`/admin/users/${selUser.id}/password`, { newPassword: next }), 'Password reset', selUser.id);
+                      }}
+                    >
+                      Reset password
+                    </button>
+                    <button
+                      className="btn ghost sm"
                       disabled={isSelf}
                       onClick={() =>
                         setConfirm({

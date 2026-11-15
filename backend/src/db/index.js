@@ -98,6 +98,18 @@ const SCHEMA = [
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, category)
   )`,
+  `CREATE TABLE IF NOT EXISTS recurring_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount >= 0),
+    category TEXT NOT NULL,
+    day_of_month INTEGER NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+    active INTEGER NOT NULL DEFAULT 1,
+    last_logged_month TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS savings_goals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -12,6 +12,9 @@ import { SpendingTracker } from '../components/SpendingTracker';
 import { MonthlyHistoryChart } from '../components/MonthlyHistoryChart';
 import { SavingsGoals } from '../components/SavingsGoals';
 import { ChangePassword } from '../components/ChangePassword';
+import { RecurringExpenses } from '../components/RecurringExpenses';
+import { ExportData } from '../components/ExportData';
+import { OnboardingModal } from '../components/OnboardingModal';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -254,8 +257,11 @@ export function Dashboard() {
 
       <SpendingTracker disposable={plan.afterFixed} onChange={() => void load()} />
       <MonthlyHistoryChart />
+      <RecurringExpenses onChange={() => void load()} />
       <SavingsGoals />
+      <ExportData />
       <ChangePassword />
+      <OnboardingModal />
     </>
   );
 }
