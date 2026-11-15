@@ -16,21 +16,23 @@ router.post(
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('month').optional().matches(/^\d{4}-\d{2}$/),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const month = req.body.month || monthKey();
     const amount = Number(req.body.amount);
-    db.prepare(
-      `INSERT INTO salary_entries (user_id, month, amount) VALUES (?, ?, ?)
-       ON CONFLICT(user_id, month) DO UPDATE SET amount=excluded.amount`
-    ).run(req.user.id, month, amount);
+    await db
+      .prepare(
+        `INSERT INTO salary_entries (user_id, month, amount) VALUES (?, ?, ?)
+         ON CONFLICT(user_id, month) DO UPDATE SET amount=excluded.amount`
+      )
+      .run(req.user.id, month, amount);
     res.json({ ok: true, month, amount });
   }
 );
 
-router.get('/salary', (req, res) => {
-  const row = db
+router.get('/salary', async (req, res) => {
+  const row = await db
     .prepare('SELECT month, amount FROM salary_entries WHERE user_id = ? ORDER BY month DESC LIMIT 1')
     .get(req.user.id);
   res.json({ salary: row || null });
@@ -43,39 +45,40 @@ router.post(
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('category').isIn(['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other']),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { label, amount, category } = req.body;
-    const info = db
+    const info = await db
       .prepare('INSERT INTO emis (user_id, label, amount, category) VALUES (?, ?, ?, ?)')
       .run(req.user.id, label, Number(amount), category);
     res.json({ id: info.lastInsertRowid });
   }
 );
 
-router.get('/emis', (req, res) => {
-  const rows = db
+router.get('/emis', async (req, res) => {
+  const rows = await db
     .prepare('SELECT id, label, amount, category FROM emis WHERE user_id = ? ORDER BY id DESC')
     .all(req.user.id);
   res.json({ emis: rows });
 });
 
-router.delete('/emis/:id', (req, res) => {
+router.delete('/emis/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
-  db.prepare('DELETE FROM emis WHERE id = ? AND user_id = ?').run(id, req.user.id);
+  await db.prepare('DELETE FROM emis WHERE id = ? AND user_id = ?').run(id, req.user.id);
   res.json({ ok: true });
 });
 
-router.get('/plan', (req, res) => {
-  const salary = db
+router.get('/plan', async (req, res) => {
+  const salary = await db
     .prepare('SELECT amount FROM salary_entries WHERE user_id = ? ORDER BY month DESC LIMIT 1')
     .get(req.user.id);
-  const emiTotal = db
+  const emiRow = await db
     .prepare('SELECT COALESCE(SUM(amount),0) AS total FROM emis WHERE user_id = ?')
-    .get(req.user.id).total;
-  const income = salary?.amount || 0;
+    .get(req.user.id);
+  const emiTotal = Number(emiRow.total || 0);
+  const income = Number(salary?.amount || 0);
   const afterFixed = Math.max(income - emiTotal, 0);
   const needs = Math.round(afterFixed * 0.5);
   const wants = Math.round(afterFixed * 0.3);

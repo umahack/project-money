@@ -1,8 +1,8 @@
 import db from '../db/index.js';
 
-export function adminRequired(req, res, next) {
+export async function adminRequired(req, res, next) {
   if (!req.user?.id) return res.status(401).json({ error: 'Unauthorized' });
-  const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.user.id);
+  const row = await db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.user.id);
   if (!row?.is_admin) return res.status(403).json({ error: 'Admin only' });
   next();
 }

@@ -21,19 +21,19 @@ router.post(
     body('rating').isInt({ min: 1, max: 5 }),
     body('message').optional().isString().isLength({ max: 2000 }),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const rating = Number(req.body.rating);
     const message = req.body.message?.trim() || null;
     try {
-      const info = db
+      const info = await db
         .prepare('INSERT INTO feedback (user_id, email, rating, message) VALUES (?, ?, ?, ?)')
         .run(req.user.id, req.user.email, rating, message);
       return res.json({ ok: true, id: info.lastInsertRowid });
     } catch (err) {
       if (err?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
-        const info = db
+        const info = await db
           .prepare('INSERT INTO feedback (user_id, email, rating, message) VALUES (NULL, ?, ?, ?)')
           .run(req.user.email, rating, message);
         return res.json({ ok: true, id: info.lastInsertRowid });

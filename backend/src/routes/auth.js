@@ -24,10 +24,10 @@ function sign(user) {
   );
 }
 
-function promoteIfConfigured(userId, email) {
+async function promoteIfConfigured(userId, email) {
   const admins = adminEmails();
   const shouldBeAdmin = admins.has(String(email).toLowerCase()) ? 1 : 0;
-  if (shouldBeAdmin) db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(userId);
+  if (shouldBeAdmin) await db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(userId);
   return shouldBeAdmin;
 }
 
@@ -46,13 +46,13 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { email, name, password } = req.body;
-    const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const exists = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (exists) return res.status(409).json({ error: 'Email already registered' });
     const hash = await bcrypt.hash(password, 12);
-    const info = db
+    const info = await db
       .prepare('INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)')
       .run(email, name, hash);
-    const is_admin = promoteIfConfigured(info.lastInsertRowid, email);
+    const is_admin = await promoteIfConfigured(info.lastInsertRowid, email);
     const user = { id: info.lastInsertRowid, email, name, is_admin: !!is_admin };
     res.json({ token: sign(user), user });
   }
@@ -66,15 +66,14 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Invalid credentials' });
     const { email, password } = req.body;
-    const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const row = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!row) {
       await bcrypt.hash(password, 12); // timing equalization
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const ok = await bcrypt.compare(password, row.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    // Allow promoting an existing user by adding their email to ADMIN_EMAILS later.
-    const is_admin = row.is_admin || promoteIfConfigured(row.id, row.email);
+    const is_admin = row.is_admin || (await promoteIfConfigured(row.id, row.email));
     const user = { id: row.id, email: row.email, name: row.name, is_admin: !!is_admin };
     res.json({ token: sign(user), user });
   }
