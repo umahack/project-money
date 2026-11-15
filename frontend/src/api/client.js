@@ -36,6 +36,12 @@ export async function api(path, { method = 'GET', body, auth = true } = {}) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if (res.status === 401 && auth) {
+      logout();
+      if (!/\/login|\/register/.test(location.pathname)) {
+        location.href = '/login';
+      }
+    }
     const msg = data?.error || `Request failed (${res.status})`;
     throw new Error(msg);
   }

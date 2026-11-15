@@ -24,10 +24,22 @@ router.post(
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-    const info = db
-      .prepare('INSERT INTO feedback (user_id, email, rating, message) VALUES (?, ?, ?, ?)')
-      .run(req.user.id, req.user.email, Number(req.body.rating), req.body.message?.trim() || null);
-    res.json({ ok: true, id: info.lastInsertRowid });
+    const rating = Number(req.body.rating);
+    const message = req.body.message?.trim() || null;
+    try {
+      const info = db
+        .prepare('INSERT INTO feedback (user_id, email, rating, message) VALUES (?, ?, ?, ?)')
+        .run(req.user.id, req.user.email, rating, message);
+      return res.json({ ok: true, id: info.lastInsertRowid });
+    } catch (err) {
+      if (err?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+        const info = db
+          .prepare('INSERT INTO feedback (user_id, email, rating, message) VALUES (NULL, ?, ?, ?)')
+          .run(req.user.email, rating, message);
+        return res.json({ ok: true, id: info.lastInsertRowid });
+      }
+      throw err;
+    }
   }
 );
 
