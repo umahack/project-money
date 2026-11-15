@@ -20,7 +20,7 @@ function sign(user) {
   return jwt.sign(
     { sub: user.id, email: user.email, name: user.name, is_admin: !!user.is_admin },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: '30m' }
   );
 }
 
