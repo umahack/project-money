@@ -77,7 +77,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={60} required placeholder="Asha Rao" />
                 </Field>
               )}
-              <Field label="Email">
+              <Field label="Email" hint={isLogin ? 'Your primary email or any linked alias.' : undefined}>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" inputMode="email" aria-invalid={!isLogin && email.length > 0 && !emailOk} />
               </Field>
               <div className="field">
