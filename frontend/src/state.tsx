@@ -65,14 +65,27 @@ interface AuthResponse {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // The session token lives in sessionStorage (cleared when the tab closes), exactly as in the classic UI.
   const [user, setUser] = useState<User | null>(() => (getToken() ? getUser() : null));
+  const [kickedMsg, setKickedMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const expired = () => setUser(null);
-    window.addEventListener('auth:expired', expired);
-    return () => window.removeEventListener('auth:expired', expired);
+    const expired = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail === 'string' && detail.length) setKickedMsg(detail);
+      setUser(null);
+    };
+    window.addEventListener('auth:expired', expired as EventListener);
+    return () => window.removeEventListener('auth:expired', expired as EventListener);
   }, []);
+
+  // Surface the kick-out reason via sessionStorage so the Auth page can read
+  // it after the forced navigate; cleared after display.
+  useEffect(() => {
+    if (kickedMsg) {
+      try { sessionStorage.setItem('pm_kicked_msg', kickedMsg); } catch { /* ignore */ }
+      setKickedMsg(null);
+    }
+  }, [kickedMsg]);
 
   const value = useMemo<AuthState>(
     () => ({

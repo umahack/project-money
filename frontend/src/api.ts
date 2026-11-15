@@ -71,7 +71,13 @@ async function request<T>(path: string, { method = 'GET', body, auth = true }: O
   if (!res.ok) {
     if (res.status === 401 && auth) {
       clearAuth();
-      window.dispatchEvent(new Event('auth:expired'));
+      // Pass the server message along so the UI can surface context like
+      // "Signed out because this account was used on another device."
+      const detail =
+        typeof data?.error === 'string'
+          ? data.error
+          : 'Your session has ended. Please sign in again.';
+      window.dispatchEvent(new CustomEvent('auth:expired', { detail }));
     }
     const fallback =
       res.status === 429 ? 'Too many requests. Please wait a moment and try again.'

@@ -180,6 +180,22 @@ await raw.execute(`CREATE TABLE IF NOT EXISTS audit_log (
 )`);
 await raw.execute('CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)');
 
+// Sessions: one row per device login. New successful login revokes all
+// prior rows for that user (single-device-at-a-time enforcement).
+await raw.execute(`CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_label TEXT,
+  ip_hash TEXT,
+  user_agent TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  revoked_at TEXT,
+  revoked_reason TEXT
+)`);
+await raw.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
+await raw.execute('CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(user_id, revoked_at)');
+
 function wrapRun(result) {
   return {
     changes: Number(result.rowsAffected ?? 0),

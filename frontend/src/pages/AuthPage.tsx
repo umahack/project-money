@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
 import { LandingPreview } from '../components/LandingPreview';
-import { errText, useAuth } from '../state';
+import { errText, useAuth, useToast } from '../state';
 
 const RULES = [
   { key: 'len', label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
@@ -22,7 +22,18 @@ function friendly(message: string, mode: 'login' | 'register'): string {
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { login, register } = useAuth();
+  const { toast } = useToast();
   const nav = useNavigate();
+
+  useEffect(() => {
+    try {
+      const msg = sessionStorage.getItem('pm_kicked_msg');
+      if (msg) {
+        toast('err', msg);
+        sessionStorage.removeItem('pm_kicked_msg');
+      }
+    } catch { /* ignore */ }
+  }, [toast]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

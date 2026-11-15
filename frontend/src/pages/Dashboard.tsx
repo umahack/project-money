@@ -13,6 +13,7 @@ import { MonthlyHistoryChart } from '../components/MonthlyHistoryChart';
 import { SmartInsights } from '../components/SmartInsights';
 import { SavingsGoals } from '../components/SavingsGoals';
 import { ChangePassword } from '../components/ChangePassword';
+import { DevicesPanel } from '../components/DevicesPanel';
 import { RecurringExpenses } from '../components/RecurringExpenses';
 import { ExportData } from '../components/ExportData';
 import { OnboardingModal } from '../components/OnboardingModal';
@@ -262,6 +263,7 @@ export function Dashboard() {
       <RecurringExpenses onChange={() => void load()} />
       <SavingsGoals />
       <ExportData />
+      <DevicesPanel />
       <ChangePassword />
       <OnboardingModal />
     </>

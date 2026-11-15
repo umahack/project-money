@@ -7,6 +7,7 @@ import db from '../db/index.js';
 import { adminEmails } from '../middleware/admin.js';
 import { authRequired } from '../middleware/auth.js';
 import { audit } from '../audit.js';
+import { createSingleSession, revokeSession } from '../sessions.js';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const authLimiter = rateLimit({
   message: { error: 'Too many attempts, slow down.' },
 });
 
-function sign(user) {
+function sign(user, sid) {
   return jwt.sign(
     {
       sub: user.id,
@@ -26,6 +27,7 @@ function sign(user) {
       name: user.name,
       is_admin: !!user.is_admin,
       tv: Number(user.token_version ?? 1),
+      sid: Number(sid),
     },
     process.env.JWT_SECRET,
     { algorithm: 'HS256', expiresIn: '30m' }
@@ -90,7 +92,14 @@ router.post(
       .run(email, name, hash);
     const is_admin = await promoteIfConfigured(info.lastInsertRowid, email);
     const user = { id: info.lastInsertRowid, email, name, is_admin: !!is_admin, token_version: 1 };
-    res.json({ token: sign(user), user: { id: user.id, email, name, is_admin: !!is_admin } });
+    const sid = await createSingleSession(user.id, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    res.json({
+      token: sign(user, sid),
+      user: { id: user.id, email, name, is_admin: !!is_admin },
+    });
   }
 );
 
@@ -127,7 +136,17 @@ router.post(
       is_admin: !!is_admin,
       token_version: Number(row.token_version ?? 1),
     };
-    res.json({ token: sign(user), user: { id: user.id, email: user.email, name: user.name, is_admin: !!is_admin } });
+    // Single-device policy: revoke every prior active session for this user,
+    // then create a fresh one. The old device's next request returns 401
+    // 'Signed out because this account was used on another device.'
+    const sid = await createSingleSession(user.id, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    res.json({
+      token: sign(user, sid),
+      user: { id: user.id, email: user.email, name: user.name, is_admin: !!is_admin },
+    });
   }
 );
 
@@ -164,22 +183,69 @@ router.post(
     const ok = await bcrypt.compare(currentPassword, row.password_hash);
     if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
     const newHash = await bcrypt.hash(newPassword, 12);
-    // Bump token_version so every outstanding JWT for this user (incl. the one
-    // on this very request) will be rejected on next call. We also return a
-    // fresh JWT so the user doesn't get kicked out mid-flow.
+    // Bump token_version + revoke every session except the one on this
+    // request. We re-issue a fresh JWT on the current session so this
+    // device stays signed in.
     await db
       .prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?')
       .run(newHash, req.user.id);
+    await db
+      .prepare(
+        `UPDATE sessions
+            SET revoked_at = CURRENT_TIMESTAMP,
+                revoked_reason = 'password_changed'
+          WHERE user_id = ? AND id != ? AND revoked_at IS NULL`
+      )
+      .run(req.user.id, req.user.sid);
     const u = await db
       .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
       .get(req.user.id);
     await audit(req, { action: 'password.self_change' });
     res.json({
       ok: true,
-      token: sign(u),
+      token: sign(u, req.user.sid),
       user: { id: u.id, email: u.email, name: u.name, is_admin: !!u.is_admin },
     });
   }
 );
+
+// ---------- Device sessions ----------
+router.get('/sessions', authRequired, async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT id, device_label, user_agent, created_at, last_seen_at, revoked_at, revoked_reason
+         FROM sessions
+        WHERE user_id = ?
+        ORDER BY (revoked_at IS NULL) DESC, id DESC
+        LIMIT 25`
+    )
+    .all(req.user.id);
+  res.json({
+    current_sid: req.user.sid,
+    sessions: rows.map((r) => ({ ...r, revoked: !!r.revoked_at })),
+  });
+});
+
+router.delete('/sessions/:id', authRequired, async (req, res) => {
+  const id = Number(req.params.id);
+  // Only the owning user can revoke; admins intentionally cannot force-quit
+  // other users' sessions here.
+  const ok = await revokeSession(req.user.id, id, 'user_revoked');
+  if (!ok) return res.status(404).json({ error: 'Session not found or already revoked' });
+  res.json({ ok: true });
+});
+
+router.delete('/sessions', authRequired, async (req, res) => {
+  // "Sign out everywhere else" — keeps the current session alive.
+  await db
+    .prepare(
+      `UPDATE sessions
+          SET revoked_at = CURRENT_TIMESTAMP,
+              revoked_reason = 'user_signed_out_all'
+        WHERE user_id = ? AND id != ? AND revoked_at IS NULL`
+    )
+    .run(req.user.id, req.user.sid);
+  res.json({ ok: true });
+});
 
 export default router;
