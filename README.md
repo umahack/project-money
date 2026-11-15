@@ -8,6 +8,13 @@ A full-stack, mobile-friendly budget planner.
 - **Trips** — budget + members + weighted splits + Splitwise-style settle-up
 - **Theme** — dark gradient, Framer Motion animations, mobile-first
 
+## UI versions and rollback
+`frontend/` is **UI v2** (TypeScript, plain CSS, Framer Motion). The previous Tailwind UI is kept as
+`frontend-v1/` and as git tag `ui-v1-classic`. The API and database are identical for both.
+
+To roll back, set `rootDir: frontend-v1` for `project-money-web` in `render.yaml`, push, and redeploy with
+**Clear build cache**. Set it back to `frontend` to return to v2. Details are in `HANDOFF.md`.
+
 ## Local dev
 
 ```bash

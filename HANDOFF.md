@@ -18,7 +18,8 @@ Hosted at **https://project-money-web.onrender.com**, source at
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Frontend | React 18 + Vite + Tailwind + Framer Motion + Recharts + React Router | Dark gradient theme, mobile-first, animated page transitions |
+| Frontend (**UI v2**, current) | React 18 + Vite 5 + TypeScript + plain CSS + Framer Motion + React Router | "Midnight vault" glass theme, light/dark toggle, bottom tab bar on phones, Arcade games. No Tailwind, no Recharts, fonts self-hosted. See **UI v2 and rollback** below |
+| Frontend (UI v1, classic) | React 18 + Vite + Tailwind + Recharts | Kept in `frontend-v1/` and git tag `ui-v1-classic` for rollback |
 | Backend | Node 20 + Express 4 (ESM) | `express-async-errors` patches async middleware |
 | Database | **Turso (libsql)** | SQLite-compatible, hosted at `project-money-umahack.aws-ap-south-1.turso.io` |
 | Auth | JWT (7-day) + bcrypt (cost 12) | Tokens in browser `sessionStorage` |
@@ -29,6 +30,45 @@ The DB client has a thin adapter (`backend/src/db/index.js`) that mimics
 stays readable. All DB calls are **async** — `await db.prepare(...).run(...)`.
 
 ---
+
+## UI v2 and rollback
+
+The whole frontend was redesigned (branch `ui-v2`). **Backend, database and API are unchanged.** The new UI
+talks to the same endpoints and uses the same `sessionStorage` keys (`pm_token`, `pm_user`), so signed-in
+users survive a switch in either direction.
+
+### Switch back to the classic UI (any of these)
+1. **Render, no code change to the app:** in `render.yaml` set the `project-money-web` service
+   `rootDir: frontend-v1` (it was `frontend`), commit, push, then **Clear build cache & deploy** on the web
+   service. `frontend-v1/` is the complete old UI and builds on its own (`npm install && npm run build`).
+2. **Git:** `git checkout ui-v1-classic` (tag on the last commit before the redesign) or
+   `git revert` the v2 commit(s) on `main`.
+3. Return to v2 any time: set `rootDir: frontend` again, or `git checkout ui-v2`.
+
+### What each old page became
+| Old page | v2 page | Notes |
+|---|---|---|
+| Login / Register | `/login`, `/register` (`AuthPage.tsx`) | Same routes, show/hide password, password checklist, friendly errors |
+| Dashboard | Home `/` | Salary, EMI CRUD, donut, health, daily spend, recommendations. Recharts replaced by an SVG donut |
+| Plan | `/plan` | Same line-by-line 50/30/20 generator plus emergency-fund target |
+| Trips / TripDetail | `/trips`, `/trips/:id` | Equal or custom split, balances, settle-up, "Mark paid", "Add me" |
+| Admin | `/admin` | Same actions; `prompt()`/`confirm()` replaced by dialogs; stats, search, per-user drill-down, feedback |
+| Feedback modal on Logout | Sign out opens the same modal | Closing it (✕, Esc) now keeps you signed in; "Skip & sign out" leaves |
+| (removed earlier) mini-game | `/arcade` | Coin Catcher and Snake Saver. Delete the route/tab in `App.tsx` and `Shell.tsx` if unwanted |
+
+### Behaviours worth knowing (all because the API is unchanged)
+- **Settlements** ("Mark paid") are saved as a normal expense whose description starts with
+  `↔ Settlement: `, paid by the person paying back and split 100% to the receiver. The UI shows them as
+  payments and leaves them out of "Spent". The classic UI shows them as ordinary expenses with that text.
+- Trip members are still **names only**. The email field is a label, not an invite. The owner is not a member
+  until added (v2 has an **Add me** button).
+- The API only returns the **latest** salary entry, so v2 has no month switcher. It shows which month is on file.
+- No API for editing/deleting trips, expenses or members, so v2 has no such buttons.
+- The recommendation list = the API's tips plus extra insights computed in the browser (`insights.ts`).
+  Amounts always come from the API.
+- Production CSP is injected into `index.html` at build time by `vite.config.ts` (`script-src 'self'`, no
+  inline script, no Google Fonts). `connect-src` allows only this site and the exact origin in `VITE_API_BASE`,
+  so **VITE_API_BASE must be set at build time** or the browser will block API calls.
 
 ## Features implemented
 
@@ -173,6 +213,10 @@ GET    /api/health
     handlers and middleware converted to async; `express-async-errors`
     added. Verified end-to-end locally against production Turso DB.
 
+12. **UI v2 redesign** (branch `ui-v2`). Replaced the Tailwind UI with a TypeScript, plain-CSS "midnight
+    vault" UI across every page including Admin. Classic UI kept in `frontend-v1/` plus tag `ui-v1-classic`.
+    Tested in headless Chrome against a throwaway local backend, never the production Turso DB.
+
 ---
 
 ## Known caveats / what the next agent should know
@@ -228,24 +272,19 @@ Project Money/
 │     ├─ db/index.js               libsql adapter + schema init
 │     ├─ middleware/{auth,admin}.js
 │     └─ routes/{auth,finance,trips,admin,feedback}.js
-└─ frontend/
-   ├─ package.json                 vite, react-router, framer-motion, …
-   ├─ vite.config.js
-   ├─ tailwind.config.js
-   ├─ index.html                   CSP meta tag lives here
-   └─ src/
-      ├─ main.jsx
-      ├─ App.jsx                   Routes + nav + logout feedback flow
-      ├─ api/client.js             fetch wrapper, 401 auto-logout
-      ├─ components/
-      │  ├─ FeedbackModal.jsx
-      │  └─ Toast.jsx
-      └─ pages/
-         ├─ Login.jsx / Register.jsx
-         ├─ Dashboard.jsx
-         ├─ Plan.jsx
-         ├─ Trips.jsx / TripDetail.jsx
-         └─ Admin.jsx
+├─ frontend/                       UI v2 (current)
+│  ├─ package.json                 vite 5, react 18, react-router 6, framer-motion 11, typescript
+│  ├─ vite.config.ts               dev/preview proxy (loopback) + build-time CSP injection
+│  └─ src/
+│     ├─ main.tsx, App.tsx         routes (public: /login /register; private: everything else)
+│     ├─ api.ts                    fetch wrapper, Bearer token in sessionStorage, 401 auto-logout
+│     ├─ state.tsx                 AuthProvider + toasts
+│     ├─ insights.ts               derived health / daily spend / recommendations
+│     ├─ money.ts, types.ts, styles.css
+│     ├─ components/               Shell (nav), FeedbackModal, ui (Card, Modal, Donut, ...)
+│     ├─ games/                    CoinCatcher, Snake
+│     └─ pages/                    AuthPage, Dashboard, Plan, Trips, TripDetail, Arcade, Admin
+└─ frontend-v1/                    UI v1 classic (Tailwind) kept for rollback
 ```
 
 ---
