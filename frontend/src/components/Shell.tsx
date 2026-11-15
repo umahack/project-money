@@ -96,7 +96,9 @@ export function Shell() {
             <Outlet />
           </motion.div>
         </AnimatePresence>
-        <footer className="foot muted tiny center">Project Money · UI v2</footer>
+        <footer className="foot muted tiny center">
+          Project Money · UI v2 · Crafted with ♥ by <span className="signature">Umakanth</span>
+        </footer>
       </main>
 
       <nav className="bottom-tabs mobile-only" aria-label="Primary mobile">

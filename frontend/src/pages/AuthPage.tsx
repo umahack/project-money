@@ -117,6 +117,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               </motion.button>
             </form>
           </Card>
+          <p className="auth-sig muted tiny center">
+            Crafted with ♥ by <span className="signature">Umakanth</span>
+          </p>
         </motion.div>
       </div>
     </>
