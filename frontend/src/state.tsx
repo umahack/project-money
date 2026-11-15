@@ -74,8 +74,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof detail === 'string' && detail.length) setKickedMsg(detail);
       setUser(null);
     };
+    const changed = () => setUser(getUser());
     window.addEventListener('auth:expired', expired as EventListener);
-    return () => window.removeEventListener('auth:expired', expired as EventListener);
+    window.addEventListener('auth:changed', changed);
+    return () => {
+      window.removeEventListener('auth:expired', expired as EventListener);
+      window.removeEventListener('auth:changed', changed);
+    };
   }, []);
 
   // Surface the kick-out reason via sessionStorage so the Auth page can read

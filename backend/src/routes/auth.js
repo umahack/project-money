@@ -209,6 +209,65 @@ router.post(
   }
 );
 
+// ---------- Edit profile (name + email) ----------
+// Email changes are intentionally un-verified for now; a future OTP sprint
+// will gate email changes behind a code sent to the new address.
+router.patch(
+  '/profile',
+  authRequired,
+  [
+    body('name').optional().isString().trim().isLength({ min: 1, max: 60 }),
+    body('email').optional().isEmail().normalizeEmail(),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const name = typeof req.body.name === 'string' ? String(req.body.name).trim() : undefined;
+    const email = typeof req.body.email === 'string' ? String(req.body.email).toLowerCase() : undefined;
+    if (name === undefined && email === undefined)
+      return res.status(400).json({ error: 'Nothing to update' });
+
+    const current = await db
+      .prepare('SELECT id, name, email FROM users WHERE id = ?')
+      .get(req.user.id);
+    if (!current) return res.status(401).json({ error: 'Session expired' });
+
+    if (email && email !== current.email) {
+      const taken = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      if (taken) return res.status(409).json({ error: 'That email is already in use.' });
+    }
+
+    const sets = [];
+    const args = [];
+    const auditParts = [];
+    if (name !== undefined && name !== current.name) {
+      sets.push('name = ?');
+      args.push(name);
+      auditParts.push(`name "${current.name}" → "${name}"`);
+    }
+    if (email !== undefined && email !== current.email) {
+      sets.push('email = ?');
+      args.push(email);
+      auditParts.push(`email ${current.email} → ${email}`);
+    }
+    if (sets.length === 0) return res.json({ ok: true, unchanged: true });
+    args.push(req.user.id);
+    await db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+
+    // Mint a fresh JWT so the new values (name/email are in the payload) land
+    // on this device immediately.
+    const u = await db
+      .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
+      .get(req.user.id);
+    await audit(req, { action: 'profile.update', details: auditParts.join('; ') });
+    res.json({
+      ok: true,
+      token: sign(u, req.user.sid),
+      user: { id: u.id, email: u.email, name: u.name, is_admin: !!u.is_admin },
+    });
+  }
+);
+
 // ---------- Session refresh ----------
 // authRequired already validated the token + session row; we just mint a new
 // JWT so the client's 30-min window slides forward. Used by the "stay signed
