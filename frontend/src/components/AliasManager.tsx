@@ -71,10 +71,12 @@ export function AliasManager() {
 
   return (
     <Card>
-      <h2>🔗 Linked emails</h2>
+      <h2>🔗 Linked emails & nicknames</h2>
       <p className="muted small">
-        Add up to five email addresses. Each one is confirmed with a 6-digit code sent to that
-        address — only after you enter the code can it be used to log in or receive trip invites.
+        Add up to five email addresses. We'll email a 6-digit code to each one — only after you
+        verify it can it be used to sign in. A short lowercase nickname (3–30 chars; letters,
+        digits, <code>. _ -</code>) is <b>globally unique</b> and lets you log in using the nickname
+        instead of the email.
       </p>
       {items && items.length > 0 && (
         <ul className="list">
@@ -87,12 +89,18 @@ export function AliasManager() {
       )}
       {items && items.length === 0 && <p className="muted small">No linked emails yet.</p>}
       <form onSubmit={add} className="stack-sm" style={{ marginTop: '0.6rem' }}>
-        <Field label="Nickname" hint="A short label so you can tell your linked emails apart.">
+        <Field
+          label="Nickname (optional)"
+          hint="Globally unique. 3–30 chars, lowercase letters/digits/./_/-. Once verified, you can log in with this instead of the email."
+        >
           <input
             value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            maxLength={40}
-            placeholder="Work email, Personal Gmail, …"
+            onChange={(e) => setLabel(e.target.value.toLowerCase())}
+            maxLength={30}
+            placeholder="umasai, suj, hasi …"
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck={false}
           />
         </Field>
         <Field label="Email" hint="We'll email a 6-digit confirmation code before it's active.">
@@ -184,9 +192,12 @@ function AliasRow({ alias, onChange, onRemove, removing }: {
           <div className="row-sm" style={{ gap: 6 }}>
             <input
               value={labelDraft}
-              onChange={(e) => setLabelDraft(e.target.value)}
-              maxLength={40}
-              placeholder="Nickname"
+              onChange={(e) => setLabelDraft(e.target.value.toLowerCase())}
+              maxLength={30}
+              placeholder="nickname (3–30 chars)"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellCheck={false}
               style={{ flex: 1 }}
             />
             <button className="btn sm" disabled={savingLabel} onClick={() => void saveLabel()}>

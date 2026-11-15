@@ -77,8 +77,21 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={60} required placeholder="Asha Rao" />
                 </Field>
               )}
-              <Field label="Email" hint={isLogin ? 'Your primary email or any linked alias.' : undefined}>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" inputMode="email" aria-invalid={!isLogin && email.length > 0 && !emailOk} />
+              <Field
+                label={isLogin ? 'Email or nickname' : 'Email'}
+                hint={isLogin ? 'Primary email, verified alias email, or your verified nickname.' : undefined}
+              >
+                <input
+                  type={isLogin ? 'text' : 'email'}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete={isLogin ? 'username' : 'email'}
+                  maxLength={254}
+                  required
+                  placeholder={isLogin ? 'you@example.com or your nickname' : 'you@example.com'}
+                  inputMode={isLogin ? 'text' : 'email'}
+                  aria-invalid={!isLogin && email.length > 0 && !emailOk}
+                />
               </Field>
               <div className="field">
                 <label htmlFor="pw" className="field-label">Password</label>

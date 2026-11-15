@@ -125,6 +125,24 @@ for (const col of [
   }
 }
 
+// Normalize legacy labels (lowercase, strip anything that isn't a valid handle),
+// then enforce global uniqueness via a partial unique index.
+await raw.execute(
+  `UPDATE user_aliases
+      SET label = NULL
+    WHERE label IS NOT NULL
+      AND (
+        length(label) < 3
+        OR length(label) > 30
+        OR label GLOB '*[^A-Za-z0-9._-]*'
+      )`
+);
+await raw.execute(`UPDATE user_aliases SET label = lower(label) WHERE label IS NOT NULL`);
+await raw.execute(
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_aliases_label_unique
+     ON user_aliases(label) WHERE label IS NOT NULL`
+);
+
 function wrapRun(result) {
   return {
     changes: Number(result.rowsAffected ?? 0),

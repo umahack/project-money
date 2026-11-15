@@ -62,7 +62,10 @@ router.post(
 router.post(
   '/login',
   authLimiter,
-  [body('email').isEmail().normalizeEmail(), body('password').isString().isLength({ min: 1 })],
+  [
+    body('email').isString().trim().isLength({ min: 1, max: 254 }),
+    body('password').isString().isLength({ min: 1 }),
+  ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Invalid credentials' });

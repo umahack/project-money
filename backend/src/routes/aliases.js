@@ -10,6 +10,14 @@ import { aliasVerifyEmail, sendMail } from '../mailer.js';
 const MAX_ALIASES_PER_USER = 5;
 const CODE_TTL_MS = 15 * 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 6;
+const HANDLE_RE = /^[a-z0-9._-]{3,30}$/;
+
+function normalizeHandle(input) {
+  const h = String(input || '').trim().toLowerCase();
+  if (!h) return null;
+  if (!HANDLE_RE.test(h)) return { error: 'Nickname must be 3–30 chars: letters, digits, dot, underscore, or dash.' };
+  return { value: h };
+}
 
 const router = Router();
 router.use(authRequired);
@@ -31,24 +39,44 @@ const verifyLimiter = rateLimit({
 });
 
 /**
- * Find a user by email, checking primary users.email first, then VERIFIED aliases only.
+ * Resolve a login identifier to a user. Accepts:
+ *   - A primary email (users.email)
+ *   - A verified alias email (user_aliases.email WHERE verified = 1)
+ *   - A verified alias nickname (user_aliases.label WHERE verified = 1)
  */
-export async function resolveUserByEmail(email) {
-  const lower = String(email || '').trim().toLowerCase();
+export async function resolveUserByEmail(input) {
+  const lower = String(input || '').trim().toLowerCase();
   if (!lower) return null;
-  const primary = await db
-    .prepare('SELECT id, email, name, password_hash, is_admin FROM users WHERE email = ?')
-    .get(lower);
-  if (primary) return { ...primary, matched_via: 'primary' };
-  const row = await db
-    .prepare(
-      `SELECT u.id, u.email, u.name, u.password_hash, u.is_admin
-         FROM users u
-         JOIN user_aliases a ON a.user_id = u.id
-        WHERE a.email = ? AND a.verified = 1`
-    )
-    .get(lower);
-  return row ? { ...row, matched_via: 'alias' } : null;
+  const looksLikeEmail = lower.includes('@');
+
+  if (looksLikeEmail) {
+    const primary = await db
+      .prepare('SELECT id, email, name, password_hash, is_admin FROM users WHERE email = ?')
+      .get(lower);
+    if (primary) return { ...primary, matched_via: 'primary' };
+    const alias = await db
+      .prepare(
+        `SELECT u.id, u.email, u.name, u.password_hash, u.is_admin
+           FROM users u
+           JOIN user_aliases a ON a.user_id = u.id
+          WHERE a.email = ? AND a.verified = 1`
+      )
+      .get(lower);
+    return alias ? { ...alias, matched_via: 'alias-email' } : null;
+  }
+
+  if (HANDLE_RE.test(lower)) {
+    const row = await db
+      .prepare(
+        `SELECT u.id, u.email, u.name, u.password_hash, u.is_admin
+           FROM users u
+           JOIN user_aliases a ON a.user_id = u.id
+          WHERE a.label = ? AND a.verified = 1`
+      )
+      .get(lower);
+    return row ? { ...row, matched_via: 'alias-handle' } : null;
+  }
+  return null;
 }
 
 function generateCode() {
@@ -95,13 +123,24 @@ router.post(
   sendLimiter,
   [
     body('email').isEmail().normalizeEmail(),
-    body('label').optional().isString().trim().isLength({ max: 40 }),
+    body('label').optional({ nullable: true }).isString(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email and a label up to 40 characters' });
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
     const email = String(req.body.email).toLowerCase();
-    const label = req.body.label ? String(req.body.label).trim().slice(0, 40) : null;
+
+    let label = null;
+    if (req.body.label != null && req.body.label !== '') {
+      const h = normalizeHandle(req.body.label);
+      if (h.error) return res.status(400).json({ error: h.error });
+      label = h.value;
+      const takenHandle = await db
+        .prepare('SELECT id, user_id FROM user_aliases WHERE label = ?')
+        .get(label);
+      if (takenHandle && takenHandle.user_id !== req.user.id)
+        return res.status(409).json({ error: 'That nickname is already taken.' });
+    }
 
     const me = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
     if (me?.email === email) return res.status(400).json({ error: 'That is already your primary email.' });
@@ -144,12 +183,20 @@ router.post(
 
 router.put(
   '/:id',
-  [body('label').optional({ nullable: true }).isString().trim().isLength({ max: 40 })],
+  [body('label').optional({ nullable: true }).isString()],
   async (req, res) => {
     const id = Number(req.params.id);
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: 'Label must be ≤ 40 characters' });
-    const label = req.body.label ? String(req.body.label).trim().slice(0, 40) : null;
+    let label = null;
+    if (req.body.label != null && req.body.label !== '') {
+      const h = normalizeHandle(req.body.label);
+      if (h.error) return res.status(400).json({ error: h.error });
+      label = h.value;
+      const takenHandle = await db
+        .prepare('SELECT id, user_id FROM user_aliases WHERE label = ? AND id != ?')
+        .get(label, id);
+      if (takenHandle && takenHandle.user_id !== req.user.id)
+        return res.status(409).json({ error: 'That nickname is already taken.' });
+    }
     const info = await db
       .prepare('UPDATE user_aliases SET label = ? WHERE id = ? AND user_id = ?')
       .run(label, id, req.user.id);
