@@ -84,6 +84,16 @@ const SCHEMA = [
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     verified_at TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS pending_registrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    verify_code_hash TEXT NOT NULL,
+    verify_expires_at TEXT NOT NULL,
+    verify_attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

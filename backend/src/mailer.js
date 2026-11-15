@@ -23,6 +23,20 @@ export async function sendMail({ to, subject, html, text }) {
   }
 }
 
+export function registerVerifyEmail(code) {
+  const text =
+    `Welcome to Project Money!\n\nYour verification code: ${code}\n\n` +
+    `Enter this on the sign-up page to continue. The code expires in 15 minutes.`;
+  const html = `
+    <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;background:#0b0b1a;color:#f4f4f5;padding:28px;border-radius:16px;max-width:480px;margin:auto">
+      <div style="font-size:24px;font-weight:800;background:linear-gradient(90deg,#7c6cff,#4ade80,#fbbf24);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:8px">Project Money</div>
+      <p>Welcome! Confirm this email to finish creating your account.</p>
+      <p style="font-size:28px;letter-spacing:0.4em;font-weight:800;background:#1f1f36;padding:14px 18px;border-radius:12px;text-align:center">${code}</p>
+      <p style="color:#a1a1aa;font-size:12px">Code expires in 15 minutes. If you weren't signing up, you can ignore this email.</p>
+    </div>`;
+  return { subject: 'Your Project Money verification code', text, html };
+}
+
 export function aliasVerifyEmail(code, inviterEmail) {
   const safeInviter = inviterEmail.replace(/[<>]/g, '');
   const text =
