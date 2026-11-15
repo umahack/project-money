@@ -5,7 +5,6 @@ import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { adminEmails } from '../middleware/admin.js';
-import { resolveUserByEmail } from './aliases.js';
 
 const router = Router();
 
@@ -67,7 +66,7 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Invalid credentials' });
     const { email, password } = req.body;
-    const row = await resolveUserByEmail(email);
+    const row = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!row) {
       await bcrypt.hash(password, 12); // timing equalization
       return res.status(401).json({ error: 'Invalid credentials' });

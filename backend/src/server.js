@@ -11,7 +11,6 @@ import tripRoutes from './routes/trips.js';
 import adminRoutes from './routes/admin.js';
 import feedbackRoutes from './routes/feedback.js';
 import invitesRoutes from './routes/invites.js';
-import aliasesRoutes from './routes/aliases.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 24) {
   console.error('JWT_SECRET missing or too short. Copy .env.example to .env and set a strong secret.');
@@ -53,7 +52,6 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api', invitesRoutes);
-app.use('/api/aliases', aliasesRoutes);
 
 app.use((err, _req, res, _next) => {
   if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Payload too large' });

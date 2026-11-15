@@ -8,7 +8,6 @@ import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../mo
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
-import { AliasManager } from '../components/AliasManager';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -249,7 +248,6 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <AliasManager />
     </>
   );
 }

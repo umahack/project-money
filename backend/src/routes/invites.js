@@ -3,7 +3,6 @@ import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
-import { resolveUserByEmail } from './aliases.js';
 
 const router = Router();
 router.use(authRequired);
@@ -40,7 +39,9 @@ router.post(
       .get(tripId, req.user.id);
     if (!trip) return res.status(404).json({ error: 'Not found' });
 
-    const invitee = await resolveUserByEmail(req.body.email);
+    const invitee = await db
+      .prepare('SELECT id, name, email FROM users WHERE email = ?')
+      .get(req.body.email);
     if (!invitee) return res.status(404).json({ error: 'No user with that email. Ask them to sign up first.' });
     if (invitee.id === req.user.id) return res.status(400).json({ error: "You can't invite yourself." });
 
