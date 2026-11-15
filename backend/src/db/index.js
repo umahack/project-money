@@ -76,6 +76,7 @@ const SCHEMA = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
+    label TEXT,
     verified INTEGER NOT NULL DEFAULT 0,
     verify_code_hash TEXT,
     verify_expires_at TEXT,
@@ -114,6 +115,7 @@ for (const col of [
   "ADD COLUMN verify_expires_at TEXT",
   "ADD COLUMN verify_attempts INTEGER NOT NULL DEFAULT 0",
   "ADD COLUMN verified_at TEXT",
+  "ADD COLUMN label TEXT",
 ]) {
   const probe = col.match(/ADD COLUMN (\w+)/)[1];
   try {

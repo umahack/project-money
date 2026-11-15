@@ -79,7 +79,7 @@ async function sendVerificationFor(aliasId, email, inviterEmail) {
 router.get('/', async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT id, email, verified, created_at, verified_at
+      `SELECT id, email, label, verified, created_at, verified_at
          FROM user_aliases
         WHERE user_id = ?
         ORDER BY id ASC`
@@ -93,11 +93,15 @@ router.get('/', async (req, res) => {
 router.post(
   '/',
   sendLimiter,
-  [body('email').isEmail().normalizeEmail()],
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('label').optional().isString().trim().isLength({ max: 40 }),
+  ],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email and a label up to 40 characters' });
     const email = String(req.body.email).toLowerCase();
+    const label = req.body.label ? String(req.body.label).trim().slice(0, 40) : null;
 
     const me = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
     if (me?.email === email) return res.status(400).json({ error: 'That is already your primary email.' });
@@ -120,14 +124,37 @@ router.post(
     let aliasId;
     if (takenAlias && takenAlias.user_id === req.user.id) {
       aliasId = (await db.prepare('SELECT id FROM user_aliases WHERE email = ?').get(email)).id;
+      if (label) await db.prepare('UPDATE user_aliases SET label = ? WHERE id = ?').run(label, aliasId);
     } else {
       const info = await db
-        .prepare('INSERT INTO user_aliases (user_id, email, verified) VALUES (?, ?, 0)')
-        .run(req.user.id, email);
+        .prepare('INSERT INTO user_aliases (user_id, email, label, verified) VALUES (?, ?, ?, 0)')
+        .run(req.user.id, email, label);
       aliasId = info.lastInsertRowid;
     }
     const mail = await sendVerificationFor(aliasId, email, me.email);
-    res.json({ id: aliasId, email, verified: false, mail: { sent: mail.ok, fallback: !!mail.fallback } });
+    res.json({
+      id: aliasId,
+      email,
+      label,
+      verified: false,
+      mail: { sent: mail.ok, fallback: !!mail.fallback },
+    });
+  }
+);
+
+router.put(
+  '/:id',
+  [body('label').optional({ nullable: true }).isString().trim().isLength({ max: 40 })],
+  async (req, res) => {
+    const id = Number(req.params.id);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Label must be ≤ 40 characters' });
+    const label = req.body.label ? String(req.body.label).trim().slice(0, 40) : null;
+    const info = await db
+      .prepare('UPDATE user_aliases SET label = ? WHERE id = ? AND user_id = ?')
+      .run(label, id, req.user.id);
+    if (!info.changes) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true, label });
   }
 );
 

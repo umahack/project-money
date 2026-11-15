@@ -7,6 +7,7 @@ import { errText, useToast } from '../state';
 interface Alias {
   id: number;
   email: string;
+  label: string | null;
   verified: boolean;
   created_at: string;
   verified_at: string | null;
@@ -16,6 +17,7 @@ export function AliasManager() {
   const { toast } = useToast();
   const [items, setItems] = useState<Alias[] | null>(null);
   const [email, setEmail] = useState('');
+  const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<number | null>(null);
 
@@ -36,11 +38,14 @@ export function AliasManager() {
   async function add(e: FormEvent) {
     e.preventDefault();
     const em = email.trim();
+    const lb = label.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return toast('err', 'Enter a valid email');
+    if (lb.length > 40) return toast('err', 'Label must be 40 characters or fewer');
     setBusy(true);
     try {
-      const res = await api.post<{ mail?: { fallback?: boolean } }>('/aliases', { email: em });
+      const res = await api.post<{ mail?: { fallback?: boolean } }>('/aliases', { email: em, label: lb || undefined });
       setEmail('');
+      setLabel('');
       toast('ok', res.mail?.fallback ? 'Verification code sent (check the server log in dev)' : `Verification code sent to ${em}`);
       await load();
     } catch (err) {
@@ -82,7 +87,15 @@ export function AliasManager() {
       )}
       {items && items.length === 0 && <p className="muted small">No linked emails yet.</p>}
       <form onSubmit={add} className="stack-sm" style={{ marginTop: '0.6rem' }}>
-        <Field label="Add an email" hint="We'll email a 6-digit confirmation code before it's active.">
+        <Field label="Nickname" hint="A short label so you can tell your linked emails apart.">
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            maxLength={40}
+            placeholder="Work email, Personal Gmail, …"
+          />
+        </Field>
+        <Field label="Email" hint="We'll email a 6-digit confirmation code before it's active.">
           <input
             type="email"
             value={email}
@@ -109,6 +122,25 @@ function AliasRow({ alias, onChange, onRemove, removing }: {
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [labelDraft, setLabelDraft] = useState(alias.label ?? '');
+  const [savingLabel, setSavingLabel] = useState(false);
+
+  async function saveLabel() {
+    const next = labelDraft.trim();
+    if (next.length > 40) return toast('err', 'Label must be 40 characters or fewer');
+    setSavingLabel(true);
+    try {
+      await api.put(`/aliases/${alias.id}`, { label: next || null });
+      toast('ok', 'Label updated');
+      setEditingLabel(false);
+      await onChange();
+    } catch (err) {
+      toast('err', errText(err));
+    } finally {
+      setSavingLabel(false);
+    }
+  }
 
   async function verify(e: FormEvent) {
     e.preventDefault();
@@ -148,8 +180,44 @@ function AliasRow({ alias, onChange, onRemove, removing }: {
     >
       <span className="avatar">@</span>
       <div className="grow">
-        <strong>{alias.email}</strong>
+        {editingLabel ? (
+          <div className="row-sm" style={{ gap: 6 }}>
+            <input
+              value={labelDraft}
+              onChange={(e) => setLabelDraft(e.target.value)}
+              maxLength={40}
+              placeholder="Nickname"
+              style={{ flex: 1 }}
+            />
+            <button className="btn sm" disabled={savingLabel} onClick={() => void saveLabel()}>
+              {savingLabel ? '…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              className="btn sm ghost"
+              disabled={savingLabel}
+              onClick={() => { setEditingLabel(false); setLabelDraft(alias.label ?? ''); }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <strong>
+            {alias.label || <span className="muted">(no nickname)</span>}
+            <button
+              type="button"
+              onClick={() => setEditingLabel(true)}
+              style={{ marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.8em' }}
+              aria-label="Edit nickname"
+              title="Edit nickname"
+            >
+              ✏️
+            </button>
+          </strong>
+        )}
         <small className="muted">
+          {alias.email}
+          {' · '}
           {alias.verified ? `verified ${alias.verified_at?.slice(0, 10) ?? ''}` : 'pending — enter the code we emailed to confirm'}
         </small>
         {!alias.verified && (
