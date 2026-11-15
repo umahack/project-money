@@ -21,6 +21,9 @@ export interface Plan {
   afterFixed: number;
   breakdown: { needs: number; wants: number; save: number };
   tips: string[];
+  month?: string;
+  spentThisMonth?: number;
+  byCategory?: Record<string, number>;
 }
 
 export interface Trip {
