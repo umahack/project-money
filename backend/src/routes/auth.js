@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
-import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
@@ -8,11 +7,17 @@ import db from '../db/index.js';
 import { adminEmails } from '../middleware/admin.js';
 import { resolveUserByEmail } from './aliases.js';
 import { registerVerifyEmail, sendMail } from '../mailer.js';
+import {
+  HANDLE_RE,
+  MAX_VERIFY_ATTEMPTS,
+  expiresAt,
+  generateCode,
+  hashCode,
+  isExpired,
+  matches,
+} from '../otp.js';
 
 const router = Router();
-const HANDLE_RE = /^[a-z0-9._-]{3,30}$/;
-const CODE_TTL_MS = 15 * 60 * 1000;
-const MAX_VERIFY_ATTEMPTS = 6;
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -45,21 +50,16 @@ async function promoteIfConfigured(userId, email) {
   return shouldBeAdmin;
 }
 
-function generateCode() {
-  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-}
-
 async function issueRegistrationCode(email) {
   const code = generateCode();
-  const hash = await bcrypt.hash(code, 10);
-  const expires = new Date(Date.now() + CODE_TTL_MS).toISOString();
+  const hash = await hashCode(code);
   await db
     .prepare(
       `UPDATE pending_registrations
           SET verify_code_hash = ?, verify_expires_at = ?, verify_attempts = 0
         WHERE email = ?`
     )
-    .run(hash, expires, email);
+    .run(hash, expiresAt(), email);
   return code;
 }
 
@@ -85,8 +85,7 @@ router.post(
 
     const hash = await bcrypt.hash(password, 12);
     const code = generateCode();
-    const codeHash = await bcrypt.hash(code, 10);
-    const expires = new Date(Date.now() + CODE_TTL_MS).toISOString();
+    const codeHash = await hashCode(code);
 
     await db
       .prepare(
@@ -99,7 +98,7 @@ router.post(
            verify_expires_at = excluded.verify_expires_at,
            verify_attempts = 0`
       )
-      .run(email, name.trim(), hash, codeHash, expires);
+      .run(email, name.trim(), hash, codeHash, expiresAt());
 
     const { subject, text, html } = registerVerifyEmail(code);
     const result = await sendMail({ to: email, subject, text, html });
@@ -144,12 +143,12 @@ router.post(
       )
       .get(email);
     if (!row) return res.status(404).json({ error: 'Start sign-up first.' });
-    if (new Date(row.verify_expires_at).getTime() < Date.now())
+    if (isExpired(row.verify_expires_at))
       return res.status(400).json({ error: 'Code expired. Please request a new one.' });
     if (row.verify_attempts >= MAX_VERIFY_ATTEMPTS)
       return res.status(429).json({ error: 'Too many wrong attempts. Resend a new code.' });
 
-    const ok = await bcrypt.compare(code, row.verify_code_hash);
+    const ok = await matches(code, row.verify_code_hash);
     if (!ok) {
       await db
         .prepare('UPDATE pending_registrations SET verify_attempts = verify_attempts + 1 WHERE email = ?')
@@ -185,11 +184,11 @@ router.post(
       )
       .get(email);
     if (!pending) return res.status(404).json({ error: 'Start sign-up first.' });
-    if (new Date(pending.verify_expires_at).getTime() < Date.now())
+    if (isExpired(pending.verify_expires_at))
       return res.status(400).json({ error: 'Code expired. Please request a new one.' });
     if (pending.verify_attempts >= MAX_VERIFY_ATTEMPTS)
       return res.status(429).json({ error: 'Too many wrong attempts. Resend a new code.' });
-    const codeOk = await bcrypt.compare(code, pending.verify_code_hash);
+    const codeOk = await matches(code, pending.verify_code_hash);
     if (!codeOk) {
       await db
         .prepare('UPDATE pending_registrations SET verify_attempts = verify_attempts + 1 WHERE email = ?')

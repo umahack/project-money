@@ -1,23 +1,21 @@
 import { Router } from 'express';
-import bcrypt from 'bcrypt';
-import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
 import { aliasVerifyEmail, sendMail } from '../mailer.js';
+import {
+  HANDLE_RE,
+  MAX_VERIFY_ATTEMPTS,
+  expiresAt,
+  generateCode,
+  hashCode,
+  isExpired,
+  matches,
+  normalizeHandle,
+} from '../otp.js';
 
 const MAX_ALIASES_PER_USER = 5;
-const CODE_TTL_MS = 15 * 60 * 1000;
-const MAX_VERIFY_ATTEMPTS = 6;
-const HANDLE_RE = /^[a-z0-9._-]{3,30}$/;
-
-function normalizeHandle(input) {
-  const h = String(input || '').trim().toLowerCase();
-  if (!h) return null;
-  if (!HANDLE_RE.test(h)) return { error: 'Nickname must be 3–30 chars: letters, digits, dot, underscore, or dash.' };
-  return { value: h };
-}
 
 const router = Router();
 router.use(authRequired);
@@ -79,21 +77,16 @@ export async function resolveUserByEmail(input) {
   return null;
 }
 
-function generateCode() {
-  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-}
-
 async function issueCode(aliasId) {
   const code = generateCode();
-  const hash = await bcrypt.hash(code, 10);
-  const expires = new Date(Date.now() + CODE_TTL_MS).toISOString();
+  const hash = await hashCode(code);
   await db
     .prepare(
       `UPDATE user_aliases
           SET verify_code_hash = ?, verify_expires_at = ?, verify_attempts = 0
         WHERE id = ?`
     )
-    .run(hash, expires, aliasId);
+    .run(hash, expiresAt(), aliasId);
   return code;
 }
 
@@ -239,12 +232,12 @@ router.post(
     if (!row) return res.status(404).json({ error: 'Not found' });
     if (row.verified) return res.json({ ok: true, alreadyVerified: true });
     if (!row.verify_code_hash) return res.status(400).json({ error: 'No code is active. Resend first.' });
-    if (new Date(row.verify_expires_at).getTime() < Date.now())
+    if (isExpired(row.verify_expires_at))
       return res.status(400).json({ error: 'Code expired. Resend a new one.' });
     if (row.verify_attempts >= MAX_VERIFY_ATTEMPTS)
       return res.status(429).json({ error: 'Too many wrong attempts. Resend a fresh code.' });
 
-    const ok = await bcrypt.compare(req.body.code, row.verify_code_hash);
+    const ok = await matches(req.body.code, row.verify_code_hash);
     if (!ok) {
       await db
         .prepare('UPDATE user_aliases SET verify_attempts = verify_attempts + 1 WHERE id = ?')

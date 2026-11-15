@@ -97,7 +97,7 @@ export function AliasManager() {
             value={label}
             onChange={(e) => setLabel(e.target.value.toLowerCase())}
             maxLength={30}
-            placeholder="umasai, suj, hasi …"
+            placeholder="e.g. uma, kiran, priya"
             autoCapitalize="off"
             autoComplete="off"
             spellCheck={false}
