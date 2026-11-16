@@ -205,6 +205,31 @@ await raw.execute(`CREATE TABLE IF NOT EXISTS user_categories (
   UNIQUE(user_id, name)
 )`);
 
+// Pending signup — holds name/password hash + bcrypt-hashed OTP while a new
+// user confirms the code sent to their email. Upserted on resend.
+await raw.execute(`CREATE TABLE IF NOT EXISTS pending_registrations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  verify_code_hash TEXT NOT NULL,
+  verify_expires_at TEXT NOT NULL,
+  verify_attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`);
+
+// Pending email change — one in-flight per user; code sent to the new address.
+await raw.execute(`CREATE TABLE IF NOT EXISTS pending_email_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  new_email TEXT NOT NULL,
+  verify_code_hash TEXT NOT NULL,
+  verify_expires_at TEXT NOT NULL,
+  verify_attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id)
+)`);
+
 // Admin-authored announcement banners (one active row at a time)
 await raw.execute(`CREATE TABLE IF NOT EXISTS announcements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

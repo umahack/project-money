@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
 import { LandingPreview } from '../components/LandingPreview';
@@ -20,20 +20,21 @@ function friendly(message: string, mode: 'login' | 'register'): string {
   return message || (mode === 'login' ? 'Could not sign you in. Please try again.' : 'Something went wrong. Please try again.');
 }
 
+type Step = 'form' | 'code';
+
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
-  const { login, register } = useAuth();
+  const { login, registerStart, registerFinish, registerResend } = useAuth();
   const { toast } = useToast();
   const nav = useNavigate();
+  const isLogin = mode === 'login';
 
   useEffect(() => {
     try {
       const msg = sessionStorage.getItem('pm_kicked_msg');
-      if (msg) {
-        toast('err', msg);
-        sessionStorage.removeItem('pm_kicked_msg');
-      }
+      if (msg) { toast('err', msg); sessionStorage.removeItem('pm_kicked_msg'); }
     } catch { /* ignore */ }
   }, [toast]);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,31 +42,83 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Register-only step state
+  const [step, setStep] = useState<Step>('form');
+  const [code, setCode] = useState('');
+
   const checks = RULES.map((r) => ({ ...r, ok: r.test(password) }));
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  async function submit(e: FormEvent) {
+  async function submitLogin(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
     setError('');
-    if (mode === 'register') {
-      if (!name.trim()) return setError('Please enter your name.');
-      if (!emailOk) return setError('That email looks off. Check for typos.');
-      const missing = checks.filter((c) => !c.ok).map((c) => c.label.toLowerCase());
-      if (missing.length) return setError(`Your password needs: ${missing.join(', ')}.`);
-    }
     setBusy(true);
     try {
-      if (mode === 'login') await login(email.trim(), password);
-      else await register(name.trim(), email.trim(), password);
+      await login(email.trim(), password);
       nav('/', { replace: true });
     } catch (err) {
-      setError(friendly(errText(err), mode));
+      setError(friendly(errText(err), 'login'));
       setBusy(false);
     }
   }
 
-  const isLogin = mode === 'login';
+  async function submitStart(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setError('');
+    if (!name.trim()) return setError('Please enter your name.');
+    if (!emailOk) return setError('That email looks off. Check for typos.');
+    const missing = checks.filter((c) => !c.ok).map((c) => c.label.toLowerCase());
+    if (missing.length) return setError(`Your password needs: ${missing.join(', ')}.`);
+    setBusy(true);
+    try {
+      const r = await registerStart(name.trim(), email.trim(), password);
+      toast('ok', r.fallback ? 'Code generated (check server log in dev)' : `Code sent to ${email.trim()}`);
+      setStep('code');
+    } catch (err) {
+      setError(friendly(errText(err), 'register'));
+    } finally { setBusy(false); }
+  }
+
+  async function submitFinish(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setError('');
+    if (!/^\d{6}$/.test(code)) return setError('Enter the 6-digit code we emailed you.');
+    setBusy(true);
+    try {
+      await registerFinish(email.trim(), code);
+      nav('/', { replace: true });
+    } catch (err) {
+      setError(friendly(errText(err), 'register'));
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    try {
+      const r = await registerResend(email.trim());
+      toast('ok', r.fallback ? 'New code generated (check server log)' : 'New code sent');
+    } catch (err) { toast('err', errText(err)); }
+  }
+
+  function startOver() {
+    setStep('form');
+    setCode('');
+    setError('');
+  }
+
+  const subtitle = isLogin
+    ? 'Sign in to plan your month like a pro.'
+    : step === 'form'
+      ? 'Plan your salary. Save smarter. Split trips fairly.'
+      : `Enter the 6-digit code we emailed to ${email.trim()}.`;
+
+  const title = isLogin
+    ? 'Welcome back'
+    : step === 'form' ? 'Create your account' : 'Verify your email';
+
   return (
     <>
       <Background />
@@ -75,8 +128,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <Card className="auth-card" tilt>
             <div className="auth-logo">
               <motion.span className="brand-mark big" animate={{ rotateY: 360 }} transition={{ repeat: Infinity, duration: 5, ease: 'linear' }}>₹</motion.span>
-              <h1>{isLogin ? 'Welcome back' : 'Create your account'}</h1>
-              <p className="muted">{isLogin ? 'Sign in to plan your month like a pro.' : 'Plan your salary. Save smarter. Split trips fairly.'}</p>
+              <h1>{title}</h1>
+              <p className="muted">{subtitle}</p>
             </div>
 
             <div className="segmented" role="tablist">
@@ -84,51 +137,66 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               <Link role="tab" aria-selected={!isLogin} className={!isLogin ? 'on' : ''} to="/register">Create account</Link>
             </div>
 
-            <form onSubmit={submit} noValidate>
-              {!isLogin && (
-                <Field label="Your name">
-                  <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={60} required placeholder="Asha Rao" />
-                </Field>
+            <AnimatePresence mode="wait">
+              {isLogin && (
+                <motion.form key="login" onSubmit={submitLogin} noValidate initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <Field label="Email">
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" inputMode="email" />
+                  </Field>
+                  <PasswordField value={password} onChange={setPassword} show={show} onToggle={() => setShow((v) => !v)} autoComplete="current-password" />
+                  {error && <ErrorBox msg={error} />}
+                  <motion.button className="btn primary block" whileTap={{ scale: 0.97 }} disabled={busy} type="submit">
+                    {busy ? 'Please wait…' : 'Sign in'}
+                  </motion.button>
+                </motion.form>
               )}
-              <Field label="Email" hint={isLogin ? 'Your primary email or any linked alias.' : undefined}>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" inputMode="email" aria-invalid={!isLogin && email.length > 0 && !emailOk} />
-              </Field>
-              <div className="field">
-                <label htmlFor="pw" className="field-label">Password</label>
-                <div className="pw-wrap">
-                  <input
-                    id="pw"
-                    type={show ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete={isLogin ? 'current-password' : 'new-password'}
-                    maxLength={128}
-                    required
-                    placeholder="••••••••"
-                  />
-                  <button type="button" className="pw-toggle" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'}>
-                    {show ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-              </div>
-              {!isLogin && (
-                <ul className="rules" aria-live="polite">
-                  {checks.map((c) => (
-                    <li key={c.key} className={c.ok ? 'ok' : ''}>
-                      <span>{c.ok ? '✓' : '•'}</span> {c.label}
-                    </li>
-                  ))}
-                </ul>
+
+              {!isLogin && step === 'form' && (
+                <motion.form key="start" onSubmit={submitStart} noValidate initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <Field label="Your name"><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={60} required placeholder="Asha Rao" /></Field>
+                  <Field label="Email">
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={254} required placeholder="you@example.com" inputMode="email" aria-invalid={email.length > 0 && !emailOk} />
+                  </Field>
+                  <PasswordField value={password} onChange={setPassword} show={show} onToggle={() => setShow((v) => !v)} autoComplete="new-password" />
+                  <ul className="rules" aria-live="polite">
+                    {checks.map((c) => (
+                      <li key={c.key} className={c.ok ? 'ok' : ''}>
+                        <span>{c.ok ? '✓' : '•'}</span> {c.label}
+                      </li>
+                    ))}
+                  </ul>
+                  {error && <ErrorBox msg={error} />}
+                  <motion.button className="btn primary block" whileTap={{ scale: 0.97 }} disabled={busy} type="submit">
+                    {busy ? 'Sending code…' : 'Send verification code'}
+                  </motion.button>
+                </motion.form>
               )}
-              {error && (
-                <motion.p className="form-error" role="alert" initial={{ x: -8 }} animate={{ x: [0, -6, 6, -4, 4, 0] }}>
-                  {error}
-                </motion.p>
+
+              {!isLogin && step === 'code' && (
+                <motion.form key="code" onSubmit={submitFinish} noValidate initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                  <Field label="6-digit code" hint="Check your inbox (and spam). Code is valid for 15 minutes.">
+                    <input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="123456"
+                      style={{ letterSpacing: '0.4em', textAlign: 'center', fontSize: '1.3rem' }}
+                      required
+                    />
+                  </Field>
+                  {error && <ErrorBox msg={error} />}
+                  <motion.button className="btn primary block" whileTap={{ scale: 0.97 }} disabled={busy || code.length !== 6} type="submit">
+                    {busy ? 'Verifying…' : 'Create account'}
+                  </motion.button>
+                  <div className="row-sm" style={{ marginTop: '0.6rem', justifyContent: 'space-between' }}>
+                    <button type="button" className="btn ghost sm" onClick={startOver}>← Change details</button>
+                    <button type="button" className="btn ghost sm" onClick={() => void resend()}>Resend code</button>
+                  </div>
+                </motion.form>
               )}
-              <motion.button className="btn primary block" whileTap={{ scale: 0.97 }} disabled={busy} type="submit">
-                {busy ? 'Please wait…' : isLogin ? 'Sign in' : 'Create my account'}
-              </motion.button>
-            </form>
+            </AnimatePresence>
           </Card>
           <p className="auth-sig muted tiny center">
             Crafted with ♥ by <span className="signature">Umakanth</span>
@@ -136,5 +204,42 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </motion.div>
       </div>
     </>
+  );
+}
+
+function PasswordField({ value, onChange, show, onToggle, autoComplete }: {
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+  autoComplete: string;
+}) {
+  return (
+    <div className="field">
+      <label htmlFor="pw" className="field-label">Password</label>
+      <div className="pw-wrap">
+        <input
+          id="pw"
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          maxLength={128}
+          required
+          placeholder="••••••••"
+        />
+        <button type="button" className="pw-toggle" onClick={onToggle} aria-label={show ? 'Hide password' : 'Show password'}>
+          {show ? 'Hide' : 'Show'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ErrorBox({ msg }: { msg: string }) {
+  return (
+    <motion.p className="form-error" role="alert" initial={{ x: -8 }} animate={{ x: [0, -6, 6, -4, 4, 0] }}>
+      {msg}
+    </motion.p>
   );
 }

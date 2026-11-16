@@ -8,6 +8,8 @@ import { adminEmails } from '../middleware/admin.js';
 import { authRequired } from '../middleware/auth.js';
 import { audit } from '../audit.js';
 import { createSingleSession, revokeSession } from '../sessions.js';
+import { generateCode, hashCode, matches, expiresAt, isExpired, MAX_VERIFY_ATTEMPTS } from '../otp.js';
+import { sendMail, registerVerifyEmail, emailChangeVerifyEmail } from '../mailer.js';
 
 const router = Router();
 
@@ -17,6 +19,15 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts, slow down.' },
+});
+
+// Separate send-side limit so a bad actor can't burn through our Resend quota.
+const sendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification emails requested. Try again later.' },
 });
 
 function sign(user, sid) {
@@ -69,9 +80,13 @@ async function promoteIfConfigured(userId, email) {
   return shouldBeAdmin;
 }
 
+// Step 1: capture name/email/password, email a 6-digit code. We store the
+// password hash immediately (bcrypt is CPU-heavy; nobody wants to re-run it
+// after each code attempt) in a pending_registrations row — the real user
+// is only created after the correct code lands in /register-finish.
 router.post(
-  '/register',
-  authLimiter,
+  '/register-start',
+  sendLimiter,
   [
     body('email').isEmail().normalizeEmail(),
     body('name').isString().trim().isLength({ min: 1, max: 60 }),
@@ -85,20 +100,104 @@ router.post(
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { email, name, password } = req.body;
     const exists = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (exists) return res.status(409).json({ error: 'Email already registered' });
-    const hash = await bcrypt.hash(password, 12);
+    if (exists) return res.status(409).json({ error: 'That email is already registered. Try signing in instead.' });
+
+    const pwHash = await bcrypt.hash(password, 12);
+    const code = generateCode();
+    const codeHash = await hashCode(code);
+    await db
+      .prepare(
+        `INSERT INTO pending_registrations (email, name, password_hash, verify_code_hash, verify_expires_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(email) DO UPDATE SET
+           name = excluded.name,
+           password_hash = excluded.password_hash,
+           verify_code_hash = excluded.verify_code_hash,
+           verify_expires_at = excluded.verify_expires_at,
+           verify_attempts = 0`
+      )
+      .run(email, name.trim(), pwHash, codeHash, expiresAt());
+
+    const { subject, text, html } = registerVerifyEmail(code, name);
+    const result = await sendMail({ to: email, subject, text, html });
+    res.json({ ok: true, email, mail: { sent: result.ok, fallback: !!result.fallback } });
+  }
+);
+
+// Resend if the user never got the code (same send-limit applies).
+router.post(
+  '/register-resend',
+  sendLimiter,
+  [body('email').isEmail().normalizeEmail()],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
+    const { email } = req.body;
+    const row = await db.prepare('SELECT name FROM pending_registrations WHERE email = ?').get(email);
+    if (!row) return res.status(404).json({ error: 'Start sign-up first — we need your name and password.' });
+    const code = generateCode();
+    await db
+      .prepare(
+        `UPDATE pending_registrations SET verify_code_hash = ?, verify_expires_at = ?, verify_attempts = 0 WHERE email = ?`
+      )
+      .run(await hashCode(code), expiresAt(), email);
+    const { subject, text, html } = registerVerifyEmail(code, row.name);
+    const result = await sendMail({ to: email, subject, text, html });
+    res.json({ ok: true, mail: { sent: result.ok, fallback: !!result.fallback } });
+  }
+);
+
+// Step 2: verify code, create the real user, mint a session JWT.
+router.post(
+  '/register-finish',
+  authLimiter,
+  [body('email').isEmail().normalizeEmail(), body('code').isString().matches(/^\d{6}$/)],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter the 6-digit code.' });
+    const { email, code } = req.body;
+    const pending = await db
+      .prepare(
+        `SELECT name, password_hash, verify_code_hash, verify_expires_at, verify_attempts
+           FROM pending_registrations WHERE email = ?`
+      )
+      .get(email);
+    if (!pending) return res.status(404).json({ error: 'Start sign-up first.' });
+    if (isExpired(pending.verify_expires_at))
+      return res.status(400).json({ error: 'Code expired. Please request a new one.' });
+    if (pending.verify_attempts >= MAX_VERIFY_ATTEMPTS)
+      return res.status(429).json({ error: 'Too many wrong attempts. Resend a fresh code.' });
+    const ok = await matches(code, pending.verify_code_hash);
+    if (!ok) {
+      await db
+        .prepare('UPDATE pending_registrations SET verify_attempts = verify_attempts + 1 WHERE email = ?')
+        .run(email);
+      return res.status(400).json({ error: 'Incorrect code.' });
+    }
+    const taken = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    if (taken) {
+      await db.prepare('DELETE FROM pending_registrations WHERE email = ?').run(email);
+      return res.status(409).json({ error: 'That email was just claimed. Please sign in.' });
+    }
     const info = await db
       .prepare('INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)')
-      .run(email, name, hash);
+      .run(email, pending.name, pending.password_hash);
+    await db.prepare('DELETE FROM pending_registrations WHERE email = ?').run(email);
     const is_admin = await promoteIfConfigured(info.lastInsertRowid, email);
-    const user = { id: info.lastInsertRowid, email, name, is_admin: !!is_admin, token_version: 1 };
+    const user = {
+      id: info.lastInsertRowid,
+      email,
+      name: pending.name,
+      is_admin: !!is_admin,
+      token_version: 1,
+    };
     const sid = await createSingleSession(user.id, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
     });
     res.json({
       token: sign(user, sid),
-      user: { id: user.id, email, name, is_admin: !!is_admin },
+      user: { id: user.id, email, name: pending.name, is_admin: !!is_admin },
     });
   }
 );
@@ -209,57 +308,24 @@ router.post(
   }
 );
 
-// ---------- Edit profile (name + email) ----------
-// Email changes are intentionally un-verified for now; a future OTP sprint
-// will gate email changes behind a code sent to the new address.
+// ---------- Edit profile ----------
+// Name updates immediately. Email changes go through /auth/email-change-* (OTP).
 router.patch(
   '/profile',
   authRequired,
-  [
-    body('name').optional().isString().trim().isLength({ min: 1, max: 60 }),
-    body('email').optional().isEmail().normalizeEmail(),
-  ],
+  [body('name').isString().trim().isLength({ min: 1, max: 60 })],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-    const name = typeof req.body.name === 'string' ? String(req.body.name).trim() : undefined;
-    const email = typeof req.body.email === 'string' ? String(req.body.email).toLowerCase() : undefined;
-    if (name === undefined && email === undefined)
-      return res.status(400).json({ error: 'Nothing to update' });
-
-    const current = await db
-      .prepare('SELECT id, name, email FROM users WHERE id = ?')
-      .get(req.user.id);
+    const name = String(req.body.name).trim();
+    const current = await db.prepare('SELECT id, name FROM users WHERE id = ?').get(req.user.id);
     if (!current) return res.status(401).json({ error: 'Session expired' });
-
-    if (email && email !== current.email) {
-      const taken = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-      if (taken) return res.status(409).json({ error: 'That email is already in use.' });
-    }
-
-    const sets = [];
-    const args = [];
-    const auditParts = [];
-    if (name !== undefined && name !== current.name) {
-      sets.push('name = ?');
-      args.push(name);
-      auditParts.push(`name "${current.name}" → "${name}"`);
-    }
-    if (email !== undefined && email !== current.email) {
-      sets.push('email = ?');
-      args.push(email);
-      auditParts.push(`email ${current.email} → ${email}`);
-    }
-    if (sets.length === 0) return res.json({ ok: true, unchanged: true });
-    args.push(req.user.id);
-    await db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...args);
-
-    // Mint a fresh JWT so the new values (name/email are in the payload) land
-    // on this device immediately.
+    if (name === current.name) return res.json({ ok: true, unchanged: true });
+    await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
     const u = await db
       .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
       .get(req.user.id);
-    await audit(req, { action: 'profile.update', details: auditParts.join('; ') });
+    await audit(req, { action: 'profile.update', details: `name "${current.name}" → "${name}"` });
     res.json({
       ok: true,
       token: sign(u, req.user.sid),
@@ -267,6 +333,105 @@ router.patch(
     });
   }
 );
+
+// Step 1 of email change: email the new address a 6-digit code.
+router.post(
+  '/email-change-start',
+  authRequired,
+  sendLimiter,
+  [body('newEmail').isEmail().normalizeEmail()],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
+    const newEmail = String(req.body.newEmail).toLowerCase();
+    const me = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+    if (!me) return res.status(401).json({ error: 'Session expired' });
+    if (newEmail === me.email) return res.status(400).json({ error: 'That is already your email.' });
+    const taken = await db.prepare('SELECT id FROM users WHERE email = ?').get(newEmail);
+    if (taken) return res.status(409).json({ error: 'That email is already in use.' });
+
+    const code = generateCode();
+    await db
+      .prepare(
+        `INSERT INTO pending_email_changes (user_id, new_email, verify_code_hash, verify_expires_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           new_email = excluded.new_email,
+           verify_code_hash = excluded.verify_code_hash,
+           verify_expires_at = excluded.verify_expires_at,
+           verify_attempts = 0`
+      )
+      .run(req.user.id, newEmail, await hashCode(code), expiresAt());
+
+    const { subject, text, html } = emailChangeVerifyEmail(code, me.email);
+    const result = await sendMail({ to: newEmail, subject, text, html });
+    res.json({ ok: true, newEmail, mail: { sent: result.ok, fallback: !!result.fallback } });
+  }
+);
+
+// Step 2: verify code, swap the email, mint a fresh JWT.
+router.post(
+  '/email-change-confirm',
+  authRequired,
+  authLimiter,
+  [body('code').isString().matches(/^\d{6}$/)],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter the 6-digit code.' });
+    const row = await db
+      .prepare(
+        `SELECT new_email, verify_code_hash, verify_expires_at, verify_attempts
+           FROM pending_email_changes WHERE user_id = ?`
+      )
+      .get(req.user.id);
+    if (!row) return res.status(404).json({ error: 'No email change in progress.' });
+    if (isExpired(row.verify_expires_at))
+      return res.status(400).json({ error: 'Code expired. Start again.' });
+    if (row.verify_attempts >= MAX_VERIFY_ATTEMPTS)
+      return res.status(429).json({ error: 'Too many wrong attempts. Start again.' });
+    const ok = await matches(req.body.code, row.verify_code_hash);
+    if (!ok) {
+      await db
+        .prepare('UPDATE pending_email_changes SET verify_attempts = verify_attempts + 1 WHERE user_id = ?')
+        .run(req.user.id);
+      return res.status(400).json({ error: 'Incorrect code.' });
+    }
+    // Race-check: did someone else grab this email during the 15-min window?
+    const taken = await db
+      .prepare('SELECT id FROM users WHERE email = ? AND id != ?')
+      .get(row.new_email, req.user.id);
+    if (taken) {
+      await db.prepare('DELETE FROM pending_email_changes WHERE user_id = ?').run(req.user.id);
+      return res.status(409).json({ error: 'That email was just taken. Start again with a different address.' });
+    }
+    const current = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+    await db.prepare('UPDATE users SET email = ? WHERE id = ?').run(row.new_email, req.user.id);
+    await db.prepare('DELETE FROM pending_email_changes WHERE user_id = ?').run(req.user.id);
+    const u = await db
+      .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
+      .get(req.user.id);
+    await audit(req, { action: 'profile.email_change', details: `${current?.email} → ${row.new_email}` });
+    res.json({
+      ok: true,
+      token: sign(u, req.user.sid),
+      user: { id: u.id, email: u.email, name: u.name, is_admin: !!u.is_admin },
+    });
+  }
+);
+
+// Read current pending email change (for the UI to show it after a refresh).
+router.get('/email-change-pending', authRequired, async (req, res) => {
+  const row = await db
+    .prepare('SELECT new_email, verify_expires_at FROM pending_email_changes WHERE user_id = ?')
+    .get(req.user.id);
+  res.json({ pending: row ? { newEmail: row.new_email, expires_at: row.verify_expires_at } : null });
+});
+
+// Cancel an in-flight email change.
+router.delete('/email-change-pending', authRequired, async (req, res) => {
+  await db.prepare('DELETE FROM pending_email_changes WHERE user_id = ?').run(req.user.id);
+  res.json({ ok: true });
+});
 
 // ---------- Session refresh ----------
 // authRequired already validated the token + session row; we just mint a new
