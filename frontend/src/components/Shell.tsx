@@ -47,10 +47,8 @@ export function Shell() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const stored = localStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') return stored;
-    // No manual choice yet — follow the OS.
-    return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches
-      ? 'light'
-      : 'dark';
+    // Warm minimal (light) is the new default experience.
+    return 'light';
   });
   const [userPickedTheme, setUserPickedTheme] = useState<boolean>(() => {
     const stored = localStorage.getItem('theme');
@@ -60,17 +58,11 @@ export function Shell() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     if (userPickedTheme) localStorage.setItem('theme', theme);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0b1a' : '#f3f1ff');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0b1a' : '#faf7f2');
   }, [theme, userPickedTheme]);
 
-  // If the user hasn't manually overridden, follow OS theme changes live.
-  useEffect(() => {
-    if (userPickedTheme) return;
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const onChange = () => setTheme(mq.matches ? 'light' : 'dark');
-    mq.addEventListener?.('change', onChange);
-    return () => mq.removeEventListener?.('change', onChange);
-  }, [userPickedTheme]);
+  // Warm-minimal is the default experience; we no longer auto-follow the OS.
+  // Users can still toggle dark via the sun/moon button in the topbar.
 
   const toggleTheme = () => {
     setUserPickedTheme(true);

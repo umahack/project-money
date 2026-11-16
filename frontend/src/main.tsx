@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import '@fontsource-variable/outfit';
 import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/fraunces';
 import './styles.css';
 import App from './App';
 import { AuthProvider, ToastProvider } from './state';
