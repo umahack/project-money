@@ -140,6 +140,11 @@ export function Shell() {
                     <span className="side-label">{t.label}</span>
                   </NavLink>
                 ))}
+                <div className="side-group">Account</div>
+                <NavLink to="/settings" className="side-link">
+                  <span className="side-icon">⚙️</span>
+                  <span className="side-label">Settings &amp; devices</span>
+                </NavLink>
                 <div className="side-group">Switch</div>
                 <NavLink to="/" className="side-link">
                   <span className="side-icon">👤</span>
