@@ -9,6 +9,7 @@ import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
 import { OnboardingModal } from '../components/OnboardingModal';
+import { TodayStrip } from '../components/TodayStrip';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -137,6 +138,7 @@ export function Dashboard() {
     return (
       <>
         <PageTitle title={`Hey ${firstName} 👋`} sub="Two quick things and your plan is ready." />
+        <TodayStrip />
         <InvitesInbox />
         <Card tilt>
           <div style={{ textAlign: 'center', padding: '0.4rem 0 0.8rem' }}>
@@ -173,6 +175,7 @@ export function Dashboard() {
           sub="One more step — add anything that leaves your bank on its own."
           right={<span className="pill info">Pay: {inr(plan.income)}</span>}
         />
+        <TodayStrip />
         <InvitesInbox />
         <Card>
           <div style={{ textAlign: 'center', padding: '0.2rem 0 0.6rem' }}>
@@ -217,6 +220,7 @@ export function Dashboard() {
         right={salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined}
       />
 
+      <TodayStrip />
       <InvitesInbox />
 
       {/* HERO: the plan donut + one big "left to spend/save" number. */}

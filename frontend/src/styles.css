@@ -725,3 +725,50 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   background: rgba(251,113,133,0.14);
   border-color: rgba(251,113,133,0.35);
 }
+
+/* ============ Today strip ============ */
+.today-strip {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+}
+.today-cal {
+  width: 72px; height: 72px; flex: 0 0 auto;
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(124,108,255,0.18), rgba(24,224,181,0.12));
+  border: 1px solid rgba(124,108,255,0.3);
+  display: grid; grid-template-rows: 20px 1fr; place-items: center;
+  overflow: hidden;
+}
+.today-cal-month {
+  width: 100%; text-align: center;
+  background: linear-gradient(135deg, #7c6cff, #4ade80);
+  color: #0b0b1a; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em;
+  line-height: 20px;
+}
+.today-cal-day {
+  font-size: 2rem; font-weight: 800; line-height: 1;
+  color: var(--text);
+  margin-top: -2px;
+}
+.today-body { display: grid; gap: 0.25rem; min-width: 0; }
+.today-head { font-size: 1.1rem; }
+.today-progress {
+  height: 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+  margin: 0.3rem 0 0.1rem;
+}
+.today-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c6cff, #4ade80, #fbbf24);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+[data-theme='light'] .today-progress { background: rgba(0,0,0,0.08); }
+@media (max-width: 420px) {
+  .today-cal { width: 60px; height: 60px; }
+  .today-cal-day { font-size: 1.6rem; }
+  .today-head { font-size: 1rem; }
+}
