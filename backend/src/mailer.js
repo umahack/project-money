@@ -47,6 +47,24 @@ export function registerVerifyEmail(code, name) {
   return { subject: 'Your Project Money sign-up code', text, html };
 }
 
+export function alreadyRegisteredEmail(name) {
+  const safeName = String(name || '').replace(/[<>]/g, '').slice(0, 60);
+  const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
+  const text =
+    `Project Money\n\n${greeting}\nSomeone tried to create a Project Money account using this email,` +
+    ` but you already have one. If this was you, you can sign in at https://project-money.online/login` +
+    ` — and if you forgot your password, reset it at https://project-money.online/forgot-password.` +
+    `\n\nIf it wasn't you, you can safely ignore this email — no account was created, nothing changed.`;
+  const html = brand(
+    `<p>${greeting}</p>` +
+    `<p>Someone tried to create a Project Money account using this email, but you already have one.</p>` +
+    `<p>If it was you: <a href="https://project-money.online/login" style="color:#4ade80">sign in</a>, or ` +
+    `<a href="https://project-money.online/forgot-password" style="color:#4ade80">reset your password</a>.</p>` +
+    `<p style="color:#a1a1aa;font-size:12px">If it wasn't you, you can safely ignore this email — no account was created, nothing changed.</p>`
+  );
+  return { subject: 'Someone tried to sign up with your email', text, html };
+}
+
 export function passwordResetEmail(code, name) {
   const safeName = String(name || '').replace(/[<>]/g, '').slice(0, 60);
   const greeting = safeName ? `Hi ${safeName},` : 'Hi,';

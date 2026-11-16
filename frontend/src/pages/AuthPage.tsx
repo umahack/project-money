@@ -75,7 +75,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setBusy(true);
     try {
       const r = await registerStart(name.trim(), email.trim(), password);
-      toast('ok', r.fallback ? 'Code generated (check server log in dev)' : `Code sent to ${email.trim()}`);
+      toast('ok', r.fallback ? 'Code generated (check server log in dev)' : `Check ${email.trim()} for a 6-digit code. If this email already has an account, we've sent a sign-in reminder instead.`);
       setStep('code');
     } catch (err) {
       setError(friendly(errText(err), 'register'));

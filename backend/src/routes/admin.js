@@ -98,9 +98,46 @@ router.put('/users/:id/admin', [body('is_admin').isBoolean()], async (req, res) 
 router.delete('/users/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (id === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
-  const info = await db.prepare('DELETE FROM users WHERE id = ?').run(id);
-  if (!info.changes) return res.status(404).json({ error: 'Not found' });
-  await audit(req, { action: 'admin.user_delete', target: `user:${id}` });
+  const target = await db
+    .prepare('SELECT id, email, is_admin FROM users WHERE id = ?')
+    .get(id);
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  // Never let an admin delete the last remaining admin — leaving the system
+  // admin-less would require manual env+boot promotion to recover.
+  if (target.is_admin) {
+    const admins = await db
+      .prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1')
+      .get();
+    if (Number(admins.n ?? 0) <= 1) {
+      return res.status(400).json({ error: 'Cannot delete the last remaining admin.' });
+    }
+  }
+  // Explicit cleanup across every user-owning table so this works regardless
+  // of whether PRAGMA foreign_keys is on under libSQL. Mirrors /auth/account.
+  const tx = [
+    ['DELETE FROM trip_expenses WHERE paid_by_user_id = ?', [id]],
+    ['DELETE FROM trip_members WHERE user_id = ?', [id]],
+    ['DELETE FROM trip_invites WHERE inviter_id = ? OR invitee_id = ?', [id, id]],
+    ['DELETE FROM trips WHERE user_id = ?', [id]],
+    ['DELETE FROM salary_entries WHERE user_id = ?', [id]],
+    ['DELETE FROM emis WHERE user_id = ?', [id]],
+    ['DELETE FROM expense_log WHERE user_id = ?', [id]],
+    ['DELETE FROM category_budgets WHERE user_id = ?', [id]],
+    ['DELETE FROM recurring_expenses WHERE user_id = ?', [id]],
+    ['DELETE FROM savings_goals WHERE user_id = ?', [id]],
+    ['DELETE FROM user_categories WHERE user_id = ?', [id]],
+    ['DELETE FROM user_aliases WHERE user_id = ?', [id]],
+    ['DELETE FROM sessions WHERE user_id = ?', [id]],
+    ['DELETE FROM pending_email_changes WHERE user_id = ?', [id]],
+    ['DELETE FROM pending_registrations WHERE email = ?', [target.email]],
+    ['DELETE FROM pending_password_resets WHERE email = ?', [target.email]],
+    ['UPDATE feedback SET user_id = NULL WHERE user_id = ?', [id]],
+    ['UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?', [id]],
+    ['UPDATE visits SET user_id = NULL WHERE user_id = ?', [id]],
+    ['DELETE FROM users WHERE id = ?', [id]],
+  ];
+  for (const [sql, args] of tx) await db.prepare(sql).run(...args);
+  await audit(req, { action: 'admin.user_delete', target: `user:${id}`, details: `email=${target.email}` });
   res.json({ ok: true });
 });
 
@@ -108,6 +145,7 @@ router.delete('/emis/:id', async (req, res) => {
   const id = Number(req.params.id);
   const info = await db.prepare('DELETE FROM emis WHERE id = ?').run(id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  await audit(req, { action: 'admin.emi_delete', target: `emi:${id}` });
   res.json({ ok: true });
 });
 
@@ -115,6 +153,7 @@ router.delete('/trips/:id', async (req, res) => {
   const id = Number(req.params.id);
   const info = await db.prepare('DELETE FROM trips WHERE id = ?').run(id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  await audit(req, { action: 'admin.trip_delete', target: `trip:${id}` });
   res.json({ ok: true });
 });
 
@@ -129,6 +168,7 @@ router.delete('/feedback/:id', async (req, res) => {
   const id = Number(req.params.id);
   const info = await db.prepare('DELETE FROM feedback WHERE id = ?').run(id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
+  await audit(req, { action: 'admin.feedback_delete', target: `feedback:${id}` });
   res.json({ ok: true });
 });
 

@@ -37,7 +37,7 @@ function optionalUserId(req) {
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
   if (!token) return null;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     return Number(payload.sub) || null;
   } catch {
     return null;

@@ -379,7 +379,7 @@ function People({ d, reload }: { d: TripDetailData; reload: () => Promise<void> 
     setInviting(true);
     try {
       await api.post(`/trips/${d.trip.id}/invite`, { email: em });
-      toast('ok', `Invite sent to ${em}`);
+      toast('ok', `If ${em} has a Project Money account, they'll see your invite.`);
       setInviteEmail('');
     } catch (err) {
       toast('err', errText(err));

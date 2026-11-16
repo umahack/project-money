@@ -9,7 +9,13 @@ import { authRequired } from '../middleware/auth.js';
 import { audit } from '../audit.js';
 import { createSession, revokeSession } from '../sessions.js';
 import { generateCode, hashCode, matches, expiresAt, isExpired, MAX_VERIFY_ATTEMPTS } from '../otp.js';
-import { sendMail, registerVerifyEmail, emailChangeVerifyEmail, passwordResetEmail } from '../mailer.js';
+import {
+  sendMail,
+  registerVerifyEmail,
+  emailChangeVerifyEmail,
+  passwordResetEmail,
+  alreadyRegisteredEmail,
+} from '../mailer.js';
 
 const router = Router();
 
@@ -21,10 +27,10 @@ const authLimiter = rateLimit({
   message: { error: 'Too many attempts, slow down.' },
 });
 
-// Separate send-side limit so a bad actor can't burn through our Resend quota.
-// Keys by (lowercased body email, else client IP) so an attacker rotating IPs
-// still can't trigger more than `max` sends against a single address, and a
-// single IP can't trigger many sends across addresses either.
+// Two layered caps so an attacker can't burn Resend quota:
+//   sendLimiter      — 8/hr per destination email
+//   sendIpLimiter    — 20/hr per source IP (bounded regardless of how many
+//                      different emails they try)
 const sendLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 8,
@@ -35,6 +41,13 @@ const sendLimiter = rateLimit({
     const email = String(req.body?.email || '').trim().toLowerCase();
     return email || `ip:${req.ip || 'unknown'}`;
   },
+});
+const sendIpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this network. Try again later.' },
 });
 
 function sign(user, sid) {
@@ -93,6 +106,7 @@ async function promoteIfConfigured(userId, email) {
 // is only created after the correct code lands in /register-finish.
 router.post(
   '/register-start',
+  sendIpLimiter,
   sendLimiter,
   [
     body('email').isEmail().normalizeEmail(),
@@ -106,34 +120,40 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { email, name, password } = req.body;
-    const exists = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (exists) return res.status(409).json({ error: 'That email is already registered. Try signing in instead.' });
-
+    const existing = await db.prepare('SELECT id, name FROM users WHERE email = ?').get(email);
+    // Constant-shape response regardless of whether the account exists — don't
+    // give unauthenticated clients an enumeration oracle. We ALWAYS run bcrypt
+    // to flatten the timing side-channel too.
     const pwHash = await bcrypt.hash(password, 12);
-    const code = generateCode();
-    const codeHash = await hashCode(code);
-    await db
-      .prepare(
-        `INSERT INTO pending_registrations (email, name, password_hash, verify_code_hash, verify_expires_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(email) DO UPDATE SET
-           name = excluded.name,
-           password_hash = excluded.password_hash,
-           verify_code_hash = excluded.verify_code_hash,
-           verify_expires_at = excluded.verify_expires_at,
-           verify_attempts = 0`
-      )
-      .run(email, name.trim(), pwHash, codeHash, expiresAt());
-
-    const { subject, text, html } = registerVerifyEmail(code, name);
-    const result = await sendMail({ to: email, subject, text, html });
-    res.json({ ok: true, email, mail: { sent: result.ok, fallback: !!result.fallback } });
+    if (existing) {
+      const { subject, text, html } = alreadyRegisteredEmail(existing.name);
+      await sendMail({ to: email, subject, text, html });
+    } else {
+      const code = generateCode();
+      const codeHash = await hashCode(code);
+      await db
+        .prepare(
+          `INSERT INTO pending_registrations (email, name, password_hash, verify_code_hash, verify_expires_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(email) DO UPDATE SET
+             name = excluded.name,
+             password_hash = excluded.password_hash,
+             verify_code_hash = excluded.verify_code_hash,
+             verify_expires_at = excluded.verify_expires_at,
+             verify_attempts = 0`
+        )
+        .run(email, name.trim(), pwHash, codeHash, expiresAt());
+      const { subject, text, html } = registerVerifyEmail(code, name);
+      await sendMail({ to: email, subject, text, html });
+    }
+    res.json({ ok: true, email, mail: { sent: true, fallback: false } });
   }
 );
 
 // Resend if the user never got the code (same send-limit applies).
 router.post(
   '/register-resend',
+  sendIpLimiter,
   sendLimiter,
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
@@ -141,16 +161,19 @@ router.post(
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
     const { email } = req.body;
     const row = await db.prepare('SELECT name FROM pending_registrations WHERE email = ?').get(email);
-    if (!row) return res.status(404).json({ error: 'Start sign-up first — we need your name and password.' });
-    const code = generateCode();
-    await db
-      .prepare(
-        `UPDATE pending_registrations SET verify_code_hash = ?, verify_expires_at = ?, verify_attempts = 0 WHERE email = ?`
-      )
-      .run(await hashCode(code), expiresAt(), email);
-    const { subject, text, html } = registerVerifyEmail(code, row.name);
-    const result = await sendMail({ to: email, subject, text, html });
-    res.json({ ok: true, mail: { sent: result.ok, fallback: !!result.fallback } });
+    // Constant response regardless of whether a pending row exists, to avoid
+    // leaking account existence via the resend endpoint.
+    if (row) {
+      const code = generateCode();
+      await db
+        .prepare(
+          `UPDATE pending_registrations SET verify_code_hash = ?, verify_expires_at = ?, verify_attempts = 0 WHERE email = ?`
+        )
+        .run(await hashCode(code), expiresAt(), email);
+      const { subject, text, html } = registerVerifyEmail(code, row.name);
+      await sendMail({ to: email, subject, text, html });
+    }
+    res.json({ ok: true, mail: { sent: true, fallback: false } });
   }
 );
 
@@ -169,17 +192,20 @@ router.post(
            FROM pending_registrations WHERE email = ?`
       )
       .get(email);
-    if (!pending) return res.status(404).json({ error: 'Start sign-up first.' });
+    // Collapse "no pending row" and "wrong code" into the same error to avoid
+    // leaking whether the email is already a real account.
+    const GENERIC_BAD = 'Invalid or expired code. Please start sign-up again.';
+    if (!pending) return res.status(400).json({ error: GENERIC_BAD });
     if (isExpired(pending.verify_expires_at))
-      return res.status(400).json({ error: 'Code expired. Please request a new one.' });
+      return res.status(400).json({ error: GENERIC_BAD });
     if (pending.verify_attempts >= MAX_VERIFY_ATTEMPTS)
-      return res.status(429).json({ error: 'Too many wrong attempts. Resend a fresh code.' });
+      return res.status(429).json({ error: 'Too many wrong attempts. Request a fresh code.' });
     const ok = await matches(code, pending.verify_code_hash);
     if (!ok) {
       await db
         .prepare('UPDATE pending_registrations SET verify_attempts = verify_attempts + 1 WHERE email = ?')
         .run(email);
-      return res.status(400).json({ error: 'Incorrect code.' });
+      return res.status(400).json({ error: GENERIC_BAD });
     }
     const taken = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (taken) {
@@ -261,6 +287,7 @@ router.post(
 // the email is on file, so this endpoint does not reveal account existence.
 router.post(
   '/password-reset-start',
+  sendIpLimiter,
   sendLimiter,
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
@@ -270,8 +297,11 @@ router.post(
     if (!errors.isEmpty()) return res.json({ ok: true });
     const email = String(req.body.email).toLowerCase();
     const user = await db.prepare('SELECT id, name FROM users WHERE email = ?').get(email);
+    // Always hash a code and run bcrypt, even if the account doesn't exist,
+    // to keep response-time similar for the two branches (no timing oracle).
+    const code = generateCode();
+    const codeHash = await hashCode(code);
     if (user) {
-      const code = generateCode();
       await db
         .prepare(
           `INSERT INTO pending_password_resets (email, verify_code_hash, verify_expires_at)
@@ -282,7 +312,7 @@ router.post(
              verify_attempts = 0,
              created_at = CURRENT_TIMESTAMP`
         )
-        .run(email, await hashCode(code), expiresAt());
+        .run(email, codeHash, expiresAt());
       const { subject, text, html } = passwordResetEmail(code, user.name);
       await sendMail({ to: email, subject, text, html });
     }
@@ -432,10 +462,24 @@ router.patch(
   }
 );
 
+// Tight per-user cap so an authenticated attacker can't use /email-change-start
+// as an enumeration oracle — 3 starts/hour/user. sendLimiter still runs for
+// quota control, keyed by the destination email.
+const emailChangeStartLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `uid:${req.user?.id ?? req.ip ?? 'unknown'}`,
+  message: { error: 'Too many email change attempts. Try again in an hour.' },
+});
+
 // Step 1 of email change: email the new address a 6-digit code.
 router.post(
   '/email-change-start',
   authRequired,
+  emailChangeStartLimiter,
+  sendIpLimiter,
   sendLimiter,
   [body('newEmail').isEmail().normalizeEmail()],
   async (req, res) => {
@@ -446,24 +490,27 @@ router.post(
     if (!me) return res.status(401).json({ error: 'Session expired' });
     if (newEmail === me.email) return res.status(400).json({ error: 'That is already your email.' });
     const taken = await db.prepare('SELECT id FROM users WHERE email = ?').get(newEmail);
-    if (taken) return res.status(409).json({ error: 'That email is already in use.' });
-
-    const code = generateCode();
-    await db
-      .prepare(
-        `INSERT INTO pending_email_changes (user_id, new_email, verify_code_hash, verify_expires_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(user_id) DO UPDATE SET
-           new_email = excluded.new_email,
-           verify_code_hash = excluded.verify_code_hash,
-           verify_expires_at = excluded.verify_expires_at,
-           verify_attempts = 0`
-      )
-      .run(req.user.id, newEmail, await hashCode(code), expiresAt());
-
-    const { subject, text, html } = emailChangeVerifyEmail(code, me.email);
-    const result = await sendMail({ to: newEmail, subject, text, html });
-    res.json({ ok: true, newEmail, mail: { sent: result.ok, fallback: !!result.fallback } });
+    // Constant-shape response: whether the target address is taken or not we
+    // return the same payload. If taken, we silently skip creating the pending
+    // row and skip the OTP send — the attacker learns nothing from the HTTP
+    // response. The tight per-user limiter caps probing to 3/hour.
+    if (!taken) {
+      const code = generateCode();
+      await db
+        .prepare(
+          `INSERT INTO pending_email_changes (user_id, new_email, verify_code_hash, verify_expires_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET
+             new_email = excluded.new_email,
+             verify_code_hash = excluded.verify_code_hash,
+             verify_expires_at = excluded.verify_expires_at,
+             verify_attempts = 0`
+        )
+        .run(req.user.id, newEmail, await hashCode(code), expiresAt());
+      const { subject, text, html } = emailChangeVerifyEmail(code, me.email);
+      await sendMail({ to: newEmail, subject, text, html });
+    }
+    res.json({ ok: true, newEmail, mail: { sent: true, fallback: false } });
   }
 );
 

@@ -42,31 +42,35 @@ router.post(
     const invitee = await db
       .prepare('SELECT id, name, email FROM users WHERE email = ?')
       .get(req.body.email);
-    if (!invitee) return res.status(404).json({ error: 'No user with that email. Ask them to sign up first.' });
-    if (invitee.id === req.user.id) return res.status(400).json({ error: "You can't invite yourself." });
+    if (invitee?.id === req.user.id) return res.status(400).json({ error: "You can't invite yourself." });
 
+    // Constant-shape response regardless of whether the invitee exists or is
+    // already a member — avoids using this endpoint as an enumeration oracle.
+    // The UI shows "If that email is on Project Money, we've sent an invite."
+    const GENERIC = { ok: true, invited: true };
+    if (!invitee) return res.json(GENERIC);
     const already = await db
       .prepare('SELECT id FROM trip_members WHERE trip_id = ? AND user_id = ?')
       .get(tripId, invitee.id);
-    if (already) return res.status(409).json({ error: 'That person is already on this trip.' });
+    if (already) return res.json(GENERIC);
 
     try {
-      const info = await db
+      await db
         .prepare(
           'INSERT INTO trip_invites (trip_id, inviter_id, invitee_id, status) VALUES (?, ?, ?, ?)'
         )
         .run(tripId, req.user.id, invitee.id, 'pending');
-      res.json({ id: info.lastInsertRowid, invitee: { email: invitee.email, name: invitee.name } });
+      return res.json(GENERIC);
     } catch (e) {
       if (/UNIQUE/i.test(e.message)) {
-        // Previous invite already exists; if declined, re-open it as pending
+        // Previous invite already exists; if declined, re-open it as pending.
         await db
           .prepare(
             `UPDATE trip_invites SET status = 'pending', responded_at = NULL, inviter_id = ?
              WHERE trip_id = ? AND invitee_id = ?`
           )
           .run(req.user.id, tripId, invitee.id);
-        return res.json({ ok: true, reopened: true });
+        return res.json(GENERIC);
       }
       throw e;
     }

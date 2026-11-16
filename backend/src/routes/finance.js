@@ -628,7 +628,10 @@ router.delete('/recurring/:id', async (req, res) => {
 // ---------- CSV export ----------
 function csvEscape(v) {
   if (v == null) return '';
-  const s = String(v);
+  let s = String(v);
+  // CSV formula-injection guard: Excel/Sheets treat =, +, -, @, and TAB as
+  // formula triggers. Prefix with a single quote so the cell renders as text.
+  if (/^[=+\-@\t]/.test(s)) s = "'" + s;
   if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
