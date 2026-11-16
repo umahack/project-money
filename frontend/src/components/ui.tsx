@@ -79,6 +79,23 @@ export function Spinner() {
   );
 }
 
+/** Shimmer placeholder for a loading block. Width/height are flex-friendly. */
+export function Skeleton({ w = '100%', h = 14, radius = 6, style }: { w?: number | string; h?: number | string; radius?: number; style?: React.CSSProperties }) {
+  return (
+    <span
+      className="skeleton"
+      aria-hidden="true"
+      style={{
+        display: 'inline-block',
+        width: typeof w === 'number' ? `${w}px` : w,
+        height: typeof h === 'number' ? `${h}px` : h,
+        borderRadius: radius,
+        ...style,
+      }}
+    />
+  );
+}
+
 export function Empty({ emoji, title, text }: { emoji: string; title: string; text?: string }) {
   return (
     <div className="empty">

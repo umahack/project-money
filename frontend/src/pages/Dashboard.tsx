@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
-import { Card, Donut, Empty, Field, Money, PageTitle, Spinner, burst } from '../components/ui';
+import { Card, Donut, Empty, Field, Money, PageTitle, Skeleton, burst } from '../components/ui';
 import { buildInsights } from '../insights';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
@@ -117,9 +117,48 @@ export function Dashboard() {
   }
 
   const ins = useMemo(() => (plan ? buildInsights(plan, emis) : null), [plan, emis]);
+  const firstNameEarly = user?.name.split(' ')[0] ?? 'there';
 
   if (loadErr) return <Card><p className="form-error">{loadErr}</p><button className="btn" onClick={() => void load()}>Retry</button></Card>;
-  if (!plan || !ins) return <Spinner />;
+
+  // Loading shell: paint the layout (headline + today strip + hero card)
+  // immediately with skeleton bars, so LCP fires on the H1 instead of waiting
+  // for the three parallel API fetches to return. The Render free tier can
+  // take ~30s to wake from idle; the user now sees structure instantly.
+  if (!plan || !ins) {
+    return (
+      <>
+        <PageTitle title={`Hey ${firstNameEarly} 👋`} sub="Pulling your month together…" />
+        <TodayStrip />
+        <Card>
+          <div className="row between" style={{ marginBottom: '0.6rem' }}>
+            <Skeleton w={180} h={22} />
+            <Skeleton w={90} h={22} radius={999} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '1rem', alignItems: 'center' }}>
+            <Skeleton w={160} h={160} radius={999} />
+            <div style={{ display: 'grid', gap: '0.6rem' }}>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Skeleton w={10} h={10} radius={999} />
+                  <Skeleton w={100} h={14} />
+                  <Skeleton w={60} h={14} style={{ marginLeft: 'auto' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: '1rem' }}>
+            <Skeleton w={120} h={12} />
+            <div style={{ height: 8 }} />
+            <Skeleton w={160} h={32} />
+          </div>
+        </Card>
+        <p className="muted small center" style={{ marginTop: '0.8rem' }} aria-live="polite">
+          If this takes a few seconds, the free API host is waking up.
+        </p>
+      </>
+    );
+  }
 
   const health = HEALTH[ins.health];
   const segments = [
