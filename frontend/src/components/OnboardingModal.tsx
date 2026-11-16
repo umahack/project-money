@@ -13,28 +13,23 @@ interface Step {
 const STEPS: Step[] = [
   {
     emoji: '👋',
-    title: 'Welcome to Project Money',
-    body: 'A simple home for your salary, spending, and shared trips. Nothing you enter leaves your account.',
+    title: 'Hey, welcome in',
+    body: "I'll help you figure out where your money should go each month. Takes 60 seconds to set up.",
   },
   {
     emoji: '💰',
-    title: 'Enter your monthly salary',
-    body: 'On the Home page, type the amount that credits each month. We assume it stays the same unless you update it.',
+    title: 'Step 1 — Your monthly pay',
+    body: 'How much actually lands in your bank each month? Just the take-home number. No tax math needed.',
   },
   {
-    emoji: '🏦',
-    title: 'Add your fixed payments',
-    body: 'Rent, EMIs, insurance, subscriptions. Everything that leaves your account automatically.',
+    emoji: '📄',
+    title: 'Step 2 — Your monthly bills',
+    body: "Rent, Netflix, insurance, loan EMIs — anything that leaves your account on its own. Add them once, they stay saved.",
   },
   {
-    emoji: '📊',
-    title: 'The rest is your money plan',
-    body: 'What is left after fixed payments is split 50% needs / 30% wants / 20% save. Log daily expenses so you see how you are tracking.',
-  },
-  {
-    emoji: '✈️',
-    title: 'Go on trips, split fairly',
-    body: 'Create a trip, invite friends by email, add shared expenses. We work out who owes whom.',
+    emoji: '✨',
+    title: "That's it",
+    body: "You'll see what's left, how much is safe to spend each day, and where to save. Log daily buys as they happen (or don't — it still works).",
   },
 ];
 
@@ -95,7 +90,7 @@ export function OnboardingModal() {
                   <button className="btn ghost sm" onClick={() => setStep((s) => Math.max(0, s - 1))}>← Back</button>
                 )}
                 <button className="btn primary sm" onClick={() => (last ? dismiss() : setStep((s) => s + 1))}>
-                  {last ? "Let's go" : 'Next →'}
+                  {last ? "Let's go 🚀" : 'Next →'}
                 </button>
               </div>
             </div>

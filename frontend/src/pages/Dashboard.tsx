@@ -13,11 +13,11 @@ import { OnboardingModal } from '../components/OnboardingModal';
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
 const HEALTH = {
-  empty: { label: 'Waiting for salary', cls: 'info' },
-  excellent: { label: 'Excellent', cls: 'success' },
-  good: { label: 'Good', cls: 'success' },
-  tight: { label: 'Tight', cls: 'warn' },
-  critical: { label: 'Critical', cls: 'danger' },
+  empty: { label: 'Waiting for your pay', cls: 'info' },
+  excellent: { label: 'Looking great 🎉', cls: 'success' },
+  good: { label: "You're good 👍", cls: 'success' },
+  tight: { label: 'A bit tight 😬', cls: 'warn' },
+  critical: { label: 'Rough month 🚨', cls: 'danger' },
 } as const;
 const LEVEL_ICON = { success: '✅', info: '💡', warn: '⚠️', danger: '🚨' } as const;
 
@@ -122,51 +122,113 @@ export function Dashboard() {
 
   const health = HEALTH[ins.health];
   const segments = [
-    { label: 'Fixed payments', value: plan.emiTotal, color: 'var(--c-fixed)' },
-    { label: 'Savings', value: plan.breakdown.save, color: 'var(--c-save)' },
-    { label: 'Essentials', value: plan.breakdown.needs, color: 'var(--c-need)' },
-    { label: 'Fun & flexible', value: plan.breakdown.wants, color: 'var(--c-want)' },
+    { label: 'Bills', value: plan.emiTotal, color: 'var(--c-fixed)' },
+    { label: 'Save 💰', value: plan.breakdown.save, color: 'var(--c-save)' },
+    { label: 'Needs 🍔', value: plan.breakdown.needs, color: 'var(--c-need)' },
+    { label: 'Wants 🎮', value: plan.breakdown.wants, color: 'var(--c-want)' },
   ];
   const stale = salaryMonth && salaryMonth !== currentMonth();
+  const firstName = user?.name.split(' ')[0] ?? 'there';
+  const hasPay = plan.income > 0;
+  const hasBills = emis.length > 0;
 
+  // ----- Brand-new user: single hero card that walks them through step 1. -----
+  if (!hasPay) {
+    return (
+      <>
+        <PageTitle title={`Hey ${firstName} 👋`} sub="Two quick things and your plan is ready." />
+        <InvitesInbox />
+        <Card tilt>
+          <div style={{ textAlign: 'center', padding: '0.4rem 0 0.8rem' }}>
+            <div style={{ fontSize: '3rem', lineHeight: 1 }}>💰</div>
+            <h2 style={{ margin: '0.4rem 0 0.2rem' }}>Step 1 · Your monthly pay</h2>
+            <p className="muted" style={{ margin: 0, maxWidth: 440, marginInline: 'auto' }}>
+              How much lands in your bank each month after tax? Just the take-home number.
+            </p>
+          </div>
+          <form onSubmit={saveSalary} className="salary-form">
+            <div className="input-prefix">
+              <span>₹</span>
+              <input value={salary} onChange={(e) => setSalary(e.target.value)} inputMode="decimal" placeholder="e.g. 75,000" aria-label="Monthly pay" maxLength={16} autoFocus />
+            </div>
+            <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
+              {saving ? 'Saving…' : 'Save and continue →'}
+            </motion.button>
+          </form>
+          <p className="muted tiny center" style={{ marginTop: '0.8rem' }}>
+            🔒 Only you can see this. Change it any time.
+          </p>
+        </Card>
+        <OnboardingModal />
+      </>
+    );
+  }
+
+  // ----- Pay set, no bills yet: nudge Step 2. -----
+  if (!hasBills) {
+    return (
+      <>
+        <PageTitle
+          title={`Hey ${firstName} 👋`}
+          sub="One more step — add anything that leaves your bank on its own."
+          right={<span className="pill info">Pay: {inr(plan.income)}</span>}
+        />
+        <InvitesInbox />
+        <Card>
+          <div style={{ textAlign: 'center', padding: '0.2rem 0 0.6rem' }}>
+            <div style={{ fontSize: '2.6rem', lineHeight: 1 }}>📄</div>
+            <h2 style={{ margin: '0.4rem 0 0.2rem' }}>Step 2 · Monthly bills</h2>
+            <p className="muted" style={{ margin: 0, maxWidth: 460, marginInline: 'auto' }}>
+              Rent, Netflix, insurance, loan EMIs — anything that leaves your account automatically.
+              Nothing recurring? Hit skip at the bottom.
+            </p>
+          </div>
+          <form onSubmit={addEmi} className="commit-form">
+            <Field label="What is it?">
+              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Rent, Netflix, Health insurance" maxLength={60} />
+            </Field>
+            <Field label="Type">
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                {EMI_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="How much (₹) a month">
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="e.g. 12,500" maxLength={16} />
+            </Field>
+            <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
+              <button className="btn ghost" type="button" onClick={() => void load()}>
+                No bills — skip
+              </button>
+              <button className="btn primary" type="submit">+ Add bill</button>
+            </div>
+          </form>
+        </Card>
+        <OnboardingModal />
+      </>
+    );
+  }
+
+  // ----- Normal state: pay + at least one bill. -----
   return (
     <>
       <PageTitle
-        title={`Hello, ${user?.name.split(' ')[0] ?? 'there'} 👋`}
-        sub="Enter this month's credited salary and your fixed payments. We'll plan the rest."
-        right={salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Salary on file: {monthLabel(salaryMonth)}</span> : undefined}
+        title={`Hey ${firstName} 👋`}
+        sub="Here's where your money is going this month."
+        right={salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined}
       />
 
       <InvitesInbox />
 
-      <div className="grid two">
-        <Card tilt>
-          <h2>💳 Credited monthly salary</h2>
-          <form onSubmit={saveSalary} className="salary-form">
-            <div className="input-prefix">
-              <span>₹</span>
-              <input value={salary} onChange={(e) => setSalary(e.target.value)} inputMode="decimal" placeholder="75,000" aria-label="Credited monthly salary" maxLength={16} />
-            </div>
-            <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
-              {saving ? 'Saving…' : 'Calculate plan'}
-            </motion.button>
-          </form>
-          {stale && <p className="small muted">Your last entry is for {monthLabel(salaryMonth!)}. Saving now records it for {monthLabel(currentMonth())}.</p>}
-          <div className="stat-row">
-            <div><span className="muted">Salary</span><Money value={plan.income} className="big" /></div>
-            <div><span className="muted">Fixed payments</span><Money value={plan.emiTotal} className="big" /></div>
-            <div><span className="muted">Left after fixed</span><Money value={plan.afterFixed} className="big" /></div>
-          </div>
-        </Card>
-
-        <Card tilt>
-          <div className="row between">
-            <h2>📊 Your plan</h2>
-            <span className={`pill ${health.cls}`}>{health.label}</span>
-          </div>
-          {plan.income > 0 ? (
+      {/* HERO: the plan donut + one big "left to spend/save" number. */}
+      <Card tilt>
+        <div className="row between" style={{ flexWrap: 'wrap', gap: '0.6rem' }}>
+          <h2 style={{ margin: 0 }}>📊 Your money this month</h2>
+          <span className={`pill ${health.cls}`}>{health.label}</span>
+        </div>
+        {plan.afterFixed > 0 ? (
+          <>
             <div className="plan-grid">
-              <Donut segments={segments} centerTop="Save this month" centerBottom={inr(plan.breakdown.save)} />
+              <Donut segments={segments} centerTop="To save" centerBottom={inr(plan.breakdown.save)} />
               <ul className="legend">
                 {segments.map((s) => (
                   <li key={s.label}>
@@ -178,76 +240,92 @@ export function Dashboard() {
                 ))}
               </ul>
             </div>
-          ) : (
-            <Empty emoji="🪙" title="No salary yet" text="Add your credited salary to see where every rupee should go." />
-          )}
-          {plan.income > 0 && plan.afterFixed > 0 && (
-            <div className="daily">
-              <span>Safe daily spend</span>
+            <div className="daily" style={{ marginTop: '0.6rem' }}>
+              <span>Safe to spend per day</span>
               <Money value={Math.round(ins.dailyAllowance)} className="big accent" />
-              <small className="muted">for food, travel and fun</small>
+              <small className="muted">on food, travel and fun · {inr(plan.spentThisMonth ?? 0)} spent so far</small>
             </div>
-          )}
-          {plan.income > 0 && plan.afterFixed <= 0 && <p className="form-error">Fixed payments use all of your salary.</p>}
-          {plan.income > 0 && <p className="small"><Link to="/plan">See the line-by-line plan →</Link></p>}
-        </Card>
-      </div>
+            <p className="small" style={{ marginTop: '0.4rem' }}>
+              <Link to="/plan">See line-by-line plan →</Link> · <Link to="/spending">Log today's spend →</Link>
+            </p>
+          </>
+        ) : (
+          <Empty emoji="⚠️" title="Your bills use all of your pay" text="Review which bills can be renegotiated, downgraded, or paused." />
+        )}
+      </Card>
 
+      {/* QUICK UPDATE: salary + add-bill side-by-side, compact. */}
       <div className="grid two">
         <Card>
-          <h2>🧾 Mandatory EMIs &amp; monthly payments</h2>
+          <h2>💰 Monthly pay</h2>
+          <form onSubmit={saveSalary} className="salary-form">
+            <div className="input-prefix">
+              <span>₹</span>
+              <input value={salary} onChange={(e) => setSalary(e.target.value)} inputMode="decimal" placeholder="75,000" aria-label="Monthly pay" maxLength={16} />
+            </div>
+            <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
+              {saving ? 'Saving…' : stale ? 'Update' : 'Save'}
+            </motion.button>
+          </form>
+          {stale && <p className="small muted">Updating saves it for {monthLabel(currentMonth())}.</p>}
+          <div className="stat-row">
+            <div><span className="muted">Pay</span><Money value={plan.income} className="big" /></div>
+            <div><span className="muted">Bills</span><Money value={plan.emiTotal} className="big" /></div>
+            <div><span className="muted">Left over</span><Money value={plan.afterFixed} className="big" /></div>
+          </div>
+        </Card>
+
+        <Card>
+          <h2>📄 Monthly bills</h2>
+          <p className="muted small" style={{ marginTop: 0 }}>Rent, EMIs, subscriptions, insurance — anything auto-deducted.</p>
           <form onSubmit={addEmi} className="commit-form">
             <Field label="What is it?">
-              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home loan EMI" maxLength={60} />
+              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Netflix" maxLength={60} />
             </Field>
             <Field label="Type">
               <select value={category} onChange={(e) => setCategory(e.target.value)}>
                 {EMI_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="Monthly amount (₹)">
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="12,500" maxLength={16} />
+            <Field label="₹ per month">
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="649" maxLength={16} />
             </Field>
             <div className="row">
-              <button className="btn primary" type="submit">+ Add</button>
+              <button className="btn primary" type="submit">+ Add bill</button>
             </div>
           </form>
-          {emis.length === 0 ? (
-            <Empty emoji="🏦" title="No fixed payments yet" text="Add EMIs, rent, insurance and subscriptions so the plan stays honest." />
-          ) : (
-            <ul className="list">
-              <AnimatePresence initial={false}>
-                {emis.map((c) => (
-                  <motion.li key={c.id} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }} className="list-item hoverable">
-                    <span className="avatar">{CAT_ICON[c.category] ?? '📌'}</span>
-                    <div className="grow">
-                      <strong>{c.label}</strong>
-                      <small className="muted">{c.category}</small>
-                    </div>
-                    <b className="mono">{inr(c.amount)}</b>
-                    <button className="icon-btn danger" aria-label={`Delete ${c.label}`} onClick={() => void remove(c.id)}>🗑️</button>
-                  </motion.li>
-                ))}
-              </AnimatePresence>
-            </ul>
-          )}
-        </Card>
-
-        <Card>
-          <h2>🧠 Recommendations</h2>
-          <ul className="recs">
-            {ins.recs.map((r, i) => (
-              <motion.li key={r.title + i} className={`rec ${r.level}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                <span className="rec-icon">{LEVEL_ICON[r.level]}</span>
-                <div>
-                  <strong>{r.title}</strong>
-                  <p>{r.text}</p>
-                </div>
-              </motion.li>
-            ))}
+          <ul className="list">
+            <AnimatePresence initial={false}>
+              {emis.map((c) => (
+                <motion.li key={c.id} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }} className="list-item hoverable">
+                  <span className="avatar">{CAT_ICON[c.category] ?? '📌'}</span>
+                  <div className="grow">
+                    <strong>{c.label}</strong>
+                    <small className="muted">{c.category}</small>
+                  </div>
+                  <b className="mono">{inr(c.amount)}</b>
+                  <button className="icon-btn danger" aria-label={`Delete ${c.label}`} onClick={() => void remove(c.id)}>🗑️</button>
+                </motion.li>
+              ))}
+            </AnimatePresence>
           </ul>
         </Card>
       </div>
+
+      <Card>
+        <h2>💡 Tips for you</h2>
+        <ul className="recs">
+          {ins.recs.map((r, i) => (
+            <motion.li key={r.title + i} className={`rec ${r.level}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+              <span className="rec-icon">{LEVEL_ICON[r.level]}</span>
+              <div>
+                <strong>{r.title}</strong>
+                <p>{r.text}</p>
+              </div>
+            </motion.li>
+          ))}
+        </ul>
+      </Card>
 
       <OnboardingModal />
     </>
