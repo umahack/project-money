@@ -92,13 +92,11 @@ export function Shell() {
         { to: '/admin/account', label: 'My account', icon: '🪪', end: false },
       ]
     : [];
-  // Mobile bottom bar: in admin mode show admin tabs + a user-view switch;
-  // otherwise regular tabs plus an Admin shortcut for admins.
-  const mobileTabs = inAdmin && adminTabs.length > 0
-    ? [...adminTabs, { to: '/', label: 'User', icon: '👤', end: true }]
-    : user?.is_admin
-      ? [...tabs, { to: '/admin', label: 'Admin', icon: '🛡️', end: false }]
-      : tabs;
+  // Mobile bottom bar: in admin mode show the admin tabs so admins have
+  // quick access to admin sections; on the user side keep only the primary
+  // user tabs. The topbar carries the single "🔄 Admin / 🔄 User" switch for
+  // moving between the two.
+  const mobileTabs = inAdmin && adminTabs.length > 0 ? adminTabs : tabs;
   const inviteCount = usePendingInvitesCount();
 
   const finishLogout = () => {
@@ -123,22 +121,18 @@ export function Shell() {
           </span>
         </NavLink>
         <div className="top-actions">
-          {inAdmin && (
+          {user?.is_admin && (
             <button
-              className="btn ghost sm"
-              onClick={() => { markUserViewPreferred(); nav('/'); }}
-              title="Leave admin console and go to your user dashboard"
+              className="btn ghost sm switch-btn"
+              onClick={() => {
+                if (inAdmin) { markUserViewPreferred(); nav('/'); }
+                else { clearUserViewPreference(); nav('/admin'); }
+              }}
+              title={inAdmin ? 'Switch to user view' : 'Switch to admin console'}
+              aria-label={inAdmin ? 'Switch to user view' : 'Switch to admin console'}
             >
-              👤 User view
-            </button>
-          )}
-          {!inAdmin && user?.is_admin && (
-            <button
-              className="btn ghost sm desktop-only"
-              onClick={() => { clearUserViewPreference(); nav('/admin'); }}
-              title="Open admin console"
-            >
-              🛡️ Admin
+              <span aria-hidden="true" style={{ marginRight: 4 }}>🔄</span>
+              {inAdmin ? 'User' : 'Admin'}
             </button>
           )}
           <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme">
