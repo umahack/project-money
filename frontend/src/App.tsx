@@ -10,6 +10,7 @@ import { AdminAccount } from './pages/admin/AdminAccount';
 import { AdminLogin } from './pages/AdminLogin';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { Privacy, Terms } from './pages/Legal';
+import { NotFound } from './pages/NotFound';
 import { Arcade } from './pages/Arcade';
 import { AuthPage } from './pages/AuthPage';
 import { Dashboard } from './pages/Dashboard';
@@ -83,8 +84,8 @@ export default function App() {
         <Route path="admin/traffic" element={<AdminTraffic />} />
         <Route path="admin/broadcast" element={<AdminBroadcast />} />
         <Route path="admin/account" element={<AdminAccount />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
