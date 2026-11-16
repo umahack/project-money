@@ -173,6 +173,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   <motion.button className="btn primary block" whileTap={{ scale: 0.97 }} disabled={busy} type="submit">
                     {busy ? 'Sending code…' : 'Send verification code'}
                   </motion.button>
+                  <p className="muted small center" style={{ marginTop: '0.6rem' }}>
+                    Already have an account on this email? Check your inbox — we'll send a sign-in reminder instead of a signup code. Or just <Link className="link" to="/login">sign in here</Link>.
+                  </p>
                 </motion.form>
               )}
 
@@ -198,6 +201,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                     <button type="button" className="btn ghost sm" onClick={startOver}>← Change details</button>
                     <button type="button" className="btn ghost sm" onClick={() => void resend()}>Resend code</button>
                   </div>
+                  <p className="muted small center" style={{ marginTop: '0.8rem' }}>
+                    No code arrived? If this email already has an account, we sent a sign-in reminder instead — <Link className="link" to="/login">sign in</Link> or <Link className="link" to="/forgot-password">reset your password</Link>.
+                  </p>
                 </motion.form>
               )}
             </AnimatePresence>
