@@ -149,6 +149,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   <motion.button className="btn primary block" whileTap={{ scale: 0.97 }} disabled={busy} type="submit">
                     {busy ? 'Please wait…' : 'Sign in'}
                   </motion.button>
+                  <p className="muted small center" style={{ marginTop: '0.6rem' }}>
+                    <Link className="link" to="/forgot-password">Forgot password?</Link>
+                  </p>
                 </motion.form>
               )}
 

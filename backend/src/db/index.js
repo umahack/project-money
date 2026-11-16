@@ -230,6 +230,18 @@ await raw.execute(`CREATE TABLE IF NOT EXISTS pending_email_changes (
   UNIQUE(user_id)
 )`);
 
+// Pending password reset — upserted per email while the user enters the code.
+// We key by email (not user_id) so the start endpoint can be constant-time
+// regardless of whether the account exists.
+await raw.execute(`CREATE TABLE IF NOT EXISTS pending_password_resets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  verify_code_hash TEXT NOT NULL,
+  verify_expires_at TEXT NOT NULL,
+  verify_attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`);
+
 // Admin-authored announcement banners (one active row at a time)
 await raw.execute(`CREATE TABLE IF NOT EXISTS announcements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

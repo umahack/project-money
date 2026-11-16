@@ -47,6 +47,19 @@ export function registerVerifyEmail(code, name) {
   return { subject: 'Your Project Money sign-up code', text, html };
 }
 
+export function passwordResetEmail(code, name) {
+  const safeName = String(name || '').replace(/[<>]/g, '').slice(0, 60);
+  const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
+  const text =
+    `Project Money\n\n${greeting}\nUse this 6-digit code to reset your password:\n\n` +
+    `${code}\n\nCode expires in 15 minutes. If you didn't request this, ignore this email — your password won't change.`;
+  const html = brand(
+    `<p>${greeting}</p><p>Use this code to reset your Project Money password.</p>${codeBlock(code)}` +
+    `<p style="color:#a1a1aa;font-size:12px">If you didn't request this, you can safely ignore this email — your password won't change.</p>`
+  );
+  return { subject: 'Reset your Project Money password', text, html };
+}
+
 export function emailChangeVerifyEmail(code, oldEmail) {
   const safeOld = String(oldEmail || '').replace(/[<>]/g, '').slice(0, 100);
   const text =

@@ -8,6 +8,8 @@ import { AdminTraffic } from './pages/admin/AdminTraffic';
 import { AdminBroadcast } from './pages/admin/AdminBroadcast';
 import { AdminAccount } from './pages/admin/AdminAccount';
 import { AdminLogin } from './pages/AdminLogin';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { Privacy, Terms } from './pages/Legal';
 import { Arcade } from './pages/Arcade';
 import { AuthPage } from './pages/AuthPage';
 import { Dashboard } from './pages/Dashboard';
@@ -62,6 +64,9 @@ export default function App() {
       <Route path="/register" element={<Guest><AuthPage mode="register" /></Guest>} />
       <Route path="/share/trip/:token" element={<PublicTrip />} />
       <Route path="/admin-login" element={<Guest><AdminLogin /></Guest>} />
+      <Route path="/forgot-password" element={<Guest><ForgotPassword /></Guest>} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route element={<Private />}>
         <Route index element={<Dashboard />} />
         <Route path="spending" element={<Spending />} />

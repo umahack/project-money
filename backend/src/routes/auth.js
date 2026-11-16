@@ -9,7 +9,7 @@ import { authRequired } from '../middleware/auth.js';
 import { audit } from '../audit.js';
 import { createSession, revokeSession } from '../sessions.js';
 import { generateCode, hashCode, matches, expiresAt, isExpired, MAX_VERIFY_ATTEMPTS } from '../otp.js';
-import { sendMail, registerVerifyEmail, emailChangeVerifyEmail } from '../mailer.js';
+import { sendMail, registerVerifyEmail, emailChangeVerifyEmail, passwordResetEmail } from '../mailer.js';
 
 const router = Router();
 
@@ -22,12 +22,19 @@ const authLimiter = rateLimit({
 });
 
 // Separate send-side limit so a bad actor can't burn through our Resend quota.
+// Keys by (lowercased body email, else client IP) so an attacker rotating IPs
+// still can't trigger more than `max` sends against a single address, and a
+// single IP can't trigger many sends across addresses either.
 const sendLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: 8,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many verification emails requested. Try again later.' },
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    return email || `ip:${req.ip || 'unknown'}`;
+  },
 });
 
 function sign(user, sid) {
@@ -249,6 +256,97 @@ router.post(
   }
 );
 
+// ---------- Forgot password (unauthenticated) ----------
+// Step 1 — ask for a reset code. We ALWAYS return 200 regardless of whether
+// the email is on file, so this endpoint does not reveal account existence.
+router.post(
+  '/password-reset-start',
+  sendLimiter,
+  [body('email').isEmail().normalizeEmail()],
+  async (req, res) => {
+    const errors = validationResult(req);
+    // Even on validation failure, return a generic ok to avoid probing. The
+    // UI treats a bad email client-side anyway.
+    if (!errors.isEmpty()) return res.json({ ok: true });
+    const email = String(req.body.email).toLowerCase();
+    const user = await db.prepare('SELECT id, name FROM users WHERE email = ?').get(email);
+    if (user) {
+      const code = generateCode();
+      await db
+        .prepare(
+          `INSERT INTO pending_password_resets (email, verify_code_hash, verify_expires_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(email) DO UPDATE SET
+             verify_code_hash = excluded.verify_code_hash,
+             verify_expires_at = excluded.verify_expires_at,
+             verify_attempts = 0,
+             created_at = CURRENT_TIMESTAMP`
+        )
+        .run(email, await hashCode(code), expiresAt());
+      const { subject, text, html } = passwordResetEmail(code, user.name);
+      await sendMail({ to: email, subject, text, html });
+    }
+    // Always ok. Caller shows "If that email is on file, a code is on the way."
+    res.json({ ok: true });
+  }
+);
+
+// Step 2 — verify code and set the new password. Bumps token_version and
+// revokes every existing session for that user (nothing is signed in here).
+router.post(
+  '/password-reset-finish',
+  authLimiter,
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('code').isString().matches(/^\d{6}$/),
+    body('newPassword').isString().isLength({ min: 8, max: 128 }),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Invalid request' });
+    const { email, code, newPassword } = req.body;
+    const pending = await db
+      .prepare(
+        `SELECT verify_code_hash, verify_expires_at, verify_attempts
+           FROM pending_password_resets WHERE email = ?`
+      )
+      .get(String(email).toLowerCase());
+    // Keep the error generic so a wrong email vs wrong code are indistinguishable.
+    if (!pending) return res.status(400).json({ error: 'Invalid or expired code. Start again.' });
+    if (isExpired(pending.verify_expires_at))
+      return res.status(400).json({ error: 'Code expired. Start again.' });
+    if (pending.verify_attempts >= MAX_VERIFY_ATTEMPTS)
+      return res.status(429).json({ error: 'Too many wrong attempts. Start again.' });
+    const ok = await matches(code, pending.verify_code_hash);
+    if (!ok) {
+      await db
+        .prepare('UPDATE pending_password_resets SET verify_attempts = verify_attempts + 1 WHERE email = ?')
+        .run(String(email).toLowerCase());
+      return res.status(400).json({ error: 'Incorrect code.' });
+    }
+    const user = await db
+      .prepare('SELECT id FROM users WHERE email = ?')
+      .get(String(email).toLowerCase());
+    if (!user) return res.status(400).json({ error: 'Invalid or expired code. Start again.' });
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await db
+      .prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?')
+      .run(newHash, user.id);
+    await db
+      .prepare(
+        `UPDATE sessions
+            SET revoked_at = CURRENT_TIMESTAMP,
+                revoked_reason = 'password_reset'
+          WHERE user_id = ? AND revoked_at IS NULL`
+      )
+      .run(user.id);
+    await db.prepare('DELETE FROM pending_password_resets WHERE email = ?').run(String(email).toLowerCase());
+    await audit(req, { action: 'password.reset', details: `email=${String(email).toLowerCase()}` });
+    clearFails(email);
+    res.json({ ok: true });
+  }
+);
+
 // ---------- Password change (authenticated) ----------
 const pwChangeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -447,6 +545,111 @@ router.post('/refresh', authRequired, async (req, res) => {
     user: { id: u.id, email: u.email, name: u.name, is_admin: !!u.is_admin },
   });
 });
+
+// ---------- Account export & delete ----------
+// Return every row this user owns as a single JSON blob. The client offers it
+// as a download. Trip data where the user is a member (not owner) is included.
+router.get('/export', authRequired, async (req, res) => {
+  const uid = req.user.id;
+  const user = await db
+    .prepare('SELECT id, email, name, is_admin, created_at FROM users WHERE id = ?')
+    .get(uid);
+  if (!user) return res.status(401).json({ error: 'Session expired' });
+  const [
+    salary,
+    emis,
+    expenses,
+    categoryBudgets,
+    recurring,
+    goals,
+    userCategories,
+    sessions,
+    tripsOwned,
+    tripMemberships,
+    feedback,
+  ] = await Promise.all([
+    db.prepare('SELECT * FROM salary_entries WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM emis WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM expense_log WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM category_budgets WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM recurring_expenses WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM savings_goals WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM user_categories WHERE user_id = ?').all(uid),
+    db.prepare('SELECT id, device_label, created_at, last_seen_at, revoked_at, revoked_reason FROM sessions WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM trips WHERE user_id = ?').all(uid),
+    db.prepare('SELECT * FROM trip_members WHERE user_id = ?').all(uid),
+    db.prepare('SELECT id, rating, message, created_at FROM feedback WHERE user_id = ?').all(uid),
+  ]);
+  res.setHeader('Content-Disposition', `attachment; filename="project-money-${uid}-${Date.now()}.json"`);
+  res.json({
+    exported_at: new Date().toISOString(),
+    user,
+    data: {
+      salary_entries: salary,
+      emis,
+      expenses,
+      category_budgets: categoryBudgets,
+      recurring_expenses: recurring,
+      savings_goals: goals,
+      user_categories: userCategories,
+      sessions,
+      trips_owned: tripsOwned,
+      trip_memberships: tripMemberships,
+      feedback,
+    },
+  });
+});
+
+// Delete the account. Requires currentPassword as a confirmation. Cascading FK
+// cleans up every user-owned row; trips/feedback/visits/audit set user to NULL
+// (we keep them for aggregates and admin history, now orphaned).
+router.delete(
+  '/account',
+  authRequired,
+  authLimiter,
+  [body('currentPassword').isString().isLength({ min: 1 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Password required to delete account.' });
+    const row = await db
+      .prepare('SELECT email, password_hash, is_admin FROM users WHERE id = ?')
+      .get(req.user.id);
+    if (!row) return res.status(401).json({ error: 'Session expired' });
+    const ok = await bcrypt.compare(req.body.currentPassword, row.password_hash);
+    if (!ok) return res.status(401).json({ error: 'Password is incorrect.' });
+    const uid = req.user.id;
+    // Explicit cleanup (don't rely on PRAGMA foreign_keys being on).
+    const tx = [
+      ['DELETE FROM trip_expenses WHERE paid_by_user_id = ?', [uid]],
+      ['DELETE FROM trip_members WHERE user_id = ?', [uid]],
+      ['DELETE FROM trip_invites WHERE inviter_id = ? OR invitee_id = ?', [uid, uid]],
+      // trips.user_id uses ON DELETE SET NULL; we also delete trips the user owned
+      // outright to avoid leaving ownerless trips cluttering the DB.
+      ['DELETE FROM trips WHERE user_id = ?', [uid]],
+      ['DELETE FROM salary_entries WHERE user_id = ?', [uid]],
+      ['DELETE FROM emis WHERE user_id = ?', [uid]],
+      ['DELETE FROM expense_log WHERE user_id = ?', [uid]],
+      ['DELETE FROM category_budgets WHERE user_id = ?', [uid]],
+      ['DELETE FROM recurring_expenses WHERE user_id = ?', [uid]],
+      ['DELETE FROM savings_goals WHERE user_id = ?', [uid]],
+      ['DELETE FROM user_categories WHERE user_id = ?', [uid]],
+      ['DELETE FROM user_aliases WHERE user_id = ?', [uid]],
+      ['DELETE FROM sessions WHERE user_id = ?', [uid]],
+      ['DELETE FROM pending_email_changes WHERE user_id = ?', [uid]],
+      ['DELETE FROM pending_registrations WHERE email = ?', [row.email]],
+      ['DELETE FROM pending_password_resets WHERE email = ?', [row.email]],
+      ['UPDATE feedback SET user_id = NULL WHERE user_id = ?', [uid]],
+      ['UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?', [uid]],
+      ['UPDATE visits SET user_id = NULL WHERE user_id = ?', [uid]],
+      ['DELETE FROM users WHERE id = ?', [uid]],
+    ];
+    for (const [sql, args] of tx) {
+      await db.prepare(sql).run(...args);
+    }
+    await audit(req, { action: 'account.self_delete', details: `email=${row.email}` });
+    res.json({ ok: true });
+  }
+);
 
 // ---------- Device sessions ----------
 router.get('/sessions', authRequired, async (req, res) => {
