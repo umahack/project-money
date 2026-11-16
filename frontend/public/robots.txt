@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /settings
+Disallow: /auth
+Disallow: /admin-login
+Disallow: /forgot-password
+
+Sitemap: https://project-money.online/sitemap.xml

@@ -1,59 +1,120 @@
 # Project Money
 
-A full-stack, mobile-friendly budget planner.
+[![Live](https://img.shields.io/badge/live-project--money.online-7c6cff?style=flat&logo=googlechrome&logoColor=white)](https://project-money.online)
+[![Stack](https://img.shields.io/badge/stack-React%2018%20·%20Node%2020%20·%20Turso-18e0b5?style=flat)](#stack)
+[![License](https://img.shields.io/badge/license-UNLICENSED-lightgrey?style=flat)](#license)
 
-- **Auth** — email + password, bcrypt, JWT, rate limited
-- **Dashboard** — enter monthly salary; see 50/30/20 split after mandatory EMIs
-- **Plan** — line-by-line expense generator (rent, groceries, SIPs, emergency fund target, etc.)
-- **Trips** — budget + members + weighted splits + Splitwise-style settle-up
-- **Theme** — dark gradient, Framer Motion animations, mobile-first
+A free personal-finance planner built for India. Plan your salary with the
+50/30/20 rule, track daily spending with smart insights, split trips with
+friends Splitwise-style, and hit savings goals — in one clean app.
 
-## UI versions and rollback
-`frontend/` is **UI v2** (TypeScript, plain CSS, Framer Motion). The previous Tailwind UI is kept as
-`frontend-v1/` and as git tag `ui-v1-classic`. The API and database are identical for both.
+> **Live**: https://project-money.online · **API**: https://project-money-api.onrender.com
 
-To roll back, set `rootDir: frontend-v1` for `project-money-web` in `render.yaml`, push, and redeploy with
-**Clear build cache**. Set it back to `frontend` to return to v2. Details are in `HANDOFF.md`.
+![Project Money cover](frontend/public/og.png)
+
+## Features
+
+- **Salary planning** — monthly salary + fixed EMIs → auto 50/30/20 recommended split
+- **Daily spending** — one-line expense entry with smart categorization; month-over-month insights
+- **Savings goals** — target amount + deadline, progress bar, "if you save ₹X/day you'll make it"
+- **Recurring expenses** — rent, subscriptions, SIPs; auto-rolled every month
+- **Trips** — budget + members + weighted splits + public share link, Splitwise-style settle-up
+- **Admin console** — dedicated `/admin-login`, isolated navigation, user management, feedback, traffic, broadcasts
+- **Security** — email OTP sign-up (Resend), bcrypt + JWT (HS256), 3-device cap with FIFO revocation,
+  session-level revocation, per-email + per-IP rate limits, strict CORS allowlist, HSTS preload,
+  constant-shape responses on all enumeration-sensitive endpoints
+- **PWA** — Add-to-Home-Screen on iOS and Android with branded icons
+- **Legal** — Privacy, Terms, in-app data export (JSON), self-serve account deletion
+
+## Stack
+
+- **Frontend**: React 18 + Vite 8 + TypeScript, plain CSS with CSS variables, Framer Motion, React Router
+- **Backend**: Node 20 + Express 4 (ESM), express-async-errors, express-validator, express-rate-limit, bcrypt, jsonwebtoken
+- **Database**: Turso (libSQL / serverless SQLite) — thin async adapter wrapping the sync-style prepared-statement API
+- **Email**: Resend (verified sender via `project-money.online` with SPF, DKIM, DMARC)
+- **Hosting**: Render (blueprint-managed) · Hostinger (domain) · GitHub Actions (nightly Turso backups)
+
+## Repo structure
+
+```
+backend/     Express API — routes, middleware, db adapter, mailer
+frontend/    Vite + React web app
+.github/     Workflows (nightly Turso dump)
+render.yaml  Render blueprint — two services (API + static web)
+HANDOFF.md   Living engineering doc for the project
+```
 
 ## Local dev
+
+Requires Node ≥ 20.
 
 ```bash
 # Terminal 1 — backend
 cd backend
-cp .env.example .env     # then set JWT_SECRET to a long random string
+cp .env.example .env     # set JWT_SECRET, TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
+                         # (and optionally RESEND_API_KEY, MAIL_FROM, ADMIN_EMAILS)
 npm install
 npm run dev              # http://localhost:4000
 
 # Terminal 2 — frontend
 cd frontend
-npm install
+npm install              # VITE_API_BASE defaults to http://localhost:4000
 npm run dev              # http://localhost:5173
 ```
 
-## Deploy to Render (free)
+Without `RESEND_API_KEY` the mailer logs OTP codes to stdout so dev still works
+end-to-end.
 
-The repo includes `render.yaml` describing two services (API + static web).
+## Deploy
 
-1. Push this repo to GitHub (already done if you got the link from the owner).
-2. Go to **https://dashboard.render.com → New → Blueprint** and point it at this repo.
-3. Render will detect `render.yaml` and show two services:
-   - `project-money-api` (Node, with 1 GB persistent disk for SQLite)
-   - `project-money-web` (static site)
-4. Click **Apply**. First deploy takes 2–3 minutes.
-5. After the API deploys, copy its URL (e.g. `https://project-money-api.onrender.com`) and set it on the web service as `VITE_API_BASE`. On the API service, set `CORS_ORIGIN` to the web URL (e.g. `https://project-money-web.onrender.com`). Trigger a redeploy of the web service so the Vite build picks up `VITE_API_BASE`.
-6. Share the web URL with your friend. First hit after idle takes ~30 s on the free tier.
+The repo ships with `render.yaml` describing two services (API + static web).
 
-## Security defaults
+1. New → **Blueprint** on Render, point at this repo.
+2. On `project-money-api` set:
+   - `JWT_SECRET` — long random string (≥ 24 chars)
+   - `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
+   - `RESEND_API_KEY`, `MAIL_FROM="Project Money <no-reply@project-money.online>"`
+   - `ADMIN_EMAILS=you@example.com`
+   - `CORS_ORIGIN=https://project-money.online,https://project-money-web.onrender.com`
+   - `NODE_ENV=production`
+3. On `project-money-web` set `VITE_API_BASE=https://project-money-api.onrender.com`.
+4. Add a custom domain (optional). Hostinger apex DNS: `ALIAS @ → <web-url>`,
+   `CNAME www → <web-url>`.
 
-- bcrypt cost 12, JWT 7-day, 20-req/15-min auth rate limit, 120-req/min global limit
-- Helmet, body size cap 64 KB (returns 413 cleanly), `x-powered-by` disabled
-- Prepared SQLite statements everywhere, trip-ownership guard on nested writes
-- `sessionStorage` tokens (cleared on tab close)
-- CSP meta + static-site security headers (X-Frame-Options, Referrer-Policy, Permissions-Policy)
+### Nightly database backups
 
-## Verified edge cases
+GitHub Actions runs `.github/workflows/turso-backup.yml` at 18:00 UTC. Add
+these repo secrets to enable:
 
-- SQLi payloads rejected (parameterized queries)
-- Short/weak passwords → 400; unknown email login still runs bcrypt (timing safe)
-- Oversized bodies → 413, bad JSON → 400
-- User B GET on User A's trip → 404
+- `TURSO_DB_NAME` — your Turso DB name
+- `TURSO_AUTH_TOKEN` — a token with read access
+
+Backups land as 90-day retained workflow artifacts.
+
+## Security notes
+
+- All email-touching endpoints (`register-start`, `register-resend`, `register-finish`,
+  `email-change-start`, `password-reset-start`, `trips/:id/invite`) return
+  constant-shape responses to avoid account-enumeration oracles.
+- JWTs are pinned to HS256 everywhere they're verified. `token_version` acts as a
+  per-user kill switch; per-session `sid` revocation lets individual devices be
+  signed out.
+- Account delete requires the current password and explicitly cleans every
+  user-owning table — no reliance on PRAGMA foreign_keys under libSQL.
+- IP addresses are never stored raw; only a daily-rotating `sha256(day:salt:ip)[0:24]`
+  hash lands in the `visits` table.
+- CSV export cells starting with `=`, `+`, `-`, `@`, or TAB are prefixed with `'`
+  to defuse Excel/Sheets formula injection.
+- CORS refuses to boot in production without a non-wildcard allowlist.
+- CSP is `default-src 'none'` on the API; static site serves its own CSP.
+- Strict HSTS preload, no `x-powered-by`, body size capped at 64 KB.
+
+## Status
+
+Beta. Actively developed by [@umahack](https://github.com/umahack). Feedback via the
+in-app form or `hello@project-money.online`.
+
+## License
+
+UNLICENSED — all rights reserved. Not for redistribution. For personal
+viewing / inspection only unless the author grants a specific license.
