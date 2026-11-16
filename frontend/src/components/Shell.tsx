@@ -6,6 +6,7 @@ import { FeedbackModal } from './FeedbackModal';
 import { usePendingInvitesCount } from './InvitesInbox';
 import { SessionWarning } from './SessionWarning';
 import { AnnouncementBanner } from './AnnouncementBanner';
+import { markUserViewPreferred, clearUserViewPreference } from '../App';
 
 export function Background() {
   return (
@@ -125,7 +126,7 @@ export function Shell() {
           {inAdmin && (
             <button
               className="btn ghost sm"
-              onClick={() => nav('/')}
+              onClick={() => { markUserViewPreferred(); nav('/'); }}
               title="Leave admin console and go to your user dashboard"
             >
               👤 User view
@@ -134,7 +135,7 @@ export function Shell() {
           {!inAdmin && user?.is_admin && (
             <button
               className="btn ghost sm desktop-only"
-              onClick={() => nav('/admin')}
+              onClick={() => { clearUserViewPreference(); nav('/admin'); }}
               title="Open admin console"
             >
               🛡️ Admin
@@ -163,7 +164,7 @@ export function Shell() {
                   </NavLink>
                 ))}
                 <div className="side-group">Switch</div>
-                <NavLink to="/" className="side-link">
+                <NavLink to="/" className="side-link" onClick={() => markUserViewPreferred()}>
                   <span className="side-icon">👤</span>
                   <span className="side-label">Exit to user view</span>
                 </NavLink>
@@ -211,7 +212,17 @@ export function Shell() {
 
       <nav className="bottom-tabs mobile-only" aria-label="Primary mobile">
         {mobileTabs.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.end} className="btab">
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end}
+            className="btab"
+            onClick={() => {
+              if (!user?.is_admin) return;
+              if (t.to.startsWith('/admin')) clearUserViewPreference();
+              else markUserViewPreferred();
+            }}
+          >
             <span className="btab-icon" style={{ position: 'relative' }}>
               {t.icon}
               {t.to === '/trips' && inviteCount > 0 && (

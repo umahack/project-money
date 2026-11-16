@@ -56,6 +56,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setBusy(true);
     try {
       const u = await login(email.trim(), password);
+      try { sessionStorage.removeItem('pm_prefer_user_view'); } catch { /* ignore */ }
       nav(u.is_admin ? '/admin' : '/', { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'login'));

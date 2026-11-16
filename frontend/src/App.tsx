@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { AdminOverview } from './pages/admin/AdminOverview';
 import { AdminUsers } from './pages/admin/AdminUsers';
@@ -29,10 +29,29 @@ function Guest({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+const USER_VIEW_FLAG = 'pm_prefer_user_view';
+export function markUserViewPreferred() {
+  try { sessionStorage.setItem(USER_VIEW_FLAG, '1'); } catch { /* ignore */ }
+}
+export function clearUserViewPreference() {
+  try { sessionStorage.removeItem(USER_VIEW_FLAG); } catch { /* ignore */ }
+}
+function wantsUserView() {
+  try { return sessionStorage.getItem(USER_VIEW_FLAG) === '1'; } catch { return false; }
+}
+
 /** Everything inside the app shell needs a session. */
 function Private() {
   const { user } = useAuth();
-  return user ? <Shell /> : <Navigate to="/login" replace />;
+  const loc = useLocation();
+  if (!user) return <Navigate to="/login" replace />;
+  // Admins default to the admin console on cold reopen. If they've explicitly
+  // clicked "User view" during this session, respect that and let them land on
+  // the user side instead.
+  if (user.is_admin && loc.pathname === '/' && !wantsUserView()) {
+    return <Navigate to="/admin" replace />;
+  }
+  return <Shell />;
 }
 
 export default function App() {
