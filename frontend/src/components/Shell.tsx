@@ -91,10 +91,13 @@ export function Shell() {
         { to: '/admin/account', label: 'My account', icon: '🪪', end: false },
       ]
     : [];
-  // Mobile bottom bar: keep the primary tabs plus an Admin shortcut.
-  const mobileTabs = user?.is_admin
-    ? [...tabs, { to: '/admin', label: 'Admin', icon: '🛡️', end: false }]
-    : tabs;
+  // Mobile bottom bar: in admin mode show admin tabs + a user-view switch;
+  // otherwise regular tabs plus an Admin shortcut for admins.
+  const mobileTabs = inAdmin && adminTabs.length > 0
+    ? [...adminTabs, { to: '/', label: 'User', icon: '👤', end: true }]
+    : user?.is_admin
+      ? [...tabs, { to: '/admin', label: 'Admin', icon: '🛡️', end: false }]
+      : tabs;
   const inviteCount = usePendingInvitesCount();
 
   const finishLogout = () => {
@@ -119,6 +122,24 @@ export function Shell() {
           </span>
         </NavLink>
         <div className="top-actions">
+          {inAdmin && (
+            <button
+              className="btn ghost sm"
+              onClick={() => nav('/')}
+              title="Leave admin console and go to your user dashboard"
+            >
+              👤 User view
+            </button>
+          )}
+          {!inAdmin && user?.is_admin && (
+            <button
+              className="btn ghost sm desktop-only"
+              onClick={() => nav('/admin')}
+              title="Open admin console"
+            >
+              🛡️ Admin
+            </button>
+          )}
           <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
