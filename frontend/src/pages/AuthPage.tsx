@@ -55,8 +55,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setError('');
     setBusy(true);
     try {
-      await login(email.trim(), password);
-      nav('/', { replace: true });
+      const u = await login(email.trim(), password);
+      nav(u.is_admin ? '/admin' : '/', { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'login'));
       setBusy(false);
@@ -88,8 +88,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     if (!/^\d{6}$/.test(code)) return setError('Enter the 6-digit code we emailed you.');
     setBusy(true);
     try {
-      await registerFinish(email.trim(), code);
-      nav('/', { replace: true });
+      const u = await registerFinish(email.trim(), code);
+      nav(u.is_admin ? '/admin' : '/', { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'register'));
       setBusy(false);

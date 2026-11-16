@@ -25,7 +25,8 @@ import { useVisitTracker } from './hooks/useVisitTracker';
 /** Signed-in users go straight to the app; everyone else sees the login or register page. */
 function Guest({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  return user ? <Navigate to="/" replace /> : <>{children}</>;
+  if (user) return <Navigate to={user.is_admin ? '/admin' : '/'} replace />;
+  return <>{children}</>;
 }
 
 /** Everything inside the app shell needs a session. */

@@ -48,9 +48,9 @@ export const errText = (e: unknown): string => (e instanceof ApiError ? e.messag
 // ---------- Auth ----------
 interface AuthState {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   registerStart: (name: string, email: string, password: string) => Promise<{ fallback: boolean }>;
-  registerFinish: (email: string, code: string) => Promise<void>;
+  registerFinish: (email: string, code: string) => Promise<User>;
   registerResend: (email: string) => Promise<{ fallback: boolean }>;
   logout: () => void;
 }
@@ -101,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const r = await api.post<AuthResponse>('/auth/login', { email, password }, false);
         setAuth(r.token, r.user);
         setUser(r.user);
+        return r.user;
       },
       async registerStart(name, email, password) {
         const r = await api.post<{ ok: true; mail?: { fallback?: boolean } }>(
@@ -114,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const r = await api.post<AuthResponse>('/auth/register-finish', { email, code }, false);
         setAuth(r.token, r.user);
         setUser(r.user);
+        return r.user;
       },
       async registerResend(email) {
         const r = await api.post<{ ok: true; mail?: { fallback?: boolean } }>(
