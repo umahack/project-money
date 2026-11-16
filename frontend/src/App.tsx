@@ -6,6 +6,7 @@ import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminFeedback } from './pages/admin/AdminFeedback';
 import { AdminTraffic } from './pages/admin/AdminTraffic';
 import { AdminBroadcast } from './pages/admin/AdminBroadcast';
+import { AdminAccount } from './pages/admin/AdminAccount';
 import { AdminLogin } from './pages/AdminLogin';
 import { Arcade } from './pages/Arcade';
 import { AuthPage } from './pages/AuthPage';
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="admin/feedback" element={<AdminFeedback />} />
         <Route path="admin/traffic" element={<AdminTraffic />} />
         <Route path="admin/broadcast" element={<AdminBroadcast />} />
+        <Route path="admin/account" element={<AdminAccount />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

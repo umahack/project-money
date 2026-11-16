@@ -88,6 +88,7 @@ export function Shell() {
         { to: '/admin/feedback', label: 'Feedback', icon: '⭐', end: false },
         { to: '/admin/traffic', label: 'Traffic', icon: '👀', end: false },
         { to: '/admin/broadcast', label: 'Broadcast', icon: '📢', end: false },
+        { to: '/admin/account', label: 'My account', icon: '🪪', end: false },
       ]
     : [];
   // Mobile bottom bar: keep the primary tabs plus an Admin shortcut.
@@ -140,11 +141,6 @@ export function Shell() {
                     <span className="side-label">{t.label}</span>
                   </NavLink>
                 ))}
-                <div className="side-group">Account</div>
-                <NavLink to="/settings" className="side-link">
-                  <span className="side-icon">⚙️</span>
-                  <span className="side-label">Settings &amp; devices</span>
-                </NavLink>
                 <div className="side-group">Switch</div>
                 <NavLink to="/" className="side-link">
                   <span className="side-icon">👤</span>
