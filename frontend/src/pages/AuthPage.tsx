@@ -181,7 +181,18 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
               {!isLogin && step === 'code' && (
                 <motion.form key="code" onSubmit={submitFinish} noValidate initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                  <Field label="6-digit code" hint="Check your inbox (and spam). Code is valid for 15 minutes.">
+                  <div className="info-banner" role="status" style={{
+                    background: 'linear-gradient(135deg, rgba(124,108,255,0.14), rgba(24,224,181,0.12))',
+                    border: '1px solid rgba(124,108,255,0.35)',
+                    borderRadius: 12,
+                    padding: '0.7rem 0.9rem',
+                    marginBottom: '0.8rem',
+                    fontSize: '0.9rem',
+                    lineHeight: 1.45,
+                  }}>
+                    📬 <b>Check {email.trim() || 'your inbox'}.</b> If this email is new, you'll get a 6-digit code. If it already has a Project Money account, we sent a sign-in reminder — <Link className="link" to="/login">sign in</Link> or <Link className="link" to="/forgot-password">reset your password</Link>.
+                  </div>
+                  <Field label="6-digit code" hint="Code is valid for 15 minutes. No code? See the note above.">
                     <input
                       inputMode="numeric"
                       autoComplete="one-time-code"
