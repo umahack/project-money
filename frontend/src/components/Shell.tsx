@@ -76,6 +76,7 @@ export function Shell() {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   };
 
+  const inAdmin = loc.pathname === '/admin' || loc.pathname.startsWith('/admin/');
   const tabs = [
     ...TABS,
     { to: '/arcade', label: 'Arcade', icon: '🎮', end: false },
@@ -128,28 +129,47 @@ export function Shell() {
       <AnnouncementBanner />
       <SessionWarning />
       <div className="app-shell">
-        <aside className="sidebar desktop-only" aria-label="Primary">
+        <aside className={`sidebar desktop-only ${inAdmin ? 'admin-mode' : ''}`} aria-label="Primary">
           <nav className="side-nav">
-            {tabs.map((t) => (
-              <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
-                <span className="side-icon">{t.icon}</span>
-                <span className="side-label">{t.label}</span>
-                {t.to === '/trips' && inviteCount > 0 && (
-                  <span className="pill info" style={{ marginLeft: 'auto' }} aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
-                    {inviteCount}
-                  </span>
-                )}
-              </NavLink>
-            ))}
-            {adminTabs.length > 0 && (
+            {inAdmin && adminTabs.length > 0 ? (
               <>
-                <div className="side-group">Admin</div>
+                <div className="side-group">🛡️ Admin console</div>
                 {adminTabs.map((t) => (
                   <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
                     <span className="side-icon">{t.icon}</span>
                     <span className="side-label">{t.label}</span>
                   </NavLink>
                 ))}
+                <div className="side-group">Switch</div>
+                <NavLink to="/" className="side-link">
+                  <span className="side-icon">👤</span>
+                  <span className="side-label">Exit to user view</span>
+                </NavLink>
+              </>
+            ) : (
+              <>
+                {tabs.map((t) => (
+                  <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
+                    <span className="side-icon">{t.icon}</span>
+                    <span className="side-label">{t.label}</span>
+                    {t.to === '/trips' && inviteCount > 0 && (
+                      <span className="pill info" style={{ marginLeft: 'auto' }} aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
+                        {inviteCount}
+                      </span>
+                    )}
+                  </NavLink>
+                ))}
+                {adminTabs.length > 0 && (
+                  <>
+                    <div className="side-group">Admin</div>
+                    {adminTabs.map((t) => (
+                      <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
+                        <span className="side-icon">{t.icon}</span>
+                        <span className="side-label">{t.label}</span>
+                      </NavLink>
+                    ))}
+                  </>
+                )}
               </>
             )}
           </nav>

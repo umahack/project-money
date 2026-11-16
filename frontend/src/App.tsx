@@ -6,6 +6,7 @@ import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminFeedback } from './pages/admin/AdminFeedback';
 import { AdminTraffic } from './pages/admin/AdminTraffic';
 import { AdminBroadcast } from './pages/admin/AdminBroadcast';
+import { AdminLogin } from './pages/AdminLogin';
 import { Arcade } from './pages/Arcade';
 import { AuthPage } from './pages/AuthPage';
 import { Dashboard } from './pages/Dashboard';
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/login" element={<Guest><AuthPage mode="login" /></Guest>} />
       <Route path="/register" element={<Guest><AuthPage mode="register" /></Guest>} />
       <Route path="/share/trip/:token" element={<PublicTrip />} />
+      <Route path="/admin-login" element={<Guest><AdminLogin /></Guest>} />
       <Route element={<Private />}>
         <Route index element={<Dashboard />} />
         <Route path="spending" element={<Spending />} />
