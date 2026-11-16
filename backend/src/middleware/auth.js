@@ -41,7 +41,7 @@ export async function authRequired(req, res, next) {
   if (session.revoked_at) {
     const msg =
       session.revoked_reason === 'another_device'
-        ? 'Signed out because this account was used on another device.'
+        ? 'Signed out because this account reached the 3-device limit on a new sign-in.'
         : 'This session was signed out.';
     return res.status(401).json({ error: msg, code: 'SESSION_REVOKED' });
   }

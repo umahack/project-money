@@ -66,8 +66,8 @@ export function DevicesPanel() {
     <Card>
       <h2>📱 Devices</h2>
       <p className="muted small">
-        Only one device can be signed in at a time. Signing in elsewhere automatically
-        signs out this device. Admins can't sign you out of your own account.
+        Up to 3 devices can be signed in at once. A new sign-in beyond that signs
+        out the oldest device automatically. Admins can't sign you out of your own account.
       </p>
 
       <h3 style={{ marginTop: '0.6rem' }}>Active ({active.length})</h3>
@@ -119,7 +119,7 @@ export function DevicesPanel() {
                 <div className="grow">
                   <strong>{s.device_label || 'Unknown device'}</strong>
                   <small className="muted">
-                    {s.revoked_reason === 'another_device' ? 'Replaced by a newer sign-in' : (s.revoked_reason || 'signed out')} · {s.revoked_at}
+                    {s.revoked_reason === 'another_device' ? 'Signed out — 3-device limit reached' : (s.revoked_reason || 'signed out')} · {s.revoked_at}
                   </small>
                 </div>
               </li>

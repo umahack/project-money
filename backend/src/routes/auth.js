@@ -7,7 +7,7 @@ import db from '../db/index.js';
 import { adminEmails } from '../middleware/admin.js';
 import { authRequired } from '../middleware/auth.js';
 import { audit } from '../audit.js';
-import { createSingleSession, revokeSession } from '../sessions.js';
+import { createSession, revokeSession } from '../sessions.js';
 import { generateCode, hashCode, matches, expiresAt, isExpired, MAX_VERIFY_ATTEMPTS } from '../otp.js';
 import { sendMail, registerVerifyEmail, emailChangeVerifyEmail } from '../mailer.js';
 
@@ -191,7 +191,7 @@ router.post(
       is_admin: !!is_admin,
       token_version: 1,
     };
-    const sid = await createSingleSession(user.id, {
+    const sid = await createSession(user.id, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
     });
@@ -235,10 +235,10 @@ router.post(
       is_admin: !!is_admin,
       token_version: Number(row.token_version ?? 1),
     };
-    // Single-device policy: revoke every prior active session for this user,
-    // then create a fresh one. The old device's next request returns 401
-    // 'Signed out because this account was used on another device.'
-    const sid = await createSingleSession(user.id, {
+    // Up to 3 concurrent devices per account. If this login would push the
+    // active count above the cap, the oldest session is revoked and that
+    // device's next request returns 401 with the 'another_device' message.
+    const sid = await createSession(user.id, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
     });

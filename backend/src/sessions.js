@@ -30,18 +30,39 @@ export function labelForUA(ua) {
 }
 
 /**
- * Enforce single-session: revoke every active session for this user,
- * then insert a fresh row. Returns the new session id.
+ * Max concurrent active sessions per account. When a login would push the count
+ * above this, the oldest active session(s) are revoked first (FIFO) so the new
+ * device fits inside the cap.
  */
-export async function createSingleSession(userId, { ip, userAgent, reason = 'new_login' } = {}) {
-  await db
+export const MAX_ACTIVE_SESSIONS = 3;
+
+/**
+ * Allow up to MAX_ACTIVE_SESSIONS devices per user. If adding this one would
+ * exceed the cap, revoke the oldest active session(s) FIFO. Returns the new
+ * session id.
+ */
+export async function createSession(userId, { ip, userAgent, reason = 'new_login' } = {}) {
+  const active = await db
     .prepare(
-      `UPDATE sessions
-          SET revoked_at = CURRENT_TIMESTAMP,
-              revoked_reason = ?
-        WHERE user_id = ? AND revoked_at IS NULL`
+      `SELECT id FROM sessions
+        WHERE user_id = ? AND revoked_at IS NULL
+        ORDER BY created_at ASC, id ASC`
     )
-    .run(reason === 'new_login' ? 'another_device' : reason, userId);
+    .all(userId);
+  const keepSlots = MAX_ACTIVE_SESSIONS - 1; // room for the new one we're about to insert
+  const toRevoke = active.slice(0, Math.max(0, active.length - keepSlots));
+  if (toRevoke.length > 0) {
+    const ids = toRevoke.map((r) => Number(r.id));
+    const placeholders = ids.map(() => '?').join(',');
+    await db
+      .prepare(
+        `UPDATE sessions
+            SET revoked_at = CURRENT_TIMESTAMP,
+                revoked_reason = ?
+          WHERE id IN (${placeholders})`
+      )
+      .run(reason === 'new_login' ? 'another_device' : reason, ...ids);
+  }
   const info = await db
     .prepare(
       `INSERT INTO sessions (user_id, device_label, ip_hash, user_agent)
@@ -50,6 +71,9 @@ export async function createSingleSession(userId, { ip, userAgent, reason = 'new
     .run(userId, labelForUA(userAgent).slice(0, 60), dailyIpHash(ip), String(userAgent || '').slice(0, 240) || null);
   return Number(info.lastInsertRowid);
 }
+
+// Backwards-compatible alias — older imports still work.
+export const createSingleSession = createSession;
 
 /** Mark a specific session revoked. */
 export async function revokeSession(userId, sessionId, reason = 'user_revoked') {
