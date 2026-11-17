@@ -22,6 +22,7 @@ import { Recurring } from './pages/Recurring';
 import { Goals } from './pages/Goals';
 import { Settings } from './pages/Settings';
 import { PublicTrip } from './pages/PublicTrip';
+import { MarketingLanding } from './pages/MarketingLanding';
 import { useAuth } from './state';
 import { useVisitTracker } from './hooks/useVisitTracker';
 import { wantsUserView } from './userViewPref';
@@ -37,7 +38,12 @@ function Guest({ children }: { children: ReactNode }) {
 function Private() {
   const { user } = useAuth();
   const loc = useLocation();
-  if (!user) return <Navigate to="/login" replace />;
+  // Non-authed visitors at "/" see the marketing landing, not an immediate
+  // redirect to /login — gives them a chance to understand the app first.
+  if (!user) {
+    if (loc.pathname === '/') return <MarketingLanding />;
+    return <Navigate to="/login" replace />;
+  }
   // Admins default to the admin console on cold reopen. If they've explicitly
   // clicked "User view" during this session, respect that and let them land on
   // the user side instead.

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
-import { LandingPreview } from '../components/LandingPreview';
 import { errText, useAuth, useToast } from '../state';
 import { clearUserViewPreference } from '../userViewPref';
 
@@ -121,23 +120,21 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
       <Background />
       <header className="auth-topbar">
         <div className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
-          <button
-            type="button"
-            className="btn ghost sm"
-            onClick={() => {
-              // Prefer history back when there is somewhere to go; otherwise
-              // fall back to the opposite auth page so the button never
-              // dead-ends on a direct link.
-              if (window.history.length > 1) nav(-1);
-              else nav(isLogin ? '/register' : '/login');
-            }}
-            aria-label="Go back"
-            title="Go back"
-            style={{ padding: '0.3rem 0.55rem' }}
-          >
-            ← Back
-          </button>
-          <Link to={isLogin ? '/login' : '/register'} className="brand" aria-label="Project Money home">
+          {/* Only show Back when the user actually navigated here from
+              somewhere inside the app (not a direct link / tab open). */}
+          {typeof window !== 'undefined' && window.history.state?.idx > 0 && (
+            <button
+              type="button"
+              className="btn ghost sm"
+              onClick={() => nav(-1)}
+              aria-label="Go back"
+              title="Go back"
+              style={{ padding: '0.3rem 0.55rem' }}
+            >
+              ← Back
+            </button>
+          )}
+          <Link to="/" className="brand" aria-label="Project Money home">
             <span className="brand-mark">₹</span>
             <span>Project&nbsp;Money</span>
             <span
@@ -150,8 +147,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           </Link>
         </div>
         <div className="top-actions">
-          {/* Show only the OTHER page's button, so clicking it always navigates
-              — no "clicking Sign in while on Sign in does nothing" dead-end. */}
+          {/* Show only the OTHER page's button so clicking it always navigates. */}
           {isLogin ? (
             <Link to="/register" className="btn primary sm">Sign up</Link>
           ) : (
@@ -160,7 +156,6 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </div>
       </header>
       <div className="auth-wrap">
-        <LandingPreview />
         <motion.div id="auth-card" initial={{ opacity: 0, y: 30, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', damping: 20 }}>
           <Card className="auth-card" tilt>
             <div className="auth-logo">
