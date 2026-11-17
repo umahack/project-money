@@ -312,6 +312,13 @@ a { color: var(--accent); }
 }
 .card > * { position: relative; }
 .card + .card, .card + .grid, .grid + .card { margin-top: 1rem; }
+/* Breathe more on mobile — stacked cards get cramped at narrow widths. */
+@media (max-width: 520px) {
+  .grid { gap: 0.85rem; margin-bottom: 0.85rem; }
+  .card + .card, .card + .grid, .grid + .card { margin-top: 0.85rem; }
+  .month-strip { margin-bottom: 1rem; }
+  .quick-actions { margin-bottom: 1rem; }
+}
 
 /* ============ Controls ============ */
 .btn {

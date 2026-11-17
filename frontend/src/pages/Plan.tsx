@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../api';
 import { Card, Empty, PageTitle, Spinner } from '../components/ui';
+import { PlanInputs } from '../components/PlanInputs';
 import { buildInsights } from '../insights';
 import { inr } from '../money';
 import { errText } from '../state';
@@ -65,13 +66,11 @@ export function Plan() {
   if (!plan || !ins) return <Spinner />;
 
   if (!plan.income) {
+    // No pay yet — show just the setup inputs so the user can start here.
     return (
       <>
-        <PageTitle title="Expense plan 🧾" />
-        <Card>
-          <Empty emoji="🪙" title="No plan yet" text="Add your salary on the Home page to generate a detailed plan." />
-          <div className="center"><Link className="btn primary" to="/">Go to Home</Link></div>
-        </Card>
+        <PageTitle title="Plan your month 🧾" sub="Set your pay and monthly bills to generate a 50/30/20 plan." />
+        <PlanInputs onChange={() => window.location.reload()} />
       </>
     );
   }
@@ -80,6 +79,10 @@ export function Plan() {
   return (
     <>
       <PageTitle title="Your month, line by line 🧾" sub={`Based on ${inr(plan.income)} a month, after ${inr(plan.emiTotal)} in mandatory payments.`} />
+
+      {/* Edit your inputs — one place to change pay + bills. Lives here so
+          Home stays an overview and this page owns the money model. */}
+      <PlanInputs onChange={() => window.location.reload()} />
 
       <Card tilt>
         <div className="grid four">
@@ -95,42 +98,20 @@ export function Plan() {
         <Section title="What you can enjoy" sub="Lifestyle · 30% of disposable" subtotal={wants} items={WANTS} color="var(--c-want)" />
         <Section title="What to save and invest" sub="20% of disposable" subtotal={save} items={SAVINGS} color="var(--c-save)" />
 
-        <div className="grid two">
-          <Card>
-            <h2>🏦 Your mandatory payments</h2>
-            <p className="muted small">These come out <em>before</em> the 50/30/20 split. Keep the total under 40% of income.</p>
-            {emis.length ? (
-              <ul className="list">
-                {emis.map((e) => (
-                  <li key={e.id} className="list-item">
-                    <div className="grow"><strong>{e.label}</strong><small className="muted">{e.category}</small></div>
-                    <b className="mono">{inr(e.amount)}</b>
-                  </li>
-                ))}
-                <li className="list-item total-row">
-                  <div className="grow"><strong>Total</strong></div>
-                  <b className="mono">{inr(plan.emiTotal)}</b>
-                </li>
-              </ul>
-            ) : (
-              <Empty emoji="🏦" title="No mandatory payments added yet" text="Add them from the Home page." />
-            )}
-          </Card>
-          <Card>
-            <h2>🧠 Smart recommendations</h2>
-            <ul className="recs">
-              {ins.recs.map((r, i) => (
-                <li key={r.title + i} className={`rec ${r.level}`}>
-                  <div>
-                    <strong>{r.title}</strong>
-                    <p>{r.text}</p>
-                  </div>
-                </li>
-              ))}
-              <li className="rec info"><div><strong>Review every quarter</strong><p>Rebalance this plan every three months, or after any raise or EMI change.</p></div></li>
-            </ul>
-          </Card>
-        </div>
+        <Card>
+          <h2>🧠 Smart recommendations</h2>
+          <ul className="recs">
+            {ins.recs.map((r, i) => (
+              <li key={r.title + i} className={`rec ${r.level}`}>
+                <div>
+                  <strong>{r.title}</strong>
+                  <p>{r.text}</p>
+                </div>
+              </li>
+            ))}
+            <li className="rec info"><div><strong>Review every quarter</strong><p>Rebalance this plan every three months, or after any raise or EMI change.</p></div></li>
+          </ul>
+        </Card>
       </div>
     </>
   );

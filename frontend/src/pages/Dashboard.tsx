@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { api } from '../api';
 import { Card, Donut, Empty, Field, Money, PageTitle, Skeleton, burst } from '../components/ui';
 import { buildInsights } from '../insights';
@@ -32,7 +32,6 @@ function SpendBar({ spent, budget, color }: { spent: number; budget: number; col
 }
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
-const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
 const HEALTH = {
   empty: { label: 'Waiting for your pay', cls: 'info' },
   excellent: { label: 'Looking great 🎉', cls: 'success' },
@@ -305,15 +304,14 @@ export function Dashboard() {
         <div className="row" style={{ gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.2rem', alignItems: 'baseline' }}>
           <small className="muted">Monthly pay</small>
           <strong className="mono">{inr(plan.income)}</strong>
-          <button
-            type="button"
+          <Link
+            to="/plan#pay-form"
             className="btn ghost sm"
             style={{ padding: '0.2rem 0.6rem', minHeight: 'auto', fontSize: '0.78rem' }}
-            onClick={() => document.getElementById('pay-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            title="Jump to the pay form below"
+            title="Change your pay on the Plan page"
           >
             ✏️ Edit
-          </button>
+          </Link>
         </div>
         {plan.afterFixed > 0 ? (
           <>
@@ -380,69 +378,10 @@ export function Dashboard() {
         )}
       </Card>
 
-      {/* QUICK UPDATE: salary + add-bill side-by-side, compact. */}
-      <div className="grid two">
-        <Card>
-          <h2 id="pay-form">💰 Monthly pay</h2>
-          <p className="muted small" style={{ marginTop: 0 }}>Change anytime; the plan updates with your next refresh.</p>
-          <form onSubmit={saveSalary} className="salary-form">
-            <div className="input-prefix">
-              <span>₹</span>
-              <input value={salary} onChange={(e) => setSalary(e.target.value)} inputMode="decimal" placeholder="75,000" aria-label="Monthly pay" maxLength={16} />
-            </div>
-            <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
-              {saving ? 'Saving…' : stale ? 'Update' : 'Save'}
-            </motion.button>
-          </form>
-          {stale && <p className="small muted">Updating saves it for {monthLabel(currentMonth())}.</p>}
-          <div className="stat-row">
-            <div><span className="muted">Pay</span><Money value={plan.income} className="big" /></div>
-            <div><span className="muted">Bills</span><Money value={plan.emiTotal} className="big" /></div>
-            <div><span className="muted">Left over</span><Money value={plan.afterFixed} className="big" /></div>
-          </div>
-        </Card>
-
-        <Card>
-          <h2>📄 Monthly bills</h2>
-          <p className="muted small" style={{ marginTop: 0 }}>Rent, EMIs, subscriptions, insurance — anything auto-deducted.</p>
-          <form onSubmit={addEmi} className="commit-form">
-            <Field label="What is it?">
-              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Netflix" maxLength={60} />
-            </Field>
-            <Field label="Type">
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {EMI_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </Field>
-            <Field label="₹ per month">
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="649" maxLength={16} />
-            </Field>
-            <div className="row">
-              <button className="btn primary" type="submit">+ Add bill</button>
-            </div>
-          </form>
-          <ul className="list">
-            <AnimatePresence initial={false}>
-              {emis.map((c) => (
-                <motion.li key={c.id} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }} className="list-item hoverable">
-                  <span className="avatar">{CAT_ICON[c.category] ?? '📌'}</span>
-                  <div className="grow">
-                    <strong>{c.label}</strong>
-                    <small className="muted">{c.category}</small>
-                  </div>
-                  <b className="mono">{inr(c.amount)}</b>
-                  <button className="icon-btn danger" aria-label={`Delete ${c.label}`} onClick={() => void remove(c.id)}>🗑️</button>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        </Card>
-      </div>
-
-      {/* Tips moved to the Plan page so the Dashboard stays focused on today's
-          money + the quick-add shortcuts. */}
+      {/* Pay + Bills forms moved to /plan — Home is overview-only now.
+          Tips live on /plan too. */}
       <p className="muted small center" style={{ margin: '0.6rem 0 0' }}>
-        Want personalised tips? <Link to="/plan">See the full plan →</Link>
+        Want to edit pay, bills, or see personalised tips? <Link to="/plan">Open the plan →</Link>
       </p>
 
       <OnboardingModal />
