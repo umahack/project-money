@@ -46,14 +46,21 @@ router.get('/trips/:token', publicLimiter, async (req, res) => {
          FROM trip_expenses WHERE trip_id = ? ORDER BY id DESC`
     )
     .all(trip.id);
-  const expenses = rawExpenses.map((e) => ({
-    id: e.id,
-    payer: e.payer,
-    description: e.description,
-    amount: Number(e.amount),
-    created_at: e.created_at,
-    split: JSON.parse(e.split_json),
-  }));
+  const expenses = rawExpenses.map((e) => {
+    let split = [];
+    try {
+      const parsed = JSON.parse(e.split_json);
+      if (Array.isArray(parsed)) split = parsed;
+    } catch { /* keep row visible with empty split */ }
+    return {
+      id: e.id,
+      payer: e.payer,
+      description: e.description,
+      amount: Number(e.amount),
+      created_at: e.created_at,
+      split,
+    };
+  });
   const settlement = computeSettlement(members, expenses);
   res.json({ trip, members, expenses, settlement });
 });

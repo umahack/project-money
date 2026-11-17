@@ -46,10 +46,12 @@ export async function authRequired(req, res, next) {
     return res.status(401).json({ error: msg, code: 'SESSION_REVOKED' });
   }
 
-  // Touch last_seen_at (best-effort; cheap, no transaction).
+  // Touch last_seen_at (best-effort; cheap, no transaction). We don't await
+  // it so request latency isn't hurt, but we DO log errors so real DB
+  // issues aren't invisible.
   db.prepare('UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(session.id)
-    .catch?.(() => undefined);
+    .catch?.((e) => console.error('[session.last_seen_at] skipped:', e?.message));
 
   req.user = { id: user.id, email: user.email, sid: Number(session.id) };
   next();

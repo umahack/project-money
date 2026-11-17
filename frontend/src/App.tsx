@@ -74,7 +74,10 @@ export default function App() {
         <Route path="admin/traffic" element={<AdminTraffic />} />
         <Route path="admin/broadcast" element={<AdminBroadcast />} />
         <Route path="admin/account" element={<AdminAccount />} />
+        {/* Signed-in catch-all keeps the Shell (sidebar, admin switch, theme). */}
+        <Route path="*" element={<NotFound />} />
       </Route>
+      {/* Public catch-all for unauthenticated visitors. */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

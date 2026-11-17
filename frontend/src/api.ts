@@ -79,6 +79,21 @@ async function request<T>(path: string, { method = 'GET', body, auth = true }: O
           : 'Your session has ended. Please sign in again.';
       window.dispatchEvent(new CustomEvent('auth:expired', { detail }));
     }
+    // If the server says "not admin", the client's cached is_admin flag has
+    // drifted (or was tampered with). Clear it so the admin UI stops leaking.
+    if (res.status === 403 && path.startsWith('/admin')) {
+      try {
+        const raw = sessionStorage.getItem(USER_KEY);
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (u && u.is_admin) {
+            u.is_admin = false;
+            sessionStorage.setItem(USER_KEY, JSON.stringify(u));
+            window.dispatchEvent(new Event('auth:changed'));
+          }
+        }
+      } catch { /* ignore */ }
+    }
     let fallback: string;
     if (res.status === 429) {
       const retry = Number(res.headers.get('retry-after')) || 60;

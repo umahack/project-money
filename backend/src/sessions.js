@@ -42,6 +42,19 @@ export const MAX_ACTIVE_SESSIONS = 3;
  * session id.
  */
 export async function createSession(userId, { ip, userAgent, reason = 'new_login' } = {}) {
+  // 1) Insert the new session FIRST, so the active-count read in step 2
+  //    includes it. This closes the race where two parallel 4th-logins
+  //    both saw active=2 and both decided no eviction was needed.
+  const info = await db
+    .prepare(
+      `INSERT INTO sessions (user_id, device_label, ip_hash, user_agent)
+       VALUES (?, ?, ?, ?)`
+    )
+    .run(userId, labelForUA(userAgent).slice(0, 60), dailyIpHash(ip), String(userAgent || '').slice(0, 240) || null);
+  const newId = Number(info.lastInsertRowid);
+
+  // 2) Trim everything older-than-the-cap in one atomic UPDATE. Oldest
+  //    rows (lowest id) get revoked; the new session is always kept.
   const active = await db
     .prepare(
       `SELECT id FROM sessions
@@ -49,27 +62,19 @@ export async function createSession(userId, { ip, userAgent, reason = 'new_login
         ORDER BY created_at ASC, id ASC`
     )
     .all(userId);
-  const keepSlots = MAX_ACTIVE_SESSIONS - 1; // room for the new one we're about to insert
-  const toRevoke = active.slice(0, Math.max(0, active.length - keepSlots));
-  if (toRevoke.length > 0) {
-    const ids = toRevoke.map((r) => Number(r.id));
-    const placeholders = ids.map(() => '?').join(',');
+  if (active.length > MAX_ACTIVE_SESSIONS) {
+    const toRevoke = active.slice(0, active.length - MAX_ACTIVE_SESSIONS).map((r) => Number(r.id));
+    const placeholders = toRevoke.map(() => '?').join(',');
     await db
       .prepare(
         `UPDATE sessions
             SET revoked_at = CURRENT_TIMESTAMP,
                 revoked_reason = ?
-          WHERE id IN (${placeholders})`
+          WHERE id IN (${placeholders}) AND revoked_at IS NULL`
       )
-      .run(reason === 'new_login' ? 'another_device' : reason, ...ids);
+      .run(reason === 'new_login' ? 'another_device' : reason, ...toRevoke);
   }
-  const info = await db
-    .prepare(
-      `INSERT INTO sessions (user_id, device_label, ip_hash, user_agent)
-       VALUES (?, ?, ?, ?)`
-    )
-    .run(userId, labelForUA(userAgent).slice(0, 60), dailyIpHash(ip), String(userAgent || '').slice(0, 240) || null);
-  return Number(info.lastInsertRowid);
+  return newId;
 }
 
 // Backwards-compatible alias — older imports still work.

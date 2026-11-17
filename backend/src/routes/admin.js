@@ -94,8 +94,18 @@ router.put('/users/:id/admin', [body('is_admin').isBoolean()], async (req, res) 
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
   if (id === req.user.id) return res.status(400).json({ error: 'Cannot demote yourself' });
-  const exists = await db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(id);
-  if (!exists) return res.status(404).json({ error: 'Not found' });
+  const target = await db
+    .prepare('SELECT id, is_admin FROM users WHERE id = ?')
+    .get(id);
+  if (!target) return res.status(404).json({ error: 'Not found' });
+  // Refuse to demote the last-but-one admin — the system should always have
+  // at least one admin left after the operation.
+  if (target.is_admin && !req.body.is_admin) {
+    const admins = await db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1').get();
+    if (Number(admins.n ?? 0) <= 1) {
+      return res.status(400).json({ error: 'Cannot demote the last remaining admin.' });
+    }
+  }
   await db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(req.body.is_admin ? 1 : 0, id);
   await audit(req, {
     action: req.body.is_admin ? 'admin.promote' : 'admin.demote',
@@ -217,6 +227,8 @@ router.delete('/announcements/:id', async (req, res) => {
 
 router.put('/announcements/:id/active', [body('is_active').isBoolean()], async (req, res) => {
   const id = Number(req.params.id);
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
   if (req.body.is_active) {
     await db.prepare('UPDATE announcements SET is_active = 0 WHERE is_active = 1').run();
   }

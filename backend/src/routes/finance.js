@@ -6,12 +6,15 @@ import { authRequired } from '../middleware/auth.js';
 const router = Router();
 router.use(authRequired);
 
+// All of these use the Date getters (not toISOString), so they respect the
+// server's configured TZ (set to Asia/Kolkata in render.yaml). This keeps the
+// expense/month tagging aligned with the IST frontend across midnight.
 function monthKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function todayISO(d = new Date()) {
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**
@@ -188,7 +191,17 @@ router.post(
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('category').isString().isLength({ min: 1, max: 24 }),
     body('note').optional().isString().trim().isLength({ max: 120 }),
-    body('spentOn').optional().matches(/^\d{4}-\d{2}-\d{2}$/),
+    body('spentOn').optional().custom((v) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+      const d = new Date(`${v}T00:00:00`);
+      if (isNaN(d.getTime())) return false;
+      // Reject nonsense like 2026-02-30 (where Date auto-rolls to March).
+      if (`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` !== v) return false;
+      const year = d.getFullYear();
+      const nowYear = new Date().getFullYear();
+      // Keep the range sane: last ~10 years, up to next year.
+      return year >= nowYear - 10 && year <= nowYear + 1;
+    }).withMessage('Pick a valid date in the last decade.'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -196,7 +209,7 @@ router.post(
     const allowed = await allowedCategoriesFor(req.user.id);
     if (!allowed.includes(req.body.category))
       return res.status(400).json({ error: 'Unknown category — add it in Settings first.' });
-    const spentOn = req.body.spentOn || new Date().toISOString().slice(0, 10);
+    const spentOn = req.body.spentOn || todayISO();
     const month = spentOn.slice(0, 7);
     const info = await db
       .prepare(

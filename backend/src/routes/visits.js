@@ -30,15 +30,34 @@ function dailyIpHash(ip) {
 
 /**
  * Attempt to recover the signed-in user id from the auth header without
- * requiring auth — tracking still works for logged-out visitors.
+ * requiring auth. Also verifies the session hasn't been revoked (e.g., by
+ * the 3-device cap) and that token_version is current — otherwise visits
+ * get attributed to accounts whose device no longer has access.
  */
-function optionalUserId(req) {
+async function optionalUserId(req) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
   if (!token) return null;
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
-    return Number(payload.sub) || null;
+    payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+  } catch {
+    return null;
+  }
+  const sub = Number(payload.sub);
+  if (!sub || !payload.sid) return null;
+  try {
+    const row = await db
+      .prepare(
+        `SELECT u.token_version AS tv, s.revoked_at
+           FROM users u JOIN sessions s ON s.user_id = u.id
+          WHERE u.id = ? AND s.id = ?`
+      )
+      .get(sub, Number(payload.sid));
+    if (!row) return null;
+    if (row.revoked_at) return null;
+    if (Number(payload.tv ?? 1) !== Number(row.tv)) return null;
+    return sub;
   } catch {
     return null;
   }
@@ -57,7 +76,7 @@ router.post(
     const ip = req.ip || req.socket?.remoteAddress || '';
     await db
       .prepare('INSERT INTO visits (user_id, path, ip_hash, user_agent) VALUES (?, ?, ?, ?)')
-      .run(optionalUserId(req), path, dailyIpHash(ip), ua);
+      .run(await optionalUserId(req), path, dailyIpHash(ip), ua);
     res.status(204).end();
   }
 );

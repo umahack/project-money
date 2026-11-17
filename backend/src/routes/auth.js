@@ -47,6 +47,9 @@ const sendIpLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  // Don't burn tokens on 4xx responses (bad email syntax, missing fields).
+  // Only count hits that reached handler logic.
+  skipFailedRequests: true,
   message: { error: 'Too many requests from this network. Try again later.' },
 });
 
@@ -85,6 +88,24 @@ function isStrongPassword(p) {
   return true;
 }
 const STRONG_PW_MSG = 'Password needs 8+ characters, a letter, a number, and no leading or trailing spaces.';
+
+/**
+ * Opportunistic purge of expired pending-OTP rows across the three tables.
+ * Called at the top of every OTP-start handler so abandoned signups don't
+ * accumulate PII + bcrypt hashes indefinitely. Idempotent and fast — a few
+ * ms, bounded by expired-row count. We don't block the request on failure.
+ */
+async function sweepExpiredPending() {
+  try {
+    await Promise.all([
+      db.prepare('DELETE FROM pending_registrations WHERE verify_expires_at < ?').run(new Date().toISOString()),
+      db.prepare('DELETE FROM pending_email_changes WHERE verify_expires_at < ?').run(new Date().toISOString()),
+      db.prepare('DELETE FROM pending_password_resets WHERE verify_expires_at < ?').run(new Date().toISOString()),
+    ]);
+  } catch (e) {
+    console.error('[pending-sweep] skipped:', e?.message);
+  }
+}
 
 function throttleKey(email) {
   return String(email || '').toLowerCase();
@@ -128,6 +149,7 @@ router.post(
     body('password').custom((v) => isStrongPassword(v)).withMessage(STRONG_PW_MSG),
   ],
   async (req, res) => {
+    await sweepExpiredPending();
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { email, name, password } = req.body;
@@ -168,6 +190,7 @@ router.post(
   sendLimiter,
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
+    await sweepExpiredPending();
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
     const { email } = req.body;
@@ -302,6 +325,7 @@ router.post(
   sendLimiter,
   [body('email').isEmail().normalizeEmail()],
   async (req, res) => {
+    await sweepExpiredPending();
     const errors = validationResult(req);
     // Even on validation failure, return a generic ok to avoid probing. The
     // UI treats a bad email client-side anyway.
@@ -474,6 +498,25 @@ router.patch(
     if (!current) return res.status(401).json({ error: 'Session expired' });
     if (name === current.name) return res.json({ ok: true, unchanged: true });
     await db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
+    // Keep trip members & expense payer strings in sync with the new name so
+    // the user doesn't silently vanish from trip balances. Updates only this
+    // user's own `trip_members` rows (user_id-scoped) and the payer field on
+    // trips they are a member of where the string still matches the old name.
+    try {
+      await db
+        .prepare('UPDATE trip_members SET name = ? WHERE user_id = ? AND name = ?')
+        .run(name, req.user.id, current.name);
+      await db
+        .prepare(
+          `UPDATE trip_expenses SET payer = ?
+             WHERE payer = ? AND trip_id IN (
+               SELECT trip_id FROM trip_members WHERE user_id = ?
+             )`
+        )
+        .run(name, current.name, req.user.id);
+    } catch (e) {
+      console.error('[profile.rename-sync] skipped:', e?.message);
+    }
     const u = await db
       .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
       .get(req.user.id);
@@ -507,6 +550,7 @@ router.post(
   sendLimiter,
   [body('newEmail').isEmail().normalizeEmail()],
   async (req, res) => {
+    await sweepExpiredPending();
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Enter a valid email' });
     const newEmail = String(req.body.newEmail).toLowerCase();
@@ -574,7 +618,18 @@ router.post(
       return res.status(409).json({ error: 'That email was just taken. Start again with a different address.' });
     }
     const current = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
-    await db.prepare('UPDATE users SET email = ? WHERE id = ?').run(row.new_email, req.user.id);
+    // Treat email change as a strong account-change event — bump token_version
+    // to invalidate every other active session, and revoke other sessions so
+    // the user is kicked out of any device still signed in with the old email.
+    await db
+      .prepare('UPDATE users SET email = ?, token_version = token_version + 1 WHERE id = ?')
+      .run(row.new_email, req.user.id);
+    await db
+      .prepare(
+        `UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = 'email_changed'
+          WHERE user_id = ? AND id != ? AND revoked_at IS NULL`
+      )
+      .run(req.user.id, req.user.sid);
     await db.prepare('DELETE FROM pending_email_changes WHERE user_id = ?').run(req.user.id);
     const u = await db
       .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')

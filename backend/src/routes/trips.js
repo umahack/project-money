@@ -80,7 +80,17 @@ router.get('/:id', async (req, res) => {
       'SELECT id, payer, description, amount, split_json, created_at FROM trip_expenses WHERE trip_id = ? ORDER BY id DESC'
     )
     .all(id);
-  const expenses = rawExpenses.map((e) => ({ ...e, split: JSON.parse(e.split_json), split_json: undefined }));
+  const expenses = rawExpenses.map((e) => {
+    let split = [];
+    try {
+      const parsed = JSON.parse(e.split_json);
+      if (Array.isArray(parsed)) split = parsed;
+    } catch {
+      // Keep the row visible but with an empty split so the whole trip
+      // doesn't 500 on a single corrupted blob.
+    }
+    return { ...e, split, split_json: undefined };
+  });
   res.json({
     trip: access.trip,
     role: access.role,
@@ -95,7 +105,8 @@ router.post(
   [body('name').isString().trim().isLength({ min: 1, max: 40 }), body('email').optional().isEmail()],
   async (req, res) => {
     const id = Number(req.params.id);
-    if (!(await accessTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
+    // Owner-only — non-owner members cannot add new members to the trip.
+    if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     try {
@@ -123,6 +134,22 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { payer, description, amount, split } = req.body;
+    // Enforce that the payer is one of this trip's current members, and that
+    // settlement-marked expenses (which cancel debts) can only be posted by
+    // the person paying. Prevents a non-owner member from forging settlements
+    // on someone else's behalf.
+    const isSettlement = String(description || '').startsWith('↔ Settlement: ');
+    const myMember = await db
+      .prepare('SELECT name FROM trip_members WHERE trip_id = ? AND user_id = ?')
+      .get(id, req.user.id);
+    const payerIsMember = await db
+      .prepare('SELECT 1 AS ok FROM trip_members WHERE trip_id = ? AND name = ?')
+      .get(id, payer);
+    if (!payerIsMember) return res.status(400).json({ error: 'Payer must be a trip member.' });
+    const isOwner = await ownTrip(req.user.id, id);
+    if (isSettlement && (!myMember || myMember.name !== payer) && !isOwner) {
+      return res.status(403).json({ error: 'Only the payer or the trip owner can mark a settlement.' });
+    }
     const clean = split
       .filter((s) => s && typeof s.name === 'string')
       .map((s) => ({ name: String(s.name).slice(0, 40), share: Math.max(0, Number(s.share) || 0) }));
