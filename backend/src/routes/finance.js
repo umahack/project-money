@@ -648,13 +648,27 @@ function csvEscape(v) {
 router.get('/export.csv', async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT COALESCE(spent_on, substr(created_at, 1, 10)) AS date, month, category, amount, note
-         FROM expense_log WHERE user_id = ? ORDER BY date ASC, id ASC`
+      `SELECT spent_on, created_at, month, category, amount, note
+         FROM expense_log WHERE user_id = ?
+        ORDER BY COALESCE(spent_on, substr(created_at, 1, 10)) ASC, id ASC`
     )
     .all(req.user.id);
   const header = ['date', 'month', 'category', 'amount', 'note'];
   const lines = [header.join(',')];
-  for (const r of rows) lines.push(header.map((h) => csvEscape(r[h])).join(','));
+  for (const r of rows) {
+    // SQLite's CURRENT_TIMESTAMP is always UTC regardless of TZ env, so when
+    // we fall back to created_at we parse through a Date so the server's
+    // configured TZ (Asia/Kolkata) gives us the user's actual local day.
+    let date = r.spent_on;
+    if (!date && r.created_at) {
+      const d = new Date(String(r.created_at).replace(' ', 'T') + 'Z');
+      if (!isNaN(d.getTime())) {
+        date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+    }
+    const row = { date, month: r.month, category: r.category, amount: r.amount, note: r.note };
+    lines.push(header.map((h) => csvEscape(row[h])).join(','));
+  }
   const filename = `project-money-expenses-${todayISO()}.csv`;
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

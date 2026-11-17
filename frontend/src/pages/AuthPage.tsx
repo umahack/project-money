@@ -5,13 +5,9 @@ import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
 import { LandingPreview } from '../components/LandingPreview';
 import { errText, useAuth, useToast } from '../state';
+import { clearUserViewPreference } from '../userViewPref';
 
-const RULES = [
-  { key: 'len', label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
-  { key: 'letter', label: 'Contains a letter', test: (p: string) => /[A-Za-z]/.test(p) },
-  { key: 'number', label: 'Contains a number', test: (p: string) => /\d/.test(p) },
-  { key: 'space', label: 'No leading or trailing spaces', test: (p: string) => p.length > 0 && p === p.trim() },
-];
+import { PW_RULES as RULES } from '../passwordRules';
 
 function friendly(message: string, mode: 'login' | 'register'): string {
   if (/invalid credentials/i.test(message)) return 'Email or password is incorrect.';
@@ -56,7 +52,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setBusy(true);
     try {
       const u = await login(email.trim(), password);
-      try { sessionStorage.removeItem('pm_prefer_user_view'); } catch { /* ignore */ }
+      clearUserViewPreference();
       nav(u.is_admin ? '/admin' : '/', { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'login'));

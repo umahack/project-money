@@ -8,12 +8,7 @@ import { errText, useToast } from '../state';
 
 type Step = 'email' | 'code';
 
-const RULES = [
-  { key: 'len', label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
-  { key: 'letter', label: 'Contains a letter', test: (p: string) => /[A-Za-z]/.test(p) },
-  { key: 'number', label: 'Contains a number', test: (p: string) => /\d/.test(p) },
-  { key: 'space', label: 'No leading or trailing spaces', test: (p: string) => p.length > 0 && p === p.trim() },
-];
+import { PW_RULES as RULES } from '../passwordRules';
 
 export function ForgotPassword() {
   const nav = useNavigate();

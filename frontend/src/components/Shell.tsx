@@ -6,7 +6,7 @@ import { FeedbackModal } from './FeedbackModal';
 import { usePendingInvitesCount } from './InvitesInbox';
 import { SessionWarning } from './SessionWarning';
 import { AnnouncementBanner } from './AnnouncementBanner';
-import { markUserViewPreferred, clearUserViewPreference } from '../App';
+import { markUserViewPreferred, clearUserViewPreference } from '../userViewPref';
 
 export function Background() {
   return (

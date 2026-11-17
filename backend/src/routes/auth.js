@@ -72,6 +72,20 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILS = 5;
 const loginAttempts = new Map(); // email -> { count, firstAt, lockedUntil }
 
+// Shared password-strength check applied anywhere a NEW password is set
+// (register, change-password, reset-password-finish). Mirrors the frontend
+// rules in frontend/src/passwordRules.ts so a password that passed the UI
+// doesn't get rejected by the server, and vice versa.
+function isStrongPassword(p) {
+  if (typeof p !== 'string') return false;
+  if (p.length < 8 || p.length > 128) return false;
+  if (!/[A-Za-z]/.test(p)) return false;
+  if (!/\d/.test(p)) return false;
+  if (p !== p.trim()) return false;
+  return true;
+}
+const STRONG_PW_MSG = 'Password needs 8+ characters, a letter, a number, and no leading or trailing spaces.';
+
 function throttleKey(email) {
   return String(email || '').toLowerCase();
 }
@@ -111,10 +125,7 @@ router.post(
   [
     body('email').isEmail().normalizeEmail(),
     body('name').isString().trim().isLength({ min: 1, max: 60 }),
-    body('password')
-      .isString()
-      .isLength({ min: 8, max: 128 })
-      .withMessage('Password must be at least 8 characters'),
+    body('password').custom((v) => isStrongPassword(v)).withMessage(STRONG_PW_MSG),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -323,13 +334,29 @@ router.post(
 
 // Step 2 — verify code and set the new password. Bumps token_version and
 // revokes every existing session for that user (nothing is signed in here).
+// Per-email finish limiter — tracks wrong attempts regardless of whether a
+// pending reset row exists, so an attacker can't tell "no account" (400) from
+// "account exists but still has attempts left" by response pattern.
+const resetFinishLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: MAX_VERIFY_ATTEMPTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    return `pwr:${email || `ip:${req.ip || 'unknown'}`}`;
+  },
+  message: { error: 'Too many attempts. Start again.' },
+});
+
 router.post(
   '/password-reset-finish',
   authLimiter,
+  resetFinishLimiter,
   [
     body('email').isEmail().normalizeEmail(),
     body('code').isString().matches(/^\d{6}$/),
-    body('newPassword').isString().isLength({ min: 8, max: 128 }),
+    body('newPassword').custom((v) => isStrongPassword(v)).withMessage(STRONG_PW_MSG),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -392,10 +419,7 @@ router.post(
   pwChangeLimiter,
   [
     body('currentPassword').isString().isLength({ min: 1 }),
-    body('newPassword')
-      .isString()
-      .isLength({ min: 8, max: 128 })
-      .withMessage('New password must be at least 8 characters'),
+    body('newPassword').custom((v) => isStrongPassword(v)).withMessage(STRONG_PW_MSG),
   ],
   async (req, res) => {
     const errors = validationResult(req);

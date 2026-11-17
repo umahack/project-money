@@ -24,23 +24,13 @@ import { Settings } from './pages/Settings';
 import { PublicTrip } from './pages/PublicTrip';
 import { useAuth } from './state';
 import { useVisitTracker } from './hooks/useVisitTracker';
+import { wantsUserView } from './userViewPref';
 
 /** Signed-in users go straight to the app; everyone else sees the login or register page. */
 function Guest({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   if (user) return <Navigate to={user.is_admin ? '/admin' : '/'} replace />;
   return <>{children}</>;
-}
-
-const USER_VIEW_FLAG = 'pm_prefer_user_view';
-export function markUserViewPreferred() {
-  try { sessionStorage.setItem(USER_VIEW_FLAG, '1'); } catch { /* ignore */ }
-}
-export function clearUserViewPreference() {
-  try { sessionStorage.removeItem(USER_VIEW_FLAG); } catch { /* ignore */ }
-}
-function wantsUserView() {
-  try { return sessionStorage.getItem(USER_VIEW_FLAG) === '1'; } catch { return false; }
 }
 
 /** Everything inside the app shell needs a session. */

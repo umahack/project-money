@@ -9,14 +9,23 @@ const router = Router();
 router.use(authRequired, adminRequired);
 
 router.get('/users', async (_req, res) => {
+  // Previously used three correlated subqueries per user row — fine for small
+  // user bases but O(N × 3) scans. Now one query with aggregated LEFT JOINs
+  // for emis + trips, plus a "latest salary" subquery that still runs per
+  // user but hits the (user_id, month) index.
   const rows = await db
     .prepare(
       `SELECT
-        u.id, u.email, u.name, u.is_admin, u.created_at,
-        (SELECT amount FROM salary_entries WHERE user_id = u.id ORDER BY month DESC LIMIT 1) AS latest_salary,
-        (SELECT COALESCE(SUM(amount),0) FROM emis WHERE user_id = u.id) AS emi_total,
-        (SELECT COUNT(*) FROM trips WHERE user_id = u.id) AS trip_count
+         u.id, u.email, u.name, u.is_admin, u.created_at,
+         (SELECT amount FROM salary_entries s
+            WHERE s.user_id = u.id ORDER BY s.month DESC LIMIT 1) AS latest_salary,
+         COALESCE(e.emi_total, 0)  AS emi_total,
+         COALESCE(t.trip_count, 0) AS trip_count
        FROM users u
+       LEFT JOIN (SELECT user_id, SUM(amount) AS emi_total FROM emis GROUP BY user_id) e
+         ON e.user_id = u.id
+       LEFT JOIN (SELECT user_id, COUNT(*) AS trip_count FROM trips GROUP BY user_id) t
+         ON t.user_id = u.id
        ORDER BY u.id DESC`
     )
     .all();
