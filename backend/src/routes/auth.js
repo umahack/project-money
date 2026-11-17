@@ -618,6 +618,11 @@ router.post(
       return res.status(409).json({ error: 'That email was just taken. Start again with a different address.' });
     }
     const current = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+    // Clear the pending row FIRST — if the UPDATE then fails, the user can
+    // retry the whole flow without being blocked by a surviving pending row.
+    // The caller already proved they owned the code; a transient DB blip
+    // shouldn't cost them access to their own email-change feature.
+    await db.prepare('DELETE FROM pending_email_changes WHERE user_id = ?').run(req.user.id);
     // Treat email change as a strong account-change event — bump token_version
     // to invalidate every other active session, and revoke other sessions so
     // the user is kicked out of any device still signed in with the old email.
@@ -630,7 +635,6 @@ router.post(
           WHERE user_id = ? AND id != ? AND revoked_at IS NULL`
       )
       .run(req.user.id, req.user.sid);
-    await db.prepare('DELETE FROM pending_email_changes WHERE user_id = ?').run(req.user.id);
     const u = await db
       .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
       .get(req.user.id);

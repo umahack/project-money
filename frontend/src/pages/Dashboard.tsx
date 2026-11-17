@@ -290,7 +290,7 @@ export function Dashboard() {
                     <i style={{ background: s.color }} />
                     <span>{s.label}</span>
                     <b className="mono">{inr(s.value)}</b>
-                    <small className="muted">{Math.round((s.value / plan.income) * 100)}%</small>
+                    <small className="muted">{Math.min(100, Math.max(0, Math.round((s.value / Math.max(plan.income, 1)) * 100)))}%</small>
                   </li>
                 ))}
               </ul>
