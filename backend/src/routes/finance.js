@@ -37,7 +37,12 @@ async function materializeRecurring(userId) {
   for (const r of rows) {
     if (r.last_logged_month === month) continue;
     if (Number(r.day_of_month) > dayToday) continue;
-    const spentOn = `${month}-${String(Math.min(Number(r.day_of_month), 28)).padStart(2, '0')}`;
+    // Clamp to the real last day of THIS month (28/29/30/31 as applicable),
+    // not a hardcoded 28 — rent-due-on-the-30th shouldn't post on the 28th
+    // every month, only in February.
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const day = Math.min(Math.max(1, Number(r.day_of_month) || 1), lastDay);
+    const spentOn = `${month}-${String(day).padStart(2, '0')}`;
     try {
       // Claim this (recurring_id, month) slot FIRST via a conditional UPDATE.
       // Only one concurrent caller will see `changes > 0`; the others see 0
@@ -253,6 +258,13 @@ router.post(
       return res.status(400).json({ error: 'Up to 24 chars; letters, digits, spaces, & / + ( ) -' });
     if (EXPENSE_CATEGORIES.map((c) => c.toLowerCase()).includes(name.toLowerCase()))
       return res.status(409).json({ error: 'That matches a built-in category.' });
+    // Case-insensitive dedup on user_categories — SQLite's UNIQUE constraint
+    // is case-sensitive by default, which would otherwise let "Pets" and
+    // "pets" and "PETS" all exist for the same user.
+    const dupe = await db
+      .prepare('SELECT 1 AS ok FROM user_categories WHERE user_id = ? AND lower(name) = lower(?)')
+      .get(req.user.id, name);
+    if (dupe) return res.status(409).json({ error: 'You already have this category.' });
     try {
       const info = await db
         .prepare('INSERT INTO user_categories (user_id, name) VALUES (?, ?)')
@@ -473,7 +485,8 @@ router.put(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const category = String(req.params.category);
-    if (!EXPENSE_CATEGORIES.includes(category))
+    const allowed = await allowedCategoriesFor(req.user.id);
+    if (!allowed.includes(category))
       return res.status(400).json({ error: 'Invalid category' });
     await db
       .prepare(

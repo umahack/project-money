@@ -88,9 +88,17 @@ app.use('/api/public', publicRoutes); // must come before `/api` catch-alls so n
 app.use('/api', visitsRoutes); // `/track` is public (optional auth); mount before invitesRoutes which uses authRequired
 app.use('/api', invitesRoutes);
 
+// Any /api/* path the routers above didn't match is a 404, not an HTML page.
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
+
 app.use((err, _req, res, _next) => {
   if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Payload too large' });
   if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON' });
+  // CORS rejections bubble as plain Error; return them as 403 so operator
+  // metrics distinguish "wrong origin" from true server faults.
+  if (typeof err?.message === 'string' && err.message.startsWith('CORS:')) {
+    return res.status(403).json({ error: err.message });
+  }
   console.error(err);
   res.status(500).json({ error: 'Server error' });
 });

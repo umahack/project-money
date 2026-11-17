@@ -52,7 +52,14 @@ router.get('/users/:id', async (req, res) => {
 
 router.put(
   '/users/:id/salary',
-  [body('amount').isFloat({ min: 0, max: 1e12 }), body('month').matches(/^\d{4}-\d{2}$/)],
+  [
+    body('amount').isFloat({ min: 0, max: 1e12 }),
+    body('month').matches(/^\d{4}-\d{2}$/).custom((v) => {
+      const [y, m] = v.split('-').map(Number);
+      const nowY = new Date().getFullYear();
+      return y >= 2000 && y <= nowY + 1 && m >= 1 && m <= 12;
+    }).withMessage('Month must be within 2000..next year.'),
+  ],
   async (req, res) => {
     const id = Number(req.params.id);
     const errors = validationResult(req);
@@ -71,7 +78,14 @@ router.put(
 
 router.put(
   '/users/:id/password',
-  [body('newPassword').isString().isLength({ min: 8, max: 128 })],
+  [body('newPassword').custom((v) => {
+    if (typeof v !== 'string') return false;
+    if (v.length < 8 || v.length > 128) return false;
+    if (!/[A-Za-z]/.test(v)) return false;
+    if (!/\d/.test(v)) return false;
+    if (v !== v.trim()) return false;
+    return true;
+  }).withMessage('Password needs 8+ characters, a letter, a number, and no leading or trailing spaces.')],
   async (req, res) => {
     const id = Number(req.params.id);
     const errors = validationResult(req);
@@ -258,7 +272,7 @@ router.get('/visits/stats', async (_req, res) => {
     (
       await db
         .prepare(
-          "SELECT COUNT(DISTINCT ip_hash) AS c FROM visits WHERE substr(created_at, 1, 10) = date('now')"
+          "SELECT COUNT(DISTINCT ip_hash) AS c FROM visits WHERE substr(datetime(created_at,'+5 hours','+30 minutes'), 1, 10) = date('now','+5 hours','+30 minutes')"
         )
         .get()
     ).c
@@ -266,7 +280,7 @@ router.get('/visits/stats', async (_req, res) => {
   const todayVisits = Number(
     (
       await db
-        .prepare("SELECT COUNT(*) AS c FROM visits WHERE substr(created_at, 1, 10) = date('now')")
+        .prepare("SELECT COUNT(*) AS c FROM visits WHERE substr(datetime(created_at,'+5 hours','+30 minutes'), 1, 10) = date('now','+5 hours','+30 minutes')")
         .get()
     ).c
   );

@@ -24,6 +24,11 @@ export function DangerZone() {
       const base = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '');
       const token = sessionStorage.getItem('pm_token') ?? '';
       const res = await fetch(`${base}/api/auth/export`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        clearAuth();
+        window.dispatchEvent(new CustomEvent('auth:expired', { detail: 'Your session has ended. Please sign in again.' }));
+        return;
+      }
       if (!res.ok) throw new Error(`Export failed (${res.status})`);
       const blob = await res.blob();
       const stamp = new Date().toISOString().slice(0, 10);

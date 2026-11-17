@@ -89,6 +89,12 @@ function isStrongPassword(p) {
 }
 const STRONG_PW_MSG = 'Password needs 8+ characters, a letter, a number, and no leading or trailing spaces.';
 
+// Fixed bcrypt hash of the string "000000" with cost 10. We use `matches()`
+// against this when no pending row exists for an email, so the response
+// time of "wrong email, no row" matches "right email, wrong code" and we
+// don't leak which emails have in-flight OTPs via a timing side channel.
+const DUMMY_CODE_HASH = '$2b$10$0000000000000000000000000000000000000000000000000000wC';
+
 /**
  * Opportunistic purge of expired pending-OTP rows across the three tables.
  * Called at the top of every OTP-start handler so abandoned signups don't
@@ -158,9 +164,10 @@ router.post(
     // give unauthenticated clients an enumeration oracle. We ALWAYS run bcrypt
     // to flatten the timing side-channel too.
     const pwHash = await bcrypt.hash(password, 12);
+    let mailResult = { ok: true, fallback: false };
     if (existing) {
       const { subject, text, html } = alreadyRegisteredEmail(existing.name);
-      await sendMail({ to: email, subject, text, html });
+      mailResult = await sendMail({ to: email, subject, text, html });
     } else {
       const code = generateCode();
       const codeHash = await hashCode(code);
@@ -177,9 +184,10 @@ router.post(
         )
         .run(email, name.trim(), pwHash, codeHash, expiresAt());
       const { subject, text, html } = registerVerifyEmail(code, name);
-      await sendMail({ to: email, subject, text, html });
+      mailResult = await sendMail({ to: email, subject, text, html });
     }
-    res.json({ ok: true, email, mail: { sent: true, fallback: false } });
+    if (mailResult?.ok === false) console.error('[mail-outcome] register-start to', email, '-', mailResult.error);
+    res.json({ ok: true, email, mail: { sent: !!mailResult.ok, fallback: !!mailResult.fallback } });
   }
 );
 
@@ -197,6 +205,7 @@ router.post(
     const row = await db.prepare('SELECT name FROM pending_registrations WHERE email = ?').get(email);
     // Constant response regardless of whether a pending row exists, to avoid
     // leaking account existence via the resend endpoint.
+    let mailResult = { ok: true, fallback: false };
     if (row) {
       const code = generateCode();
       await db
@@ -205,16 +214,33 @@ router.post(
         )
         .run(await hashCode(code), expiresAt(), email);
       const { subject, text, html } = registerVerifyEmail(code, row.name);
-      await sendMail({ to: email, subject, text, html });
+      mailResult = await sendMail({ to: email, subject, text, html });
+      if (mailResult?.ok === false) console.error('[mail-outcome] register-resend to', email, '-', mailResult.error);
     }
-    res.json({ ok: true, mail: { sent: true, fallback: false } });
+    res.json({ ok: true, mail: { sent: !!mailResult.ok, fallback: !!mailResult.fallback } });
   }
 );
+
+// Per-email register-finish limiter — fires regardless of whether a pending
+// row exists, so an attacker can't tell "signup in flight" (429) from
+// "nothing in flight" (400) by burning 6 wrong codes.
+const registerFinishLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: MAX_VERIFY_ATTEMPTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    return `reg:${email || `ip:${req.ip || 'unknown'}`}`;
+  },
+  message: { error: 'Too many attempts. Start again.' },
+});
 
 // Step 2: verify code, create the real user, mint a session JWT.
 router.post(
   '/register-finish',
   authLimiter,
+  registerFinishLimiter,
   [body('email').isEmail().normalizeEmail(), body('code').isString().matches(/^\d{6}$/)],
   async (req, res) => {
     const errors = validationResult(req);
@@ -229,7 +255,12 @@ router.post(
     // Collapse "no pending row" and "wrong code" into the same error to avoid
     // leaking whether the email is already a real account.
     const GENERIC_BAD = 'Invalid or expired code. Please start sign-up again.';
-    if (!pending) return res.status(400).json({ error: GENERIC_BAD });
+    if (!pending) {
+      // Flatten the timing side-channel: do a bcrypt compare against a dummy
+      // hash so the response time matches the "code wrong" path.
+      await matches(code, DUMMY_CODE_HASH);
+      return res.status(400).json({ error: GENERIC_BAD });
+    }
     if (isExpired(pending.verify_expires_at))
       return res.status(400).json({ error: GENERIC_BAD });
     if (pending.verify_attempts >= MAX_VERIFY_ATTEMPTS)
@@ -349,7 +380,8 @@ router.post(
         )
         .run(email, codeHash, expiresAt());
       const { subject, text, html } = passwordResetEmail(code, user.name);
-      await sendMail({ to: email, subject, text, html });
+      const mr = await sendMail({ to: email, subject, text, html });
+      if (mr?.ok === false) console.error('[mail-outcome] password-reset-start to', email, '-', mr.error);
     }
     // Always ok. Caller shows "If that email is on file, a code is on the way."
     res.json({ ok: true });
@@ -393,7 +425,10 @@ router.post(
       )
       .get(String(email).toLowerCase());
     // Keep the error generic so a wrong email vs wrong code are indistinguishable.
-    if (!pending) return res.status(400).json({ error: 'Invalid or expired code. Start again.' });
+    if (!pending) {
+      await matches(code, DUMMY_CODE_HASH);
+      return res.status(400).json({ error: 'Invalid or expired code. Start again.' });
+    }
     if (isExpired(pending.verify_expires_at))
       return res.status(400).json({ error: 'Code expired. Start again.' });
     if (pending.verify_attempts >= MAX_VERIFY_ATTEMPTS)
@@ -576,7 +611,8 @@ router.post(
         )
         .run(req.user.id, newEmail, await hashCode(code), expiresAt());
       const { subject, text, html } = emailChangeVerifyEmail(code, me.email);
-      await sendMail({ to: newEmail, subject, text, html });
+      const mr = await sendMail({ to: newEmail, subject, text, html });
+      if (mr?.ok === false) console.error('[mail-outcome] email-change-start to', newEmail, '-', mr.error);
     }
     res.json({ ok: true, newEmail, mail: { sent: true, fallback: false } });
   }
@@ -597,7 +633,10 @@ router.post(
            FROM pending_email_changes WHERE user_id = ?`
       )
       .get(req.user.id);
-    if (!row) return res.status(404).json({ error: 'No email change in progress.' });
+    if (!row) {
+      await matches(req.body.code, DUMMY_CODE_HASH);
+      return res.status(404).json({ error: 'No email change in progress.' });
+    }
     if (isExpired(row.verify_expires_at))
       return res.status(400).json({ error: 'Code expired. Start again.' });
     if (row.verify_attempts >= MAX_VERIFY_ATTEMPTS)
