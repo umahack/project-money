@@ -6,6 +6,7 @@ import { FeedbackModal } from './FeedbackModal';
 import { usePendingInvitesCount } from './InvitesInbox';
 import { SessionWarning } from './SessionWarning';
 import { AnnouncementBanner } from './AnnouncementBanner';
+import { TopbarClock } from './TopbarClock';
 import { markUserViewPreferred, clearUserViewPreference } from '../userViewPref';
 
 export function Background() {
@@ -113,6 +114,7 @@ export function Shell() {
           </span>
         </NavLink>
         <div className="top-actions">
+          <TopbarClock />
           {user?.is_admin && (
             <button
               className="btn ghost sm switch-btn"

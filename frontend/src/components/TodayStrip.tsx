@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Card } from './ui';
 
 /**
  * Live "today" strip for the Dashboard. Shows a friendly date header, a
@@ -33,26 +32,20 @@ export function TodayStrip() {
 
   const monthName = now.toLocaleDateString('en-IN', { month: 'long' });
 
+  // Topbar now carries date + time; this strip focuses on the month-
+  // progress visual, which is what the daily-spend math is tied to.
   return (
-    <Card>
-      <div className="today-strip">
-        <div className="today-cal" aria-hidden="true">
-          <div className="today-cal-month">{monthName.slice(0, 3).toUpperCase()}</div>
-          <div className="today-cal-day">{dayNum}</div>
-        </div>
-        <div className="today-body">
-          <strong className="today-head">
-            Today · {dayName}
-          </strong>
-          <small className="muted">{dateStr} · {timeStr}</small>
-          <div className="today-progress" aria-label={`${monthPct}% of ${monthName} is over`}>
-            <div className="today-progress-fill" style={{ width: `${monthPct}%` }} />
-          </div>
-          <small className="muted">
-            Day {dayNum} of {totalDays} · {monthPct}% of {monthName} done · {daysLeft} day{daysLeft === 1 ? '' : 's'} left
-          </small>
-        </div>
+    <div className="month-strip">
+      <div className="month-strip-head">
+        <strong>{monthName} progress</strong>
+        <small className="muted">
+          Day {dayNum} of {totalDays} · {monthPct}% done · {daysLeft} day{daysLeft === 1 ? '' : 's'} left
+        </small>
       </div>
-    </Card>
+      <div className="today-progress" aria-label={`${monthPct}% of ${monthName} is over`}>
+        <div className="today-progress-fill" style={{ width: `${monthPct}%` }} />
+      </div>
+      <span className="sr-only">{dateStr} · {timeStr}</span>
+    </div>
   );
 }

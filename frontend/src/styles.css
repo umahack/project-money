@@ -705,11 +705,13 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 @media (min-width: 900px) {
   .app-shell {
     display: grid;
-    grid-template-columns: 232px 1fr;
-    gap: 1rem;
-    max-width: 1280px;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 1.25rem;
+    /* Let content breathe on wide screens — cap only on ultra-wide so
+       lines don't become uncomfortably long. */
+    max-width: min(1680px, calc(100% - 2rem));
     margin: 0 auto;
-    padding: 0 0.75rem;
+    padding: 0 1rem;
   }
   .sidebar {
     display: block;
@@ -855,6 +857,32 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
+/* ============ Topbar clock (macOS menu-bar style) ============ */
+.top-clock {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.85rem; font-weight: 500;
+  color: var(--muted);
+  padding: 0.3rem 0.65rem;
+  border-radius: 10px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.top-clock .tc-sep { opacity: 0.5; }
+.top-clock .tc-day { font-weight: 600; color: var(--text); }
+.top-clock .tc-time { color: var(--text); }
+:root[data-theme='light'] .top-clock { background: #ffffff; }
+@media (max-width: 520px) {
+  .top-clock { font-size: 0.72rem; padding: 0.25rem 0.5rem; gap: 0.25rem; }
+  .top-clock .tc-day { display: none; }
+  .top-clock .tc-sep:first-of-type { display: none; }
+}
+@media (max-width: 380px) {
+  .top-clock .tc-date { display: none; }
+  .top-clock .tc-sep { display: none; }
+}
+
 /* ============ Auth top bar (public pages only) ============ */
 .auth-topbar {
   position: sticky; top: 0; z-index: 20;
@@ -921,7 +949,22 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   .qa-label { font-size: 0.72rem; }
 }
 
-/* ============ Today strip ============ */
+/* ============ Month-progress strip (inline, below QuickActions) ============ */
+.month-strip {
+  margin: 0 0 1rem;
+  padding: 0.3rem 0.1rem 0;
+}
+.month-strip-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.6rem; flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ============ Today strip (legacy — kept for any residual usage) ============ */
 .today-strip {
   display: grid;
   grid-template-columns: auto 1fr;
