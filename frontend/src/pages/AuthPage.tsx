@@ -120,24 +120,43 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     <>
       <Background />
       <header className="auth-topbar">
-        <Link to="/login" className="brand" aria-label="Project Money home">
-          <span className="brand-mark">₹</span>
-          <span>Project&nbsp;Money</span>
-          <span
-            className="beta-badge"
-            title="This app is in active development — features may change and bugs are expected."
-            aria-label="Beta — under development"
+        <div className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={() => {
+              // Prefer history back when there is somewhere to go; otherwise
+              // fall back to the opposite auth page so the button never
+              // dead-ends on a direct link.
+              if (window.history.length > 1) nav(-1);
+              else nav(isLogin ? '/register' : '/login');
+            }}
+            aria-label="Go back"
+            title="Go back"
+            style={{ padding: '0.3rem 0.55rem' }}
           >
-            BETA
-          </span>
-        </Link>
+            ← Back
+          </button>
+          <Link to={isLogin ? '/login' : '/register'} className="brand" aria-label="Project Money home">
+            <span className="brand-mark">₹</span>
+            <span>Project&nbsp;Money</span>
+            <span
+              className="beta-badge"
+              title="This app is in active development — features may change and bugs are expected."
+              aria-label="Beta — under development"
+            >
+              BETA
+            </span>
+          </Link>
+        </div>
         <div className="top-actions">
-          <Link to="/login" className={`btn sm ${isLogin ? 'ghost on' : 'ghost'}`} aria-current={isLogin ? 'page' : undefined}>
-            Sign in
-          </Link>
-          <Link to="/register" className={`btn sm ${!isLogin ? 'primary' : 'ghost'}`} aria-current={!isLogin ? 'page' : undefined}>
-            Sign up
-          </Link>
+          {/* Show only the OTHER page's button, so clicking it always navigates
+              — no "clicking Sign in while on Sign in does nothing" dead-end. */}
+          {isLogin ? (
+            <Link to="/register" className="btn primary sm">Sign up</Link>
+          ) : (
+            <Link to="/login" className="btn primary sm">Sign in</Link>
+          )}
         </div>
       </header>
       <div className="auth-wrap">
