@@ -86,9 +86,12 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/public', publicRoutes); // must come before `/api` catch-alls so no-auth routes are reachable
+// Secret-gated scheduler endpoints — mount BEFORE the `/api`-wide routers
+// (visits + invites both run authRequired) so cron-job.org requests aren't
+// intercepted by their auth middleware before reaching requireCronSecret.
+app.use('/api/internal', internalRoutes);
 app.use('/api', visitsRoutes); // `/track` is public (optional auth); mount before invitesRoutes which uses authRequired
 app.use('/api', invitesRoutes);
-app.use('/api/internal', internalRoutes);
 
 // Any /api/* path the routers above didn't match is a 404, not an HTML page.
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
