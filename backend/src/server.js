@@ -13,6 +13,7 @@ import feedbackRoutes from './routes/feedback.js';
 import invitesRoutes from './routes/invites.js';
 import publicRoutes from './routes/public.js';
 import visitsRoutes from './routes/visits.js';
+import internalRoutes from './routes/internal.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 24) {
   console.error('JWT_SECRET missing or too short. Copy .env.example to .env and set a strong secret.');
@@ -87,6 +88,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/public', publicRoutes); // must come before `/api` catch-alls so no-auth routes are reachable
 app.use('/api', visitsRoutes); // `/track` is public (optional auth); mount before invitesRoutes which uses authRequired
 app.use('/api', invitesRoutes);
+app.use('/api/internal', internalRoutes);
 
 // Any /api/* path the routers above didn't match is a 404, not an HTML page.
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
