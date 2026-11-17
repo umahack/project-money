@@ -47,6 +47,42 @@ export function registerVerifyEmail(code, name) {
   return { subject: 'Your Project Money sign-up code', text, html };
 }
 
+export function monthlyReviewEmail({ name, monthLabel, income, needs, wants, save, saveTarget, top3, streak }) {
+  const safeName = String(name || '').replace(/[<>]/g, '').slice(0, 60);
+  const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
+  const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+  const topLines = Array.isArray(top3) ? top3.map((t, i) => `${i + 1}. ${t.category} — ${inr(t.total)}`).join('\n') : '';
+  const topHtml = Array.isArray(top3)
+    ? top3.map((t, i) => `<tr><td style="padding:4px 10px;color:#a1a1aa">${i + 1}</td><td style="padding:4px 10px"><b>${t.category}</b></td><td style="padding:4px 10px;text-align:right">${inr(t.total)}</td></tr>`).join('')
+    : '';
+  const saveHit = Number(save) >= Number(saveTarget || 0);
+  const text =
+    `Project Money\n\n${greeting}\nYour ${monthLabel} wrap-up is in:\n\n` +
+    `Income       ${inr(income)}\n` +
+    `Needs spent  ${inr(needs)}\n` +
+    `Wants spent  ${inr(wants)}\n` +
+    `Saved        ${inr(save)}  ${saveHit ? '✓ target hit' : ''}\n\n` +
+    (topLines ? `Top categories:\n${topLines}\n\n` : '') +
+    (streak ? `Logging streak: ${streak} day${streak === 1 ? '' : 's'} 🔥\n\n` : '') +
+    `Open the app → https://project-money.online\n` +
+    `To unsubscribe, email hello@project-money.online.`;
+  const html = brand(
+    `<p>${greeting}</p>` +
+    `<p>Here's your <b>${monthLabel}</b> wrap-up:</p>` +
+    `<table style="border-collapse:collapse;width:100%;margin:12px 0">` +
+    `<tr><td style="padding:6px 10px">Income</td><td style="padding:6px 10px;text-align:right"><b>${inr(income)}</b></td></tr>` +
+    `<tr><td style="padding:6px 10px">Needs spent</td><td style="padding:6px 10px;text-align:right">${inr(needs)}</td></tr>` +
+    `<tr><td style="padding:6px 10px">Wants spent</td><td style="padding:6px 10px;text-align:right">${inr(wants)}</td></tr>` +
+    `<tr><td style="padding:6px 10px">Saved</td><td style="padding:6px 10px;text-align:right"><b style="color:${saveHit ? '#4ade80' : '#fbbf24'}">${inr(save)}${saveHit ? ' ✓' : ''}</b></td></tr>` +
+    `</table>` +
+    (topHtml ? `<p style="color:#a1a1aa;margin:16px 0 4px">Top categories</p><table style="border-collapse:collapse;width:100%">${topHtml}</table>` : '') +
+    (streak ? `<p style="margin-top:16px">Logging streak: <b>${streak} day${streak === 1 ? '' : 's'}</b> 🔥</p>` : '') +
+    `<p style="margin-top:20px"><a href="https://project-money.online" style="color:#4ade80;font-weight:600">Open Project Money →</a></p>` +
+    `<p style="color:#a1a1aa;font-size:12px;margin-top:20px">To unsubscribe, reply with "unsubscribe" or email <a href="mailto:hello@project-money.online" style="color:#a1a1aa">hello@project-money.online</a>.</p>`
+  );
+  return { subject: `Your ${monthLabel} money wrap-up`, text, html };
+}
+
 export function alreadyRegisteredEmail(name) {
   const safeName = String(name || '').replace(/[<>]/g, '').slice(0, 60);
   const greeting = safeName ? `Hi ${safeName},` : 'Hi,';

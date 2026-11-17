@@ -225,6 +225,63 @@ router.post(
   }
 );
 
+// Logging streak: how many consecutive days (ending today in server TZ)
+// the user has logged at least one expense, plus their longest-ever streak.
+// Computed on the fly from distinct spent_on days — no new table needed.
+router.get('/streak', async (req, res) => {
+  await materializeRecurring(req.user.id);
+  const rows = await db
+    .prepare(
+      `SELECT COALESCE(
+                 spent_on,
+                 substr(datetime(created_at,'+5 hours','+30 minutes'), 1, 10)
+               ) AS day
+         FROM expense_log
+        WHERE user_id = ?
+        GROUP BY day
+        ORDER BY day DESC
+        LIMIT 400`
+    )
+    .all(req.user.id);
+  const days = rows.map((r) => String(r.day));
+  const todayStr = todayISO();
+  const yesterdayStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return todayISO(d);
+  })();
+  let current = 0;
+  if (days[0] === todayStr || days[0] === yesterdayStr) {
+    // Anchor streak to today when today has a log, else to yesterday so a
+    // user who hasn't logged yet today still sees their streak until EOD.
+    let cursor = days[0] === todayStr ? todayStr : yesterdayStr;
+    for (const d of days) {
+      if (d !== cursor) break;
+      current++;
+      const prev = new Date(`${cursor}T00:00:00`);
+      prev.setDate(prev.getDate() - 1);
+      cursor = todayISO(prev);
+    }
+  }
+  // Longest streak: walk the sorted list and count runs of consecutive dates.
+  let longest = 0;
+  let run = 0;
+  let prev = null;
+  const sorted = [...days].sort(); // ascending
+  for (const d of sorted) {
+    if (prev === null) {
+      run = 1;
+    } else {
+      const prevDate = new Date(`${prev}T00:00:00`);
+      prevDate.setDate(prevDate.getDate() + 1);
+      run = todayISO(prevDate) === d ? run + 1 : 1;
+    }
+    if (run > longest) longest = run;
+    prev = d;
+  }
+  res.json({ current, longest, days_logged: days.length });
+});
+
 router.get('/expenses', async (req, res) => {
   await materializeRecurring(req.user.id);
   const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? String(req.query.month) : monthKey();

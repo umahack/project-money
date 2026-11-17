@@ -10,6 +10,7 @@ import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
 import { OnboardingModal } from '../components/OnboardingModal';
 import { TodayStrip } from '../components/TodayStrip';
+import { StreakCard } from '../components/StreakCard';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -272,6 +273,7 @@ export function Dashboard() {
       />
 
       <TodayStrip />
+      <StreakCard />
       <InvitesInbox />
 
       {/* HERO: the plan donut + one big "left to spend/save" number. */}
