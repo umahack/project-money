@@ -11,6 +11,7 @@ import { InvitesInbox } from '../components/InvitesInbox';
 import { OnboardingModal } from '../components/OnboardingModal';
 import { TodayStrip } from '../components/TodayStrip';
 import { StreakCard } from '../components/StreakCard';
+import { QuickActions } from '../components/QuickActions';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
@@ -272,6 +273,7 @@ export function Dashboard() {
         right={salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined}
       />
 
+      <QuickActions />
       <TodayStrip />
       <StreakCard />
       <InvitesInbox />
@@ -369,20 +371,11 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <Card>
-        <h2>💡 Tips for you</h2>
-        <ul className="recs">
-          {ins.recs.map((r, i) => (
-            <motion.li key={r.title + i} className={`rec ${r.level}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-              <span className="rec-icon">{LEVEL_ICON[r.level]}</span>
-              <div>
-                <strong>{r.title}</strong>
-                <p>{r.text}</p>
-              </div>
-            </motion.li>
-          ))}
-        </ul>
-      </Card>
+      {/* Tips moved to the Plan page so the Dashboard stays focused on today's
+          money + the quick-add shortcuts. */}
+      <p className="muted small center" style={{ margin: '0.6rem 0 0' }}>
+        Want personalised tips? <Link to="/plan">See the full plan →</Link>
+      </p>
 
       <OnboardingModal />
     </>
