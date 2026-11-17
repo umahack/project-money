@@ -12,8 +12,15 @@ export type Health = 'empty' | 'excellent' | 'good' | 'tight' | 'critical';
 export interface Insights {
   health: Health;
   emiRatio: number;
-  dailyAllowance: number;
+  dailyAllowance: number;        // flat: (needs+wants) / daysInMonth
+  dailyLeft: number;             // dynamic: (needs+wants - spent) / daysRemaining
+  daysRemaining: number;
   emergencyTarget: number;
+  spentOnNeeds: number;          // sum of expense_log in Needs categories
+  spentOnWants: number;          // total - spentOnNeeds
+  actualSave: number;            // income - emiTotal - total spent (floored at 0)
+  overspentNeeds: number;        // max(0, spent - budget)
+  overspentWants: number;
   recs: Rec[];
 }
 
@@ -21,6 +28,13 @@ const daysThisMonth = (): number => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 };
+const daysRemainingInMonth = (): number => {
+  const d = new Date();
+  return daysThisMonth() - d.getDate() + 1;    // today counts
+};
+
+// Mapping must stay in sync with backend NEEDS set used in the monthly review.
+const NEEDS_CATS = new Set(['Food', 'Groceries', 'Transport', 'Bills', 'Health']);
 
 /** Server tips arrive as plain sentences. Give each a level, title and icon-friendly shape. */
 function fromServerTip(tip: string): Rec {
@@ -37,12 +51,31 @@ function fromServerTip(tip: string): Rec {
  */
 export function buildInsights(plan: Plan, emis: Emi[]): Insights {
   const { income, emiTotal, afterFixed, breakdown } = plan;
+  const spentThisMonth = Number(plan.spentThisMonth ?? 0);
+  const byCategory = plan.byCategory ?? {};
+  // Dynamic needs/wants spending — recomputed every time plan() returns, so
+  // adding an expense reshapes these values on the next load.
+  const spentOnNeeds = Object.entries(byCategory)
+    .filter(([cat]) => NEEDS_CATS.has(cat))
+    .reduce((s, [, v]) => s + Number(v || 0), 0);
+  const spentOnWants = Math.max(0, spentThisMonth - spentOnNeeds);
+  const overspentNeeds = Math.max(0, spentOnNeeds - breakdown.needs);
+  const overspentWants = Math.max(0, spentOnWants - breakdown.wants);
+  const actualSave = Math.max(0, income - emiTotal - spentThisMonth);
+
   if (income <= 0) {
     return {
       health: 'empty',
       emiRatio: 0,
       dailyAllowance: 0,
+      dailyLeft: 0,
+      daysRemaining: daysRemainingInMonth(),
       emergencyTarget: 0,
+      spentOnNeeds: 0,
+      spentOnWants: 0,
+      actualSave: 0,
+      overspentNeeds: 0,
+      overspentWants: 0,
       recs: [
         {
           level: 'info',
@@ -55,13 +88,25 @@ export function buildInsights(plan: Plan, emis: Emi[]): Insights {
 
   const emiRatio = emiTotal / income;
   const dailyAllowance = (breakdown.needs + breakdown.wants) / daysThisMonth();
+  const daysRemaining = Math.max(1, daysRemainingInMonth());
+  const remainingSpendBudget = Math.max(0, (breakdown.needs + breakdown.wants) - spentThisMonth);
+  const dailyLeft = remainingSpendBudget / daysRemaining;
   const emergencyTarget = 6 * (emiTotal + breakdown.needs);
 
+  // Base health on EMI ratio (fixed obligations) and degrade it when actual
+  // spending overshoots the discretionary budget. A 50/30/20 plan is
+  // meaningless if the user has already spent beyond needs+wants.
   let health: Health;
   if (afterFixed <= 0 || emiRatio > 0.6) health = 'critical';
   else if (emiRatio > 0.4) health = 'tight';
   else if (emiRatio > 0.3) health = 'good';
   else health = 'excellent';
+  if (afterFixed > 0 && spentThisMonth > breakdown.needs + breakdown.wants) {
+    // Overspent — knock health down one notch.
+    health = health === 'excellent' ? 'tight'
+           : health === 'good' ? 'tight'
+           : 'critical';
+  }
 
   const recs: Rec[] = [];
   if (afterFixed <= 0) {
@@ -106,5 +151,18 @@ export function buildInsights(plan: Plan, emis: Emi[]): Insights {
       text: 'No insurance payment is listed. Health and term cover protect your savings from one bad event.',
     });
   }
-  return { health, emiRatio, dailyAllowance, emergencyTarget, recs };
+  return {
+    health,
+    emiRatio,
+    dailyAllowance,
+    dailyLeft,
+    daysRemaining,
+    emergencyTarget,
+    spentOnNeeds,
+    spentOnWants,
+    actualSave,
+    overspentNeeds,
+    overspentWants,
+    recs,
+  };
 }

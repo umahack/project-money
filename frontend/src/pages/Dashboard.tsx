@@ -13,6 +13,24 @@ import { TodayStrip } from '../components/TodayStrip';
 import { StreakCard } from '../components/StreakCard';
 import { QuickActions } from '../components/QuickActions';
 
+/** Compact progress pill — "₹X of ₹Y" with a gradient fill clamped to 100%. */
+function SpendBar({ spent, budget, color }: { spent: number; budget: number; color: string }) {
+  const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+  const over = spent > budget && budget > 0;
+  return (
+    <div className="spend-bar" aria-label={`${pct}% of budget used`}>
+      <div
+        className="spend-bar-fill"
+        style={{
+          width: `${pct}%`,
+          background: over ? 'linear-gradient(90deg, #ff5c7c, #e11d48)' : color,
+        }}
+      />
+      <span className={`spend-bar-pct ${over ? 'over' : ''}`}>{pct}%</span>
+    </div>
+  );
+}
+
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
 const HEALTH = {
@@ -278,15 +296,28 @@ export function Dashboard() {
       <StreakCard />
       <InvitesInbox />
 
-      {/* HERO: the plan donut + one big "left to spend/save" number. */}
+      {/* HERO: the plan donut + actual-vs-budget breakdown. */}
       <Card tilt>
         <div className="row between" style={{ flexWrap: 'wrap', gap: '0.6rem' }}>
           <h2 style={{ margin: 0 }}>📊 Your money this month</h2>
           <span className={`pill ${health.cls}`}>{health.label}</span>
         </div>
+        <div className="row" style={{ gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.2rem', alignItems: 'baseline' }}>
+          <small className="muted">Monthly pay</small>
+          <strong className="mono">{inr(plan.income)}</strong>
+          <button
+            type="button"
+            className="btn ghost sm"
+            style={{ padding: '0.2rem 0.6rem', minHeight: 'auto', fontSize: '0.78rem' }}
+            onClick={() => document.getElementById('pay-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            title="Jump to the pay form below"
+          >
+            ✏️ Edit
+          </button>
+        </div>
         {plan.afterFixed > 0 ? (
           <>
-            <div className="plan-grid">
+            <div className="plan-grid" style={{ marginTop: '0.6rem' }}>
               <Donut segments={segments} centerTop="To save" centerBottom={inr(plan.breakdown.save)} />
               <ul className="legend">
                 {segments.map((s) => (
@@ -299,10 +330,46 @@ export function Dashboard() {
                 ))}
               </ul>
             </div>
-            <div className="daily" style={{ marginTop: '0.6rem' }}>
-              <span>Safe to spend per day</span>
-              <Money value={Math.round(ins.dailyAllowance)} className="big accent" />
-              <small className="muted">on food, travel and fun · {inr(plan.spentThisMonth ?? 0)} spent so far</small>
+
+            {/* ACTUAL vs BUDGET — reshapes every time an expense is added. */}
+            <div className="actual-vs-budget">
+              <h3 style={{ margin: '0 0 0.4rem', fontSize: '0.95rem' }}>Spent so far</h3>
+              <ul className="list" style={{ gap: '0.5rem' }}>
+                <li className="list-item">
+                  <span className="avatar">🍔</span>
+                  <div className="grow">
+                    <strong>Needs</strong>
+                    <small className="muted">{inr(ins.spentOnNeeds)} of {inr(plan.breakdown.needs)}</small>
+                  </div>
+                  <SpendBar spent={ins.spentOnNeeds} budget={plan.breakdown.needs} color="var(--c-need)" />
+                </li>
+                <li className="list-item">
+                  <span className="avatar">🎮</span>
+                  <div className="grow">
+                    <strong>Wants</strong>
+                    <small className="muted">{inr(ins.spentOnWants)} of {inr(plan.breakdown.wants)}</small>
+                  </div>
+                  <SpendBar spent={ins.spentOnWants} budget={plan.breakdown.wants} color="var(--c-want)" />
+                </li>
+                <li className="list-item">
+                  <span className="avatar">💰</span>
+                  <div className="grow">
+                    <strong>Save so far</strong>
+                    <small className="muted">target {inr(plan.breakdown.save)}</small>
+                  </div>
+                  <b className="mono" style={{ color: ins.actualSave >= plan.breakdown.save ? 'var(--c-save)' : 'var(--warn)' }}>
+                    {inr(ins.actualSave)}
+                  </b>
+                </li>
+              </ul>
+            </div>
+
+            <div className="daily" style={{ marginTop: '0.8rem' }}>
+              <span>Left to spend per day</span>
+              <Money value={Math.max(0, Math.round(ins.dailyLeft))} className="big accent" />
+              <small className="muted">
+                {ins.daysRemaining} day{ins.daysRemaining === 1 ? '' : 's'} left · {inr(plan.spentThisMonth ?? 0)} spent so far
+              </small>
             </div>
             <p className="small" style={{ marginTop: '0.4rem' }}>
               <Link to="/plan">See line-by-line plan →</Link> · <Link to="/spending">Log today's spend →</Link>
@@ -316,7 +383,8 @@ export function Dashboard() {
       {/* QUICK UPDATE: salary + add-bill side-by-side, compact. */}
       <div className="grid two">
         <Card>
-          <h2>💰 Monthly pay</h2>
+          <h2 id="pay-form">💰 Monthly pay</h2>
+          <p className="muted small" style={{ marginTop: 0 }}>Change anytime; the plan updates with your next refresh.</p>
           <form onSubmit={saveSalary} className="salary-form">
             <div className="input-prefix">
               <span>₹</span>

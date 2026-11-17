@@ -949,6 +949,35 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   .qa-label { font-size: 0.72rem; }
 }
 
+/* ============ Spend bar (actual vs budget) ============ */
+.spend-bar {
+  position: relative;
+  width: 140px; height: 20px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.spend-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease, background 0.3s;
+}
+.spend-bar-pct {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 0.72rem; font-weight: 700;
+  color: var(--text);
+  mix-blend-mode: difference;
+}
+.spend-bar-pct.over { color: #ffffff; mix-blend-mode: normal; }
+:root[data-theme='light'] .spend-bar { background: rgba(26,26,26,0.08); }
+.actual-vs-budget { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+@media (max-width: 520px) {
+  .spend-bar { width: 90px; height: 16px; }
+  .spend-bar-pct { font-size: 0.65rem; }
+}
+
 /* ============ Month-progress strip (inline, below QuickActions) ============ */
 .month-strip {
   margin: 0 0 1rem;
