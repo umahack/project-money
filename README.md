@@ -51,19 +51,32 @@ Requires Node ≥ 20.
 ```bash
 # Terminal 1 — backend
 cd backend
-cp .env.example .env     # set JWT_SECRET, TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
-                         # (and optionally RESEND_API_KEY, MAIL_FROM, ADMIN_EMAILS)
+cp .env.local.example .env   # fill in TURSO_* and ADMIN_EMAILS
 npm install
-npm run dev              # http://localhost:4000
+npm run dev                  # http://localhost:4000
 
 # Terminal 2 — frontend
 cd frontend
-npm install              # VITE_API_BASE defaults to http://localhost:4000
-npm run dev              # http://localhost:5173
+cp .env.local.example .env.local
+npm install
+npm run dev                  # http://localhost:5173
 ```
 
 Without `RESEND_API_KEY` the mailer logs OTP codes to stdout so dev still works
-end-to-end.
+end-to-end — just copy the 6-digit code from the terminal into the UI.
+
+### Create a staging Turso DB (one-time, free)
+
+Keep local experiments far away from prod data:
+
+```bash
+turso db create project-money-staging
+turso db show project-money-staging --url     # paste into backend/.env
+turso db tokens create project-money-staging --expiration none
+```
+
+Point `backend/.env` at the staging DB. The schema is created automatically
+on first API hit. Prod stays untouched.
 
 ## Deploy
 
