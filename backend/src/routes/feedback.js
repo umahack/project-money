@@ -13,6 +13,15 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Lets the client decide whether to show the "Skip" button — only users
+// who have already submitted at least one feedback get to skip on sign-out.
+router.get('/mine', authRequired, async (req, res) => {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM feedback WHERE user_id = ? OR email = ?')
+    .get(req.user.id, req.user.email);
+  res.json({ count: Number(row?.n ?? 0) });
+});
+
 router.post(
   '/',
   authRequired,
