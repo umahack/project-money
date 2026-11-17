@@ -664,10 +664,24 @@ router.delete(
     if (!row) return res.status(401).json({ error: 'Session expired' });
     const ok = await bcrypt.compare(req.body.currentPassword, row.password_hash);
     if (!ok) return res.status(401).json({ error: 'Password is incorrect.' });
+    // Protect the system from an admin deleting themselves and leaving no
+    // one who can manage it. Mirrors the guard in /admin/users/:id.
+    if (row.is_admin) {
+      const admins = await db
+        .prepare('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1')
+        .get();
+      if (Number(admins.n ?? 0) <= 1) {
+        return res.status(400).json({
+          error: 'You are the last admin. Promote another user before deleting this account.',
+        });
+      }
+    }
     const uid = req.user.id;
     // Explicit cleanup (don't rely on PRAGMA foreign_keys being on).
     const tx = [
-      ['DELETE FROM trip_expenses WHERE paid_by_user_id = ?', [uid]],
+      // trip_expenses rows reference the payer by name string, not user_id,
+      // so there is nothing to delete directly here. They are rolled up when
+      // the parent trip is deleted below via ON DELETE CASCADE.
       ['DELETE FROM trip_members WHERE user_id = ?', [uid]],
       ['DELETE FROM trip_invites WHERE inviter_id = ? OR invitee_id = ?', [uid, uid]],
       // trips.user_id uses ON DELETE SET NULL; we also delete trips the user owned

@@ -135,8 +135,8 @@ export function Dashboard() {
             <Skeleton w={180} h={22} />
             <Skeleton w={90} h={22} radius={999} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '1rem', alignItems: 'center' }}>
-            <Skeleton w={160} h={160} radius={999} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 160px) minmax(0, 1fr)', gap: '1rem', alignItems: 'center' }}>
+            <Skeleton w="100%" h={160} radius={999} style={{ aspectRatio: '1 / 1', maxWidth: 160 }} />
             <div style={{ display: 'grid', gap: '0.6rem' }}>
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -171,6 +171,11 @@ export function Dashboard() {
   const firstName = user?.name.split(' ')[0] ?? 'there';
   const hasPay = plan.income > 0;
   const hasBills = emis.length > 0;
+  // Users whose life has no recurring bills can declare that once and skip
+  // Step 2 for the rest of the session.
+  const skippedBills = (() => {
+    try { return sessionStorage.getItem('pm_bills_skipped') === '1'; } catch { return false; }
+  })();
 
   // ----- Brand-new user: single hero card that walks them through step 1. -----
   if (!hasPay) {
@@ -205,8 +210,8 @@ export function Dashboard() {
     );
   }
 
-  // ----- Pay set, no bills yet: nudge Step 2. -----
-  if (!hasBills) {
+  // ----- Pay set, no bills yet, and user hasn't explicitly skipped. -----
+  if (!hasBills && !skippedBills) {
     return (
       <>
         <PageTitle
@@ -238,7 +243,14 @@ export function Dashboard() {
               <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="e.g. 12,500" maxLength={16} />
             </Field>
             <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
-              <button className="btn ghost" type="button" onClick={() => void load()}>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => {
+                  try { sessionStorage.setItem('pm_bills_skipped', '1'); } catch { /* ignore */ }
+                  void load();
+                }}
+              >
                 No bills — skip
               </button>
               <button className="btn primary" type="submit">+ Add bill</button>

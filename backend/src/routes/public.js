@@ -60,12 +60,21 @@ router.get('/trips/:token', publicLimiter, async (req, res) => {
 
 function computeSettlement(members, expenses) {
   const bal = {};
-  for (const m of members) bal[m.name] = 0;
+  const memberNames = new Set();
+  for (const m of members) {
+    bal[m.name] = 0;
+    memberNames.add(m.name);
+  }
   for (const e of expenses) {
-    const totalShare = e.split.reduce((a, b) => a + b.share, 0) || 1;
-    bal[e.payer] = (bal[e.payer] || 0) + e.amount;
+    const totalShare = e.split.reduce((a, b) => a + Math.max(0, Number(b.share) || 0), 0);
+    if (!(e.amount > 0) || totalShare <= 0) continue;
+    if (!memberNames.has(e.payer)) continue;
+    bal[e.payer] += e.amount;
     for (const s of e.split) {
-      bal[s.name] = (bal[s.name] || 0) - (e.amount * s.share) / totalShare;
+      if (!memberNames.has(s.name)) continue;
+      const share = Math.max(0, Number(s.share) || 0);
+      if (share <= 0) continue;
+      bal[s.name] -= (e.amount * share) / totalShare;
     }
   }
   const creditors = [];

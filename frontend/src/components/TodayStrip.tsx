@@ -10,10 +10,16 @@ export function TodayStrip() {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    // Tick every 30 s — enough for the clock and the month-progress bar to feel
-    // live without burning cycles when the tab is open all day.
+    // Tick every 30 s so the clock and month-progress bar stay live.
     const id = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(id);
+    // Mobile browsers pause timers in background tabs; snap to real time
+    // the moment the tab is foregrounded again.
+    const onVis = () => { if (document.visibilityState === 'visible') setNow(new Date()); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   const dayNum = now.getDate();

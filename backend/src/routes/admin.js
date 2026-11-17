@@ -115,7 +115,9 @@ router.delete('/users/:id', async (req, res) => {
   // Explicit cleanup across every user-owning table so this works regardless
   // of whether PRAGMA foreign_keys is on under libSQL. Mirrors /auth/account.
   const tx = [
-    ['DELETE FROM trip_expenses WHERE paid_by_user_id = ?', [id]],
+    // trip_expenses rows reference the payer by name string, not user_id,
+    // so there is nothing to delete directly here. They are rolled up when
+    // the parent trip is deleted below via ON DELETE CASCADE.
     ['DELETE FROM trip_members WHERE user_id = ?', [id]],
     ['DELETE FROM trip_invites WHERE inviter_id = ? OR invitee_id = ?', [id, id]],
     ['DELETE FROM trips WHERE user_id = ?', [id]],

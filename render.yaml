@@ -10,6 +10,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Pin the server timezone to IST so monthKey/day-of-month/CSV dates
+      # match the frontend (which reads the user's local clock). Prevents the
+      # 5h30m month-boundary mismatch between IST users and UTC server.
+      - key: TZ
+        value: Asia/Kolkata
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN

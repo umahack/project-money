@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
 import { Card } from './ui';
 import { inr } from '../money';
-import { errText, useToast } from '../state';
+import { errText, useAuth, useToast } from '../state';
 import type { Invite } from '../types';
 
 export function InvitesInbox({ onCountChange }: { onCountChange?: (n: number) => void }) {
@@ -88,8 +88,15 @@ export function InvitesInbox({ onCountChange }: { onCountChange?: (n: number) =>
 
 // Headless hook: just the pending count, for a nav badge.
 export function usePendingInvitesCount() {
+  const { user } = useAuth();
   const [count, setCount] = useState<number>(0);
   useEffect(() => {
+    // Don't poll while signed out — spam of 401s is wasteful and can hide
+    // legitimate 'auth:expired' signals.
+    if (!user) {
+      setCount(0);
+      return;
+    }
     let alive = true;
     const load = async () => {
       try {
@@ -105,7 +112,7 @@ export function usePendingInvitesCount() {
       alive = false;
       clearInterval(t);
     };
-  }, []);
+  }, [user]);
   return count;
 }
 

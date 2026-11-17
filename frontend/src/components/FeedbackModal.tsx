@@ -31,7 +31,11 @@ export function FeedbackModal({ open, onCancel, onDone }: { open: boolean; onCan
     setPriorCount(null);
     api.get<{ count: number }>('/feedback/mine')
       .then((r) => setPriorCount(Number(r.count ?? 0)))
-      .catch(() => setPriorCount(0));
+      // If the API is cold or unreachable, don't trap the user on the
+      // mandatory path — fall back to the lenient "skippable" mode so they
+      // can still sign out. The /feedback/mine check is UX only; no security
+      // guarantee depends on it.
+      .catch(() => setPriorCount(1));
   }, [open]);
 
   const canSkip = (priorCount ?? 0) > 0;

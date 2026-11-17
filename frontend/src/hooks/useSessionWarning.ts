@@ -43,11 +43,13 @@ export function useSessionWarning(warnBeforeMs = 5 * 60 * 1000) {
     };
     schedule();
     const onChange = () => schedule();
+    const onExpired = () => setWarn(false);
     window.addEventListener('auth:changed', onChange);
-    window.addEventListener('auth:expired', () => setWarn(false));
+    window.addEventListener('auth:expired', onExpired);
     return () => {
       if (timer.current) clearTimeout(timer.current);
       window.removeEventListener('auth:changed', onChange);
+      window.removeEventListener('auth:expired', onExpired);
     };
   }, [warnBeforeMs]);
 

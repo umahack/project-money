@@ -193,7 +193,7 @@ export function Shell() {
           <footer className="foot muted tiny center">
             Project Money · UI v2 · Crafted with ♥ by <span className="signature">Umakanth</span>
             <br />
-            <a className="link" href="/privacy">Privacy</a> · <a className="link" href="/terms">Terms</a>
+            <NavLink className="link" to="/privacy">Privacy</NavLink> · <NavLink className="link" to="/terms">Terms</NavLink>
           </footer>
         </main>
       </div>

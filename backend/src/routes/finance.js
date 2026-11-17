@@ -36,15 +36,24 @@ async function materializeRecurring(userId) {
     if (Number(r.day_of_month) > dayToday) continue;
     const spentOn = `${month}-${String(Math.min(Number(r.day_of_month), 28)).padStart(2, '0')}`;
     try {
+      // Claim this (recurring_id, month) slot FIRST via a conditional UPDATE.
+      // Only one concurrent caller will see `changes > 0`; the others see 0
+      // and skip the insert — prevents the double-materialize race when the
+      // Dashboard fetches /plan, /recurring, /salary in parallel on month-1.
+      const claim = await db
+        .prepare(
+          `UPDATE recurring_expenses
+              SET last_logged_month = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ? AND (last_logged_month IS NULL OR last_logged_month != ?)`
+        )
+        .run(month, r.id, userId, month);
+      if (!claim.changes) continue;
       await db
         .prepare(
           `INSERT INTO expense_log (user_id, month, category, amount, note, spent_on)
            VALUES (?, ?, ?, ?, ?, ?)`
         )
         .run(userId, month, r.category, Number(r.amount), `${r.label} (recurring)`, spentOn);
-      await db
-        .prepare('UPDATE recurring_expenses SET last_logged_month = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run(month, r.id);
     } catch (e) {
       console.error('[recurring-materialize] skipped id', r.id, e?.message);
     }
