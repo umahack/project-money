@@ -119,6 +119,27 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   return (
     <>
       <Background />
+      <header className="auth-topbar">
+        <Link to="/login" className="brand" aria-label="Project Money home">
+          <span className="brand-mark">₹</span>
+          <span>Project&nbsp;Money</span>
+          <span
+            className="beta-badge"
+            title="This app is in active development — features may change and bugs are expected."
+            aria-label="Beta — under development"
+          >
+            BETA
+          </span>
+        </Link>
+        <div className="top-actions">
+          <Link to="/login" className={`btn sm ${isLogin ? 'ghost on' : 'ghost'}`} aria-current={isLogin ? 'page' : undefined}>
+            Sign in
+          </Link>
+          <Link to="/register" className={`btn sm ${!isLogin ? 'primary' : 'ghost'}`} aria-current={!isLogin ? 'page' : undefined}>
+            Sign up
+          </Link>
+        </div>
+      </header>
       <div className="auth-wrap">
         <LandingPreview />
         <motion.div id="auth-card" initial={{ opacity: 0, y: 30, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', damping: 20 }}>
@@ -127,11 +148,6 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               <motion.span className="brand-mark big" animate={{ rotateY: 360 }} transition={{ repeat: Infinity, duration: 5, ease: 'linear' }}>₹</motion.span>
               <h1>{title}</h1>
               <p className="muted">{subtitle}</p>
-            </div>
-
-            <div className="segmented" role="tablist">
-              <Link role="tab" aria-selected={isLogin} className={isLogin ? 'on' : ''} to="/login">Sign in</Link>
-              <Link role="tab" aria-selected={!isLogin} className={!isLogin ? 'on' : ''} to="/register">Create account</Link>
             </div>
 
             <AnimatePresence mode="wait">
@@ -147,6 +163,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   </motion.button>
                   <p className="muted small center" style={{ marginTop: '0.6rem' }}>
                     <Link className="link" to="/forgot-password">Forgot password?</Link>
+                  </p>
+                  <p className="muted small center" style={{ marginTop: '0.4rem' }}>
+                    New here? <Link className="link" to="/register">Create an account</Link>
                   </p>
                 </motion.form>
               )}
