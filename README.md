@@ -81,15 +81,23 @@ The repo ships with `render.yaml` describing two services (API + static web).
 4. Add a custom domain (optional). Hostinger apex DNS: `ALIAS @ → <web-url>`,
    `CNAME www → <web-url>`.
 
-### Nightly database backups
+### Scheduled jobs
 
-GitHub Actions runs `.github/workflows/turso-backup.yml` at 18:00 UTC. Add
-these repo secrets to enable:
+Both scheduled jobs run on **Render Cron**, declared in `render.yaml` — no
+secrets live on GitHub, no workflow files to maintain:
 
-- `TURSO_DB_NAME` — your Turso DB name
-- `TURSO_AUTH_TOKEN` — a token with read access
+- **`project-money-monthly-review`** — fires on the 1st of each month at
+  09:00 IST and sends every active user a wrap-up email via Resend. Reads
+  the same env vars as the API (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+  `RESEND_API_KEY`, `MAIL_FROM`). Idempotent per `(user_id, month)` via a
+  `monthly_review_log` table.
 
-Backups land as 90-day retained workflow artifacts.
+### Backups
+
+Turso provides **automatic point-in-time backups** on every plan,
+including the free tier — 24-hour snapshots retained for 30 days. No
+cron / dump script needed. To restore, run `turso db restore <db>
+--timestamp <ISO>` from the Turso CLI.
 
 ## Security notes
 

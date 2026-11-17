@@ -34,6 +34,29 @@ services:
     #   mountPath: /opt/render/project/src/backend
     #   sizeGB: 1
 
+  # Scheduled job — runs on the 1st of each month at 03:30 UTC (09:00 IST).
+  # Walks every user and sends a monthly wrap-up email via Resend. Uses the
+  # same secrets as the API service; nothing lives on GitHub.
+  - type: cron
+    name: project-money-monthly-review
+    runtime: node
+    rootDir: backend
+    plan: free
+    schedule: "30 3 1 * *"
+    buildCommand: npm install
+    startCommand: node scripts/send-monthly-review.js
+    envVars:
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: TZ
+        value: Asia/Kolkata
+
   - type: web
     name: project-money-web
     runtime: static
