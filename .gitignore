@@ -6,6 +6,9 @@ data.sqlite
 data.sqlite-journal
 data.sqlite-wal
 data.sqlite-shm
+local-dev.sqlite
+local-dev.sqlite-*
+*.sqlite-journal
 dist
 .DS_Store
 
