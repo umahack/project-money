@@ -46,14 +46,29 @@ services:
     buildCommand: npm install
     startCommand: node scripts/send-monthly-review.js
     envVars:
+      # Inherit the same values already set on project-money-api — no
+      # duplicate secret entry, and rotating the API's token rotates
+      # the cron's token too.
       - key: TURSO_DATABASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: project-money-api
+          envVarKey: TURSO_DATABASE_URL
       - key: TURSO_AUTH_TOKEN
-        sync: false
+        fromService:
+          type: web
+          name: project-money-api
+          envVarKey: TURSO_AUTH_TOKEN
       - key: RESEND_API_KEY
-        sync: false
+        fromService:
+          type: web
+          name: project-money-api
+          envVarKey: RESEND_API_KEY
       - key: MAIL_FROM
-        sync: false
+        fromService:
+          type: web
+          name: project-money-api
+          envVarKey: MAIL_FROM
       - key: TZ
         value: Asia/Kolkata
 
