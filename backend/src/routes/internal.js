@@ -27,18 +27,21 @@ function requireCronSecret(req, res, next) {
 }
 
 // Light rate limit — these endpoints are called at most monthly in prod.
-// A tighter cap means an attacker who guesses the secret can still only
-// trigger a dozen runs an hour before being blocked.
+// Caps authenticated callers only (unauthenticated attempts shed early via
+// requireCronSecret), so a probe can't burn the legitimate scheduler's
+// quota from a shared cloud-provider IP range.
 const cronLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 12,
   standardHeaders: true,
   legacyHeaders: false,
+  skipFailedRequests: true,
   message: { error: 'Cron endpoint rate-limited.' },
 });
 
-router.use(cronLimiter);
+// Order matters: shed wrong-secret traffic before it touches the limiter.
 router.use(requireCronSecret);
+router.use(cronLimiter);
 
 router.post('/cron/monthly-review', async (req, res) => {
   const dry = req.query?.dry === '1' || req.body?.dry === true;

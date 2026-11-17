@@ -26,19 +26,35 @@ function copyFor(n: number): string {
   return `${n}-day streak — habit-forming.`;
 }
 
+type State = { kind: 'loading' } | { kind: 'ok'; data: StreakRes } | { kind: 'err' };
+
 export function StreakCard() {
-  const [data, setData] = useState<StreakRes | null>(null);
+  const [state, setState] = useState<State>({ kind: 'loading' });
 
   useEffect(() => {
     let alive = true;
-    api.get<StreakRes>('/finance/streak')
-      .then((r) => { if (alive) setData(r); })
-      .catch(() => { /* badge is best-effort */ });
+    let attempts = 0;
+    const fetchStreak = () => {
+      api.get<StreakRes>('/finance/streak')
+        .then((r) => { if (alive) setState({ kind: 'ok', data: r }); })
+        .catch(() => {
+          if (!alive) return;
+          // One quiet retry (API free-tier cold start can take 20-30s).
+          if (attempts < 1) {
+            attempts++;
+            setTimeout(fetchStreak, 4000);
+          } else {
+            setState({ kind: 'err' });
+          }
+        });
+    };
+    fetchStreak();
     return () => { alive = false; };
   }, []);
 
-  if (!data) return null;
-  const { current, longest } = data;
+  if (state.kind === 'loading') return null;
+  if (state.kind === 'err') return null; // keep card absent rather than nag; next mount retries
+  const { current, longest } = state.data;
 
   return (
     <Card>

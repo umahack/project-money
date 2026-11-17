@@ -228,8 +228,10 @@ router.post(
 // Logging streak: how many consecutive days (ending today in server TZ)
 // the user has logged at least one expense, plus their longest-ever streak.
 // Computed on the fly from distinct spent_on days — no new table needed.
+// Intentionally skips materializeRecurring; the Dashboard's /plan call
+// handles that, so a recurring auto-log counts toward the streak on the
+// next page load. Keeps this endpoint read-only and cheap.
 router.get('/streak', async (req, res) => {
-  await materializeRecurring(req.user.id);
   const rows = await db
     .prepare(
       `SELECT COALESCE(
@@ -258,7 +260,10 @@ router.get('/streak', async (req, res) => {
     for (const d of days) {
       if (d !== cursor) break;
       current++;
-      const prev = new Date(`${cursor}T00:00:00`);
+      // Build previous day via Date components (TZ-safe) rather than parsing
+      // "YYYY-MM-DDT00:00:00", which Node interprets in local TZ.
+      const [y, m, dd] = cursor.split('-').map(Number);
+      const prev = new Date(y, m - 1, dd);
       prev.setDate(prev.getDate() - 1);
       cursor = todayISO(prev);
     }
@@ -272,7 +277,8 @@ router.get('/streak', async (req, res) => {
     if (prev === null) {
       run = 1;
     } else {
-      const prevDate = new Date(`${prev}T00:00:00`);
+      const [py, pm, pd] = prev.split('-').map(Number);
+      const prevDate = new Date(py, pm - 1, pd);
       prevDate.setDate(prevDate.getDate() + 1);
       run = todayISO(prevDate) === d ? run + 1 : 1;
     }

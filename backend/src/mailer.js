@@ -48,12 +48,24 @@ export function registerVerifyEmail(code, name) {
 }
 
 export function monthlyReviewEmail({ name, monthLabel, income, needs, wants, save, saveTarget, top3, streak }) {
-  const safeName = String(name || '').replace(/[<>]/g, '').slice(0, 60);
+  // User-provided strings get full HTML entity-escaping before landing in
+  // any HTML context (text node OR attribute value).
+  const esc = (s) => String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const safeName = esc(name).slice(0, 60);
   const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
-  const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+  const inr = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '₹0';
+    return '₹' + v.toLocaleString('en-IN');
+  };
   const topLines = Array.isArray(top3) ? top3.map((t, i) => `${i + 1}. ${t.category} — ${inr(t.total)}`).join('\n') : '';
   const topHtml = Array.isArray(top3)
-    ? top3.map((t, i) => `<tr><td style="padding:4px 10px;color:#a1a1aa">${i + 1}</td><td style="padding:4px 10px"><b>${t.category}</b></td><td style="padding:4px 10px;text-align:right">${inr(t.total)}</td></tr>`).join('')
+    ? top3.map((t, i) => `<tr><td style="padding:4px 10px;color:#a1a1aa">${i + 1}</td><td style="padding:4px 10px"><b>${esc(t.category)}</b></td><td style="padding:4px 10px;text-align:right">${inr(t.total)}</td></tr>`).join('')
     : '';
   const saveHit = Number(save) >= Number(saveTarget || 0);
   const text =
@@ -68,7 +80,7 @@ export function monthlyReviewEmail({ name, monthLabel, income, needs, wants, sav
     `To unsubscribe, email hello@project-money.online.`;
   const html = brand(
     `<p>${greeting}</p>` +
-    `<p>Here's your <b>${monthLabel}</b> wrap-up:</p>` +
+    `<p>Here's your <b>${esc(monthLabel)}</b> wrap-up:</p>` +
     `<table style="border-collapse:collapse;width:100%;margin:12px 0">` +
     `<tr><td style="padding:6px 10px">Income</td><td style="padding:6px 10px;text-align:right"><b>${inr(income)}</b></td></tr>` +
     `<tr><td style="padding:6px 10px">Needs spent</td><td style="padding:6px 10px;text-align:right">${inr(needs)}</td></tr>` +

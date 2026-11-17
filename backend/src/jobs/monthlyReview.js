@@ -49,7 +49,11 @@ async function computeStreakFor(userId) {
   for (const d of days) {
     if (d !== cursor) break;
     streak++;
-    const prev = new Date(`${cursor}T00:00:00`);
+    // Build the previous day without string parsing — avoids relying on the
+    // host TZ to interpret `YYYY-MM-DDT00:00:00`. Works in any TZ including
+    // local dev where the TZ env may not be pinned.
+    const [y, m, dd] = cursor.split('-').map(Number);
+    const prev = new Date(y, m - 1, dd);
     prev.setDate(prev.getDate() - 1);
     cursor = todayISO(prev);
   }
