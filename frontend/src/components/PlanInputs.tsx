@@ -82,6 +82,32 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
     } catch (err) { toast('err', errText(err)); }
   }
 
+  // Inline edit state: which emi id is in edit mode, and its draft fields.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState<string>('EMI');
+
+  function startEdit(c: Emi) {
+    setEditingId(c.id);
+    setEditLabel(c.label);
+    setEditAmount(amountToInput(c.amount));
+    setEditCategory(c.category);
+  }
+  function cancelEdit() { setEditingId(null); }
+  async function saveEdit(id: number) {
+    const value = parseAmount(editAmount);
+    if (!editLabel.trim()) return toast('err', 'Name required');
+    if (value === null || value < 0) return toast('err', 'Invalid amount');
+    try {
+      await api.patch(`/finance/emis/${id}`, { label: editLabel.trim(), amount: value, category: editCategory });
+      setEditingId(null);
+      await load();
+      onChange?.();
+      toast('ok', 'Bill updated');
+    } catch (err) { toast('err', errText(err)); }
+  }
+
   const payAmount = parseAmount(salary) ?? 0;
   const emiTotal = emis.reduce((s, e) => s + e.amount, 0);
   const leftOver = Math.max(payAmount - emiTotal, 0);
@@ -130,14 +156,53 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
         <ul className="list">
           <AnimatePresence initial={false}>
             {emis.map((c) => (
-              <motion.li key={c.id} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40 }} className="list-item hoverable">
-                <span className="avatar">{CAT_ICON[c.category] ?? '📌'}</span>
-                <div className="grow">
-                  <strong>{c.label}</strong>
-                  <small className="muted">{c.category}</small>
-                </div>
-                <b className="mono">{inr(c.amount)}</b>
-                <button className="icon-btn danger" aria-label={`Delete ${c.label}`} onClick={() => void remove(c.id)}>🗑️</button>
+              <motion.li
+                key={c.id}
+                layout
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 40 }}
+                className="list-item hoverable"
+              >
+                {editingId === c.id ? (
+                  <>
+                    <span className="avatar">✏️</span>
+                    <div className="grow" style={{ display: 'grid', gap: '0.3rem' }}>
+                      <input
+                        value={editLabel}
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        maxLength={60}
+                        placeholder="Name"
+                      />
+                      <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)}>
+                          {EMI_CATEGORIES.map((cat) => <option key={cat}>{cat}</option>)}
+                        </select>
+                        <input
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="₹/month"
+                          maxLength={16}
+                          style={{ flex: 1, minWidth: 100 }}
+                        />
+                      </div>
+                    </div>
+                    <button className="btn primary sm" onClick={() => void saveEdit(c.id)}>Save</button>
+                    <button className="btn ghost sm" onClick={cancelEdit}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="avatar">{CAT_ICON[c.category] ?? '📌'}</span>
+                    <div className="grow">
+                      <strong>{c.label}</strong>
+                      <small className="muted">{c.category}</small>
+                    </div>
+                    <b className="mono">{inr(c.amount)}</b>
+                    <button className="icon-btn" title={`Edit ${c.label}`} aria-label={`Edit ${c.label}`} onClick={() => startEdit(c)}>✏️</button>
+                    <button className="icon-btn danger" aria-label={`Delete ${c.label}`} onClick={() => void remove(c.id)}>🗑️</button>
+                  </>
+                )}
               </motion.li>
             ))}
           </AnimatePresence>

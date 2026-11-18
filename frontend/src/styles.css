@@ -209,7 +209,7 @@ a { color: var(--accent); }
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   padding: 0.7rem clamp(0.8rem, 3vw, 2rem);
-  padding-top: max(0.7rem, env(safe-area-inset-top));
+  padding-top: max(0.7rem, env(safe-area-inset-top, 44px));
   backdrop-filter: blur(18px) saturate(140%);
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   border-bottom: 1px solid var(--border);
@@ -927,7 +927,10 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   padding: 0.7rem clamp(0.8rem, 3vw, 2rem);
-  padding-top: max(0.7rem, env(safe-area-inset-top));
+  /* On Android 15 edge-to-edge or iPhone notch, reserve space for the
+     status bar + camera cutout. 44px is iOS Dynamic Island height;
+     env(safe-area-inset-top) picks up actual device inset when supported. */
+  padding-top: max(0.7rem, env(safe-area-inset-top, 44px));
   backdrop-filter: blur(18px) saturate(140%);
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   border-bottom: 1px solid var(--border);
@@ -950,6 +953,10 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   .auth-topbar { padding: 0.55rem 0.75rem; gap: 0.4rem; }
   .auth-topbar .btn.sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
   .auth-topbar .beta-badge { display: none; }
+  /* On narrow phones, the brand's "Project Money" wordmark can push the
+     CTAs off-screen. Shrink the brand to just the ₹ mark here. */
+  .auth-topbar .brand span:nth-child(2) { display: none; }
+  .auth-topbar .top-actions { gap: 0.3rem; flex-shrink: 0; }
 }
 
 /* ============ Quick Actions ============ */

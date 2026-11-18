@@ -121,6 +121,38 @@ router.get('/emis', async (req, res) => {
   res.json({ emis: rows });
 });
 
+// Inline edit — change label / amount / category on an existing bill without
+// deleting and re-adding. Partial updates allowed; only sent fields are
+// touched. Scoped to the caller's own rows.
+router.patch(
+  '/emis/:id',
+  [
+    body('label').optional().isString().trim().isLength({ min: 1, max: 60 }),
+    body('amount').optional().isFloat({ min: 0, max: 1e12 }),
+    body('category').optional().isString().isIn(['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other']),
+  ],
+  async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    const owned = await db.prepare('SELECT 1 AS ok FROM emis WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    if (!owned) return res.status(404).json({ error: 'Not found' });
+    const sets = [];
+    const args = [];
+    if (typeof req.body.label === 'string') { sets.push('label = ?'); args.push(req.body.label.trim()); }
+    if (req.body.amount != null) { sets.push('amount = ?'); args.push(Number(req.body.amount)); }
+    if (typeof req.body.category === 'string') { sets.push('category = ?'); args.push(req.body.category); }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
+    args.push(id, req.user.id);
+    await db.prepare(`UPDATE emis SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...args);
+    const row = await db
+      .prepare('SELECT id, label, amount, category FROM emis WHERE id = ?')
+      .get(id);
+    res.json({ ok: true, emi: row });
+  }
+);
+
 router.delete('/emis/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });

@@ -70,10 +70,15 @@ app.use(cors({ origin: corsOrigin, credentials: false }));
 app.use(express.json({ limit: '64kb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
+// Global IP throttle. 120/min protects prod (many users, each with their
+// own IP). On a single-user local box the whole frontend's traffic hits
+// one IP and burns through 120 in seconds — raise the cap there so local
+// dev isn't blocked. Per-endpoint limiters (login, OTP sends, etc.) still
+// enforce their tighter rules in both envs.
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
-    max: 120,
+    max: process.env.NODE_ENV === 'production' ? 120 : 2000,
     standardHeaders: true,
     legacyHeaders: false,
   })

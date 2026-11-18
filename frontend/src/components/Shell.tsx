@@ -33,12 +33,12 @@ const TABS = [
   { to: '/', label: 'Home', icon: '🏠', end: true },
   { to: '/spending', label: 'Spending', icon: '📊', end: false },
   { to: '/plan', label: 'Plan', icon: '🧾', end: false },
-  { to: '/recurring', label: 'Recurring', icon: '🔁', end: false },
   { to: '/goals', label: 'Goals', icon: '🎯', end: false },
   { to: '/trips', label: 'Trips', icon: '✈️', end: false },
   { to: '/settings', label: 'Settings', icon: '⚙️', end: false },
 ];
-// Admin + Arcade are appended conditionally below. Keep this list focused.
+// Admin tabs are appended conditionally below. Recurring was merged into
+// Plan's "Monthly bills" and Arcade was hidden to reduce nav clutter.
 
 export function Shell() {
   const { user, logout } = useAuth();
@@ -71,10 +71,7 @@ export function Shell() {
   };
 
   const inAdmin = loc.pathname === '/admin' || loc.pathname.startsWith('/admin/');
-  const tabs = [
-    ...TABS,
-    { to: '/arcade', label: 'Arcade', icon: '🎮', end: false },
-  ];
+  const tabs = TABS;
   const adminTabs = user?.is_admin
     ? [
         { to: '/admin', label: 'Overview', icon: '🛡️', end: true },

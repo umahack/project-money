@@ -2,6 +2,21 @@ node_modules
 .env
 .env.local
 .env.*.local
+
+# Capacitor / Android native build output
+frontend/android/.gradle
+frontend/android/app/build
+frontend/android/build
+frontend/android/captures
+frontend/android/local.properties
+frontend/android/.idea
+frontend/android/app/release
+*.keystore
+*.jks
+# iOS build output (when we add iOS later)
+frontend/ios/App/App.xcworkspace/xcuserdata
+frontend/ios/App/Pods
+frontend/ios/DerivedData
 data.sqlite
 data.sqlite-journal
 data.sqlite-wal

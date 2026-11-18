@@ -13,10 +13,10 @@ import { Donut } from '../components/ui';
 const FEATURES: Array<{ icon: string; title: string; text: string }> = [
   { icon: '💰', title: 'Plan your salary', text: 'Enter what credits each month — we split what\'s left into Needs, Wants, and Save.' },
   { icon: '📊', title: 'Track daily spend', text: 'One-tap log with 10 categories, inline budgets, and over/under alerts.' },
+  { icon: '🎨', title: 'Customise everything', text: 'Rename, add, or delete your own categories, bills, and goals — nothing is locked.' },
   { icon: '🧠', title: 'Smart insights', text: 'Month-over-month deltas, weekday patterns, and category spikes auto-surface.' },
   { icon: '🎯', title: 'Savings goals', text: 'Set a target, watch progress, add or withdraw contributions as life happens.' },
   { icon: '✈️', title: 'Trip splits', text: 'Invite friends by email, log shared expenses, see who owes whom instantly.' },
-  { icon: '🔗', title: 'Public share link', text: 'Share any trip read-only — guests see the plan without creating an account.' },
 ];
 
 const QUOTES: Array<{ text: string; author: string }> = [
@@ -62,7 +62,8 @@ export function MarketingLanding() {
           </h1>
           <p className="landing-sub">
             A tiny web app that turns your monthly salary into a plan, your receipts into insights,
-            and your group trips into a tidy settle-up — no spreadsheet required.
+            and your group trips into a tidy settle-up — no spreadsheet required. Every category,
+            bill, and goal is yours to rename, add, or delete.
           </p>
           <div className="landing-cta">
             <Link to="/register" className="btn primary">Create free account</Link>

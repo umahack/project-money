@@ -291,18 +291,18 @@ export function Dashboard() {
       />
 
       <QuickActions />
-      <TodayStrip />
       <StreakCard />
       <InvitesInbox />
 
-      {/* HERO: the plan donut + actual-vs-budget breakdown. */}
+      {/* HERO: the plan donut + actual-vs-budget breakdown.
+          Month progress bar lives in the header to save one card of scroll. */}
       <Card tilt>
         <div className="row between" style={{ flexWrap: 'wrap', gap: '0.6rem' }}>
           <h2 style={{ margin: 0 }}>📊 Your money this month</h2>
           <span className={`pill ${health.cls}`}>{health.label}</span>
         </div>
         <div className="row" style={{ gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.2rem', alignItems: 'baseline' }}>
-          <small className="muted">Monthly pay</small>
+          <small className="muted">Pay</small>
           <strong className="mono">{inr(plan.income)}</strong>
           <Link
             to="/plan#pay-form"
@@ -312,6 +312,17 @@ export function Dashboard() {
           >
             ✏️ Edit
           </Link>
+          <span className="muted small" style={{ marginLeft: 'auto' }}>
+            Day {new Date().getDate()} of {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()}
+          </span>
+        </div>
+        <div className="today-progress" aria-hidden="true" style={{ marginTop: '0.5rem' }}>
+          <div
+            className="today-progress-fill"
+            style={{
+              width: `${Math.round((new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()) * 100)}%`,
+            }}
+          />
         </div>
         {plan.afterFixed > 0 ? (
           <>
