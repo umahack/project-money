@@ -1,6 +1,7 @@
 // API client for the Project Money backend (Express + JWT). Same storage keys as the classic UI,
 // so users stay signed in across a UI switch or a rollback.
 import type { User } from './types';
+import { clearCachedPlan } from './hooks/useCachedPlan';
 
 const BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '') + '/api';
 const TOKEN_KEY = 'pm_token';
@@ -40,6 +41,10 @@ export function setAuth(token: string, user: User): void {
 export function clearAuth(): void {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
+  // Also wipe the dashboard-hydration cache so the next account signing in
+  // on this tab never reads the previous user's plan. Covers 401 kick-outs,
+  // explicit logout, and account-delete.
+  clearCachedPlan();
 }
 
 interface Opts {

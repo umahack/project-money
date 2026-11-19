@@ -14,6 +14,10 @@ import { FiveYearProjection } from '../components/FiveYearProjection';
 import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
 import { readCachedPlan, writeCachedPlan } from '../hooks/useCachedPlan';
 
+// Precomputed once — the demo plan is immutable, so there is no need to
+// re-run buildInsights on every render in demo mode.
+const DEMO_INSIGHTS = buildInsights(DEMO_PLAN, []);
+
 /** Compact progress pill — "₹X of ₹Y" with a gradient fill clamped to 100%. */
 function SpendBar({ spent, budget, color }: { spent: number; budget: number; color: string }) {
   const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
@@ -49,9 +53,9 @@ interface SalaryRes {
 export function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
-  // Hydrate from last-known cache so the first paint shows real numbers
-  // instead of a skeleton. Server data overwrites on the first successful
-  // fetch — nothing stale shows for more than one tick.
+  // Hydrate from last-known cache so a tab-reload shows real numbers
+  // instead of a skeleton. The cache is uid+month-guarded and tab-scoped
+  // (sessionStorage) so a cached plan never leaks across users or months.
   const cached = useMemo(() => readCachedPlan(), []);
   const [plan, setPlan] = useState<Plan | null>(cached.plan);
   const [emis, setEmis] = useState<Emi[]>(cached.emis ?? []);
@@ -59,6 +63,11 @@ export function Dashboard() {
   const [salary, setSalary] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState('');
+  // Flip only after the first server response. We refuse to drop into demo
+  // mode while the first fetch is still in flight — otherwise returning
+  // users with an empty cache would briefly see "Rohan's month" instead of
+  // a quiet loading state.
+  const [loaded, setLoaded] = useState<boolean>(cached.plan !== null);
 
   const load = useCallback(async () => {
     try {
@@ -72,9 +81,11 @@ export function Dashboard() {
       setEmis(e.emis);
       setPlan(p);
       writeCachedPlan(p, e.emis);
+      setLoaded(true);
       setLoadErr('');
     } catch (err) {
       setLoadErr(errText(err));
+      setLoaded(true);
     }
   }, []);
 
@@ -98,13 +109,17 @@ export function Dashboard() {
     e.preventDefault();
     const value = parseAmount(salary || '0');
     if (value === null) return toast('err', 'Enter a valid amount, e.g. 75000 or 75,000.50');
+    // Reject 0 explicitly: a successful POST with amount=0 would wipe the
+    // user's real plan back to demo mode, which looks destructive even
+    // though their bills are still on the server. Edit flow lives on /plan.
+    if (value <= 0) return toast('err', 'Enter a positive amount');
     setSaving(true);
     try {
       const rect = e.currentTarget.getBoundingClientRect();
       await api.post('/finance/salary', { amount: value });
       await load();
       toast('ok', 'Salary saved. Your plan is updated.');
-      if (value > 0) burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
     } catch (err) {
       toast('err', errText(err));
     } finally {
@@ -117,13 +132,25 @@ export function Dashboard() {
 
   if (loadErr) return <Card><p className="form-error">{loadErr}</p><button className="btn" onClick={() => void load()}>Retry</button></Card>;
 
-  // Demo-first: if we don't have real data yet, or the user hasn't set their
-  // pay, render the dashboard filled with a sample "Rohan" month. The user
-  // sees what the app does BEFORE being asked for anything. One field — the
-  // salary input in the banner — replaces the demo with their real plan.
-  const demoMode = !plan || plan.income <= 0;
-  const displayPlan: Plan = demoMode ? DEMO_PLAN : plan;
-  const displayIns = demoMode ? buildInsights(DEMO_PLAN, []) : ins!;
+  // Pre-first-fetch: show a quiet "loading" PageTitle so returning users
+  // whose cache was cleared (sign-out, cross-user) don't briefly see
+  // "Rohan's month" and think their real plan was wiped.
+  if (!loaded && !plan) {
+    return (
+      <>
+        <PageTitle title={`Hey ${firstName} 👋`} sub="Pulling your month together…" />
+        <p className="muted small center" style={{ marginTop: '0.8rem' }} aria-live="polite">
+          If this takes a few seconds, the free API host is waking up.
+        </p>
+      </>
+    );
+  }
+
+  // Demo mode kicks in only AFTER the first server response confirms the
+  // user hasn't set their pay. We never fall into demo during loading.
+  const demoMode = loaded && (!plan || plan.income <= 0);
+  const displayPlan: Plan = demoMode ? DEMO_PLAN : plan!;
+  const displayIns = demoMode ? DEMO_INSIGHTS : ins!;
   const health = HEALTH[displayIns.health];
   const segments = [
     { label: 'Bills', value: displayPlan.emiTotal, color: 'var(--c-fixed)' },

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../api';
 import { Card, PageTitle } from '../components/ui';
@@ -9,6 +8,10 @@ import { inr } from '../money';
 import { errText } from '../state';
 import type { Emi, Plan as PlanData } from '../types';
 import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
+import { readCachedPlan } from '../hooks/useCachedPlan';
+
+// Precomputed once; the demo plan is immutable.
+const DEMO_INSIGHTS = buildInsights(DEMO_PLAN, []);
 
 interface Line {
   key: string;
@@ -45,9 +48,13 @@ const SAVINGS: Line[] = [
 ];
 
 export function Plan() {
-  const [plan, setPlan] = useState<PlanData | null>(null);
-  const [emis, setEmis] = useState<Emi[]>([]);
+  // Same hydration trick as Dashboard — read cache on mount so a tab reload
+  // on Plan draws instantly instead of flashing Rohan while the server wakes.
+  const cached = useMemo(() => readCachedPlan(), []);
+  const [plan, setPlan] = useState<PlanData | null>(cached.plan);
+  const [emis, setEmis] = useState<Emi[]>(cached.emis ?? []);
   const [err, setErr] = useState('');
+  const [loaded, setLoaded] = useState<boolean>(cached.plan !== null);
 
   useEffect(() => {
     (async () => {
@@ -55,8 +62,10 @@ export function Plan() {
         const [p, e] = await Promise.all([api.get<PlanData>('/finance/plan'), api.get<{ emis: Emi[] }>('/finance/emis')]);
         setPlan(p);
         setEmis(e.emis);
+        setLoaded(true);
       } catch (e) {
         setErr(errText(e));
+        setLoaded(true);
       }
     })();
   }, []);
@@ -65,12 +74,16 @@ export function Plan() {
 
   if (err) return <Card><p className="form-error">{err}</p></Card>;
 
-  // Demo-first: show the full line-by-line plan using sample data when the
-  // user hasn't set their pay. PlanInputs lives at the top so one keystroke
-  // on their salary replaces the demo with their real breakdown.
-  const demoMode = !plan || plan.income <= 0;
-  const displayPlan: PlanData = demoMode ? DEMO_PLAN : plan;
-  const displayIns = demoMode ? buildInsights(DEMO_PLAN, []) : ins!;
+  // Quiet loading state before the first server response. Avoids showing
+  // "Rohan's month" to returning users whose cache was just cleared.
+  if (!loaded && !plan) {
+    return <PageTitle title="Plan your month 🧾" sub="Loading…" />;
+  }
+
+  // Demo mode only kicks in once the server has confirmed no pay is set.
+  const demoMode = loaded && (!plan || plan.income <= 0);
+  const displayPlan: PlanData = demoMode ? DEMO_PLAN : plan!;
+  const displayIns = demoMode ? DEMO_INSIGHTS : ins!;
   const { needs, wants, save } = displayPlan.breakdown;
 
   return (
@@ -101,17 +114,28 @@ export function Plan() {
         <Section title="What to save and invest" sub="20% of disposable" subtotal={save} items={SAVINGS} color="var(--c-save)" />
 
         <Card>
-          <h2>🧠 Smart recommendations</h2>
+          <div className="row between wrap" style={{ gap: '0.4rem' }}>
+            <h2 style={{ margin: 0 }}>🧠 Smart recommendations</h2>
+            {demoMode && <span className="pill info">Sample</span>}
+          </div>
+          {demoMode && (
+            <p className="muted small" style={{ marginTop: '0.3rem' }}>
+              These apply to {DEMO_SAMPLE_NAME}'s sample month. Enter your pay above
+              to get recommendations based on your own numbers.
+            </p>
+          )}
           <ul className="recs">
             {displayIns.recs.map((r, i) => (
               <li key={r.title + i} className={`rec ${r.level}`}>
                 <div>
-                  <strong>{r.title}</strong>
+                  <strong>{demoMode ? `Sample · ${r.title}` : r.title}</strong>
                   <p>{r.text}</p>
                 </div>
               </li>
             ))}
-            <li className="rec info"><div><strong>Review every quarter</strong><p>Rebalance this plan every three months, or after any raise or EMI change.</p></div></li>
+            {!demoMode && (
+              <li className="rec info"><div><strong>Review every quarter</strong><p>Rebalance this plan every three months, or after any raise or EMI change.</p></div></li>
+            )}
           </ul>
         </Card>
       </div>
