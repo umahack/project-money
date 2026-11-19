@@ -5,8 +5,10 @@ function expOf(token: string | null): number | null {
   if (!token) return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
+  const payloadRaw = parts[1];
+  if (!payloadRaw) return null;
   try {
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const b64 = payloadRaw.replace(/-/g, '+').replace(/_/g, '/');
     const padded = b64 + '==='.slice((b64.length + 3) % 4);
     const payload = JSON.parse(atob(padded)) as { exp?: number };
     return typeof payload.exp === 'number' ? payload.exp : null;

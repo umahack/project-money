@@ -16,7 +16,9 @@ interface HistoryResponse {
 }
 
 const monthShort = (m: string) => {
-  const [, mm] = m.split('-').map(Number);
+  const parts = m.split('-');
+  const mm = Number(parts[1]);
+  if (!Number.isFinite(mm)) return m;
   return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mm - 1] ?? m;
 };
 

@@ -98,7 +98,7 @@ export function VisitorsPanel() {
                 <strong>{v.path}</strong>
                 <small className="muted">
                   {v.email ? `${v.email}` : 'anonymous'} · {v.created_at}
-                  {v.user_agent ? ` · ${v.user_agent.split(/[()]/)[0].slice(0, 40)}` : ''}
+                  {v.user_agent ? ` · ${(v.user_agent.split(/[()]/)[0] ?? '').slice(0, 40)}` : ''}
                 </small>
               </div>
             </li>
