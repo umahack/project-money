@@ -25,25 +25,37 @@ export function CategoryManager() {
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return toast('err', 'Enter a category name');
+    const n = name.trim();
+    if (!n) return toast('err', 'Enter a category name');
+    // Optimistic insert with a temp id; swap on server response.
+    const tempId = -Date.now();
+    setData((d) => d ? ({ ...d, custom: [...d.custom, { id: tempId, name: n }] }) : d);
+    setName('');
     setBusy(true);
     try {
-      await api.post('/finance/categories', { name: name.trim() });
-      setName('');
-      await load();
-      toast('ok', `Added ${name.trim()}`);
-    } catch (err) { toast('err', errText(err)); }
-    finally { setBusy(false); }
+      const r = await api.post<{ id: number }>('/finance/categories', { name: n });
+      setData((d) => d ? ({
+        ...d,
+        custom: d.custom.map((c) => c.id === tempId ? { ...c, id: r.id } : c),
+      }) : d);
+      toast('ok', `Added ${n}`);
+    } catch (err) {
+      setData((d) => d ? ({ ...d, custom: d.custom.filter((c) => c.id !== tempId) }) : d);
+      toast('err', errText(err));
+    } finally { setBusy(false); }
   }
 
   async function remove(id: number) {
     if (!confirm('Remove this custom category? Existing expenses keep the label.')) return;
+    const removed = data?.custom.find((c) => c.id === id);
+    setData((d) => d ? ({ ...d, custom: d.custom.filter((c) => c.id !== id) }) : d);
     setRemoving(id);
     try {
       await api.del(`/finance/categories/${id}`);
-      await load();
-    } catch (err) { toast('err', errText(err)); }
-    finally { setRemoving(null); }
+    } catch (err) {
+      if (removed) setData((d) => d ? ({ ...d, custom: [...d.custom, removed] }) : d);
+      toast('err', errText(err));
+    } finally { setRemoving(null); }
   }
 
   if (!data) return null;

@@ -47,14 +47,17 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
     const value = parseAmount(salary || '0');
     if (value === null) return toast('err', 'Enter a valid amount, e.g. 75000 or 75,000.50');
     setSaving(true);
+    const prevMonth = salaryMonth;
+    // Optimistic: update the month pill to the current month immediately.
+    setSalaryMonth(currentMonth());
     try {
       const rect = e.currentTarget.getBoundingClientRect();
       await api.post('/finance/salary', { amount: value });
-      await load();
       onChange?.();
       toast('ok', 'Pay saved. Your plan is updated.');
       if (value > 0) burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
     } catch (err) {
+      setSalaryMonth(prevMonth);  // roll back
       toast('err', errText(err));
     } finally { setSaving(false); }
   }
@@ -64,22 +67,35 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
     const value = parseAmount(amount);
     if (!label.trim()) return toast('err', 'Give this payment a name');
     if (value === null || value <= 0) return toast('err', 'Enter a valid monthly amount');
+    const draftLabel = label.trim();
+    const draftCat = category;
+    // Optimistic: append a temp row, clear form instantly.
+    const tempId = -Date.now();
+    setEmis((xs) => [{ id: tempId, label: draftLabel, amount: value, category: draftCat }, ...xs]);
+    setLabel('');
+    setAmount('');
     try {
-      await api.post('/finance/emis', { label: label.trim(), amount: value, category });
-      setLabel('');
-      setAmount('');
-      await load();
+      const r = await api.post<{ id: number }>('/finance/emis', { label: draftLabel, amount: value, category: draftCat });
+      // Swap temp id for the real server id so delete works.
+      setEmis((xs) => xs.map((e2) => e2.id === tempId ? { ...e2, id: r.id } : e2));
       onChange?.();
       toast('ok', 'Bill added');
-    } catch (err) { toast('err', errText(err)); }
+    } catch (err) {
+      setEmis((xs) => xs.filter((e2) => e2.id !== tempId));  // roll back
+      toast('err', errText(err));
+    }
   }
 
   async function remove(id: number) {
+    const removed = emis.find((e2) => e2.id === id);
+    setEmis((xs) => xs.filter((e2) => e2.id !== id));
     try {
       await api.del(`/finance/emis/${id}`);
-      await load();
       onChange?.();
-    } catch (err) { toast('err', errText(err)); }
+    } catch (err) {
+      if (removed) setEmis((xs) => [removed, ...xs]);
+      toast('err', errText(err));
+    }
   }
 
   // Inline edit state: which emi id is in edit mode, and its draft fields.
@@ -99,13 +115,21 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
     const value = parseAmount(editAmount);
     if (!editLabel.trim()) return toast('err', 'Name required');
     if (value === null || value < 0) return toast('err', 'Invalid amount');
+    const prev = emis.find((e) => e.id === id);
+    const nextLabel = editLabel.trim();
+    const nextAmt = value;
+    const nextCat = editCategory;
+    // Optimistic: patch the local row instantly, close the edit UI.
+    setEmis((xs) => xs.map((e) => e.id === id ? { ...e, label: nextLabel, amount: nextAmt, category: nextCat } : e));
+    setEditingId(null);
     try {
-      await api.patch(`/finance/emis/${id}`, { label: editLabel.trim(), amount: value, category: editCategory });
-      setEditingId(null);
-      await load();
+      await api.patch(`/finance/emis/${id}`, { label: nextLabel, amount: nextAmt, category: nextCat });
       onChange?.();
       toast('ok', 'Bill updated');
-    } catch (err) { toast('err', errText(err)); }
+    } catch (err) {
+      if (prev) setEmis((xs) => xs.map((e) => e.id === id ? prev : e));
+      toast('err', errText(err));
+    }
   }
 
   const payAmount = parseAmount(salary) ?? 0;
@@ -116,7 +140,11 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
     <div className="grid two gap-top">
       <Card>
         <h2 id="pay-form">💰 Monthly pay</h2>
-        <p className="muted small" style={{ marginTop: 0 }}>Take-home amount credited each month. Change anytime; the plan updates on your next refresh.</p>
+        <p className="muted small" style={{ marginTop: 0 }}>
+          <strong>Why we ask:</strong> we subtract your bills from this, then split what's left
+          into Needs 50 / Wants 30 / Save 20 — the daily-spend number is derived from here.
+          Just the take-home amount credited each month; no tax math needed.
+        </p>
         <form onSubmit={saveSalary} className="salary-form">
           <div className="input-prefix">
             <span>₹</span>
@@ -135,8 +163,12 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
       </Card>
 
       <Card>
-        <h2 id="bills-form">📄 Monthly bills</h2>
-        <p className="muted small" style={{ marginTop: 0 }}>Rent, EMIs, subscriptions, insurance — anything auto-deducted.</p>
+        <h2 id="bills-form">📄 Monthly bills <small className="muted" style={{ fontWeight: 400 }}>(optional)</small></h2>
+        <p className="muted small" style={{ marginTop: 0 }}>
+          <strong>Why we ask:</strong> these come out of your pay before anything else, so we
+          remove them first — otherwise the plan would suggest spending money you don't actually
+          have. Add rent, EMIs, Netflix, insurance, gym. Skip entirely if you don't have any.
+        </p>
         <form onSubmit={addEmi} className="commit-form">
           <Field label="What is it?">
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Netflix" maxLength={60} />

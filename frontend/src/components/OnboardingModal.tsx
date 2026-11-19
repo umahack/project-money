@@ -12,24 +12,24 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    emoji: '👋',
-    title: 'Hey, welcome in',
-    body: "I'll help you figure out where your money should go each month. Takes 60 seconds to set up.",
+    emoji: '🎯',
+    title: "Here's the point",
+    body: "Most of us earn fine but still end the month wondering where it went. This app tells you — upfront — how much you can spend each day and how much you'll actually save. No spreadsheets.",
   },
   {
-    emoji: '💰',
-    title: 'Step 1 — Your monthly pay',
-    body: 'How much actually lands in your bank each month? Just the take-home number. No tax math needed.',
+    emoji: '📊',
+    title: 'What you get',
+    body: 'A clear number for daily spend, a split of Needs / Wants / Save, and a live view of what you\'ve used so far. Updates every time you log an expense.',
   },
   {
-    emoji: '📄',
-    title: 'Step 2 — Your monthly bills',
-    body: "Rent, Netflix, insurance, loan EMIs — anything that leaves your account on its own. Add them once, they stay saved.",
+    emoji: '🔒',
+    title: "Your data stays yours",
+    body: "Only you can see it. No ads, no selling data, no sharing with banks. Export or delete your account anytime from Settings.",
   },
   {
-    emoji: '✨',
-    title: "That's it",
-    body: "You'll see what's left, how much is safe to spend each day, and where to save. Log daily buys as they happen (or don't — it still works).",
+    emoji: '⏱️',
+    title: 'Setup takes 60 seconds',
+    body: "Just your monthly take-home pay. Bills (rent, Netflix, EMIs) are optional — you can add them later. Daily expenses are optional too; the plan works either way.",
   },
 ];
 

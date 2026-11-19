@@ -190,11 +190,6 @@ export function Dashboard() {
   const firstName = user?.name.split(' ')[0] ?? 'there';
   const hasPay = plan.income > 0;
   const hasBills = emis.length > 0;
-  // Users whose life has no recurring bills can declare that once and skip
-  // Step 2 for the rest of the session.
-  const skippedBills = (() => {
-    try { return sessionStorage.getItem('pm_bills_skipped') === '1'; } catch { return false; }
-  })();
 
   // ----- Brand-new user: single hero card that walks them through step 1. -----
   if (!hasPay) {
@@ -206,9 +201,10 @@ export function Dashboard() {
         <Card tilt>
           <div style={{ textAlign: 'center', padding: '0.4rem 0 0.8rem' }}>
             <div style={{ fontSize: '3rem', lineHeight: 1 }}>💰</div>
-            <h2 style={{ margin: '0.4rem 0 0.2rem' }}>Step 1 · Your monthly pay</h2>
-            <p className="muted" style={{ margin: 0, maxWidth: 440, marginInline: 'auto' }}>
-              How much lands in your bank each month after tax? Just the take-home number.
+            <h2 style={{ margin: '0.4rem 0 0.2rem' }}>What lands in your bank each month?</h2>
+            <p className="muted" style={{ margin: 0, maxWidth: 480, marginInline: 'auto' }}>
+              Take-home amount, after tax. One number is all we need to generate your plan —
+              bills and expenses can come later.
             </p>
           </div>
           <form onSubmit={saveSalary} className="salary-form">
@@ -217,11 +213,11 @@ export function Dashboard() {
               <input value={salary} onChange={(e) => setSalary(e.target.value)} inputMode="decimal" placeholder="e.g. 75,000" aria-label="Monthly pay" maxLength={16} autoFocus />
             </div>
             <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
-              {saving ? 'Saving…' : 'Save and continue →'}
+              {saving ? 'Saving…' : 'Show me my plan →'}
             </motion.button>
           </form>
           <p className="muted tiny center" style={{ marginTop: '0.8rem' }}>
-            🔒 Only you can see this. Change it any time.
+            🔒 Only you can see this · Change it anytime · No tax math, no bank linking
           </p>
         </Card>
         <OnboardingModal />
@@ -229,59 +225,8 @@ export function Dashboard() {
     );
   }
 
-  // ----- Pay set, no bills yet, and user hasn't explicitly skipped. -----
-  if (!hasBills && !skippedBills) {
-    return (
-      <>
-        <PageTitle
-          title={`Hey ${firstName} 👋`}
-          sub="One more step — add anything that leaves your bank on its own."
-          right={<span className="pill info">Pay: {inr(plan.income)}</span>}
-        />
-        <TodayStrip />
-        <InvitesInbox />
-        <Card>
-          <div style={{ textAlign: 'center', padding: '0.2rem 0 0.6rem' }}>
-            <div style={{ fontSize: '2.6rem', lineHeight: 1 }}>📄</div>
-            <h2 style={{ margin: '0.4rem 0 0.2rem' }}>Step 2 · Monthly bills</h2>
-            <p className="muted" style={{ margin: 0, maxWidth: 460, marginInline: 'auto' }}>
-              Rent, Netflix, insurance, loan EMIs — anything that leaves your account automatically.
-              Nothing recurring? Hit skip at the bottom.
-            </p>
-          </div>
-          <form onSubmit={addEmi} className="commit-form">
-            <Field label="What is it?">
-              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Rent, Netflix, Health insurance" maxLength={60} />
-            </Field>
-            <Field label="Type">
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {EMI_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </Field>
-            <Field label="How much (₹) a month">
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="e.g. 12,500" maxLength={16} />
-            </Field>
-            <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={() => {
-                  try { sessionStorage.setItem('pm_bills_skipped', '1'); } catch { /* ignore */ }
-                  void load();
-                }}
-              >
-                No bills — skip
-              </button>
-              <button className="btn primary" type="submit">+ Add bill</button>
-            </div>
-          </form>
-        </Card>
-        <OnboardingModal />
-      </>
-    );
-  }
-
-  // ----- Normal state: pay + at least one bill. -----
+  // ----- Normal state: pay is set. Bills are optional — if none, we just
+  //       show the plan without Fixed/EMIs taken out. No blocking Step 2. -----
   return (
     <>
       <PageTitle
@@ -293,6 +238,26 @@ export function Dashboard() {
       <QuickActions />
       <StreakCard />
       <InvitesInbox />
+
+      {/* Non-blocking nudge if the user hasn't set up bills yet — the plan
+          is still accurate without them, but more useful once they're in. */}
+      {!hasBills && (
+        <div
+          className="info-banner"
+          style={{
+            background: 'linear-gradient(135deg, rgba(124,108,255,0.1), rgba(16,185,129,0.08))',
+            border: '1px solid rgba(124,108,255,0.3)',
+            borderRadius: 12,
+            padding: '0.7rem 0.9rem',
+            marginBottom: '0.8rem',
+            fontSize: '0.9rem',
+          }}
+        >
+          💡 Your plan doesn't know your fixed bills yet (rent, Netflix, EMIs).
+          {' '}<Link className="link" to="/plan#bills-form">Add them →</Link>{' '}
+          — your daily-spend number will get sharper.
+        </div>
+      )}
 
       {/* HERO: the plan donut + actual-vs-budget breakdown.
           Month progress bar lives in the header to save one card of scroll. */}

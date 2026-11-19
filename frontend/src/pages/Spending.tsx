@@ -22,7 +22,14 @@ export function Spending() {
 
   useEffect(() => { void load(); }, [load, reloadKey]);
 
-  if (!plan) return <Spinner />;
+  if (!plan) {
+    return (
+      <>
+        <PageTitle title="Spending 📊" sub="Pulling this month's log…" />
+        <Card><div style={{ height: 20, width: 240, background: 'rgba(0,0,0,0.07)', borderRadius: 6, marginBottom: 10 }} /><div style={{ height: 14, width: 180, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} /></Card>
+      </>
+    );
+  }
 
   return (
     <>

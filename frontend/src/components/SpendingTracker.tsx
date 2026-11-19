@@ -79,15 +79,41 @@ export function SpendingTracker({ disposable, onChange }: { disposable: number; 
     e.preventDefault();
     const n = parseAmount(amount);
     if (n == null || n <= 0) return toast('err', 'Enter a valid amount');
+    // Optimistic: append a temp row and reset the form IMMEDIATELY so the
+    // user sees instant feedback. Reconcile with the server's real id when
+    // the response lands; roll back on error.
+    const tempId = -Date.now();
+    const noteVal = note.trim() || null;
+    const today = new Date();
+    const spentOn = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const monthKey = spentOn.slice(0, 7);
+    const optimisticRow: ExpenseRow = {
+      id: tempId,
+      month: monthKey,
+      category,
+      amount: n,
+      note: noteVal,
+      spent_on: spentOn,
+      created_at: new Date().toISOString(),
+    };
+    setData((d) => (d ? { ...d, expenses: [optimisticRow, ...d.expenses] } : d));
+    setAmount('');
+    setNote('');
     setBusy(true);
     try {
-      await api.post('/finance/expenses', { amount: n, category, note: note.trim() || undefined });
-      setAmount('');
-      setNote('');
-      await load();
+      const r = await api.post<{ id: number }>('/finance/expenses', {
+        amount: n, category, note: noteVal ?? undefined,
+      });
+      // Swap temp id for the real one so delete works.
+      setData((d) => d ? ({
+        ...d,
+        expenses: d.expenses.map((row) => row.id === tempId ? { ...row, id: r.id } : row),
+      }) : d);
       onChange?.();
       toast('ok', `Logged ${inr(n)} to ${category}`);
     } catch (err) {
+      // Roll back.
+      setData((d) => d ? ({ ...d, expenses: d.expenses.filter((row) => row.id !== tempId) }) : d);
       toast('err', errText(err));
     } finally {
       setBusy(false);
@@ -95,12 +121,15 @@ export function SpendingTracker({ disposable, onChange }: { disposable: number; 
   }
 
   async function remove(id: number) {
+    // Optimistic remove: drop immediately, re-insert on error.
+    const removed = data?.expenses.find((r) => r.id === id);
+    setData((d) => d ? ({ ...d, expenses: d.expenses.filter((r) => r.id !== id) }) : d);
     setRemoving(id);
     try {
       await api.del(`/finance/expenses/${id}`);
-      await load();
       onChange?.();
     } catch (err) {
+      if (removed) setData((d) => d ? ({ ...d, expenses: [removed, ...d.expenses] }) : d);
       toast('err', errText(err));
     } finally {
       setRemoving(null);

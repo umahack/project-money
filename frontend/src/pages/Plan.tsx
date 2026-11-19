@@ -63,7 +63,22 @@ export function Plan() {
   const ins = useMemo(() => (plan ? buildInsights(plan, emis) : null), [plan, emis]);
 
   if (err) return <Card><p className="form-error">{err}</p></Card>;
-  if (!plan || !ins) return <Spinner />;
+  if (!plan || !ins) {
+    // Skeleton shell — show the page outline immediately instead of a
+    // blank spinner. Header + card lines appear before the data lands.
+    return (
+      <>
+        <PageTitle title="Plan your month 🧾" sub="Loading…" />
+        <Card>
+          <div style={{ display: 'grid', gap: '0.6rem' }}>
+            <div style={{ height: 22, width: 200, background: 'rgba(0,0,0,0.07)', borderRadius: 6 }} />
+            <div style={{ height: 14, width: 320, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} />
+            <div style={{ height: 14, width: 260, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} />
+          </div>
+        </Card>
+      </>
+    );
+  }
 
   if (!plan.income) {
     // No pay yet — show just the setup inputs so the user can start here.

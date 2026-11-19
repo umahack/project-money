@@ -54,7 +54,14 @@ export function Trips() {
     }
   }
 
-  if (!trips) return <Spinner />;
+  if (!trips) {
+    return (
+      <>
+        <PageTitle title="Trips ✈️" sub="Loading your trips…" />
+        <Card><div style={{ height: 18, width: 260, background: 'rgba(0,0,0,0.06)', borderRadius: 6, marginBottom: 10 }} /><div style={{ height: 14, width: 200, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} /></Card>
+      </>
+    );
+  }
 
   return (
     <>

@@ -55,7 +55,14 @@ export function TripDetail() {
       </Card>
     );
   }
-  if (!d) return <Spinner />;
+  if (!d) {
+    return (
+      <>
+        <PageTitle title="Trip ✈️" sub="Opening the trip…" />
+        <Card><div style={{ height: 20, width: 220, background: 'rgba(0,0,0,0.07)', borderRadius: 6, marginBottom: 10 }} /><div style={{ height: 14, width: 180, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} /></Card>
+      </>
+    );
+  }
 
   const isOwner = d.role === 'owner';
   const availableTabs: TripTab[] = isOwner

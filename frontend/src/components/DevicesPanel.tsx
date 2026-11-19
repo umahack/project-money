@@ -37,23 +37,39 @@ export function DevicesPanel() {
 
   async function revoke(id: number) {
     if (!confirm('Sign out this device?')) return;
+    // Optimistic — mark revoked locally so it moves to "Recent sign-outs"
+    // instantly; re-fetch on success to get the authoritative timestamp.
+    const prev = data;
+    setData((d) => d ? ({
+      ...d,
+      sessions: d.sessions.map((s) => s.id === id ? { ...s, revoked: true, revoked_at: new Date().toISOString(), revoked_reason: 'user_revoked' } : s),
+    }) : d);
     setBusy(id);
     try {
       await api.del(`/auth/sessions/${id}`);
-      await load();
       toast('ok', 'Device signed out');
-    } catch (e) { toast('err', errText(e)); }
+    } catch (e) {
+      setData(prev);  // roll back on failure
+      toast('err', errText(e));
+    }
     finally { setBusy(null); }
   }
 
   async function revokeOthers() {
     if (!confirm('Sign out of every other device?')) return;
+    const prev = data;
+    setData((d) => d ? ({
+      ...d,
+      sessions: d.sessions.map((s) => s.id === d.current_sid ? s : { ...s, revoked: true, revoked_at: new Date().toISOString(), revoked_reason: 'user_revoked' }),
+    }) : d);
     setBusy('all');
     try {
       await api.del('/auth/sessions');
-      await load();
       toast('ok', 'All other devices signed out');
-    } catch (e) { toast('err', errText(e)); }
+    } catch (e) {
+      setData(prev);
+      toast('err', errText(e));
+    }
     finally { setBusy(null); }
   }
 
