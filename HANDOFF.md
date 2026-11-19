@@ -86,9 +86,6 @@ backend/                          Node Express API
       monthlyReview.js            shared logic for monthly email job
   scripts/
     send-monthly-review.js        CLI runner for local invocation
-    seed-dev.js                   dev-only data seeder (300k salary + 200 random expenses)
-  .env.local.example              fill-and-go template for local dev
-  .env                            YOUR local config (gitignored, points at file:local-dev.sqlite)
 
 frontend/                         React + Vite SPA
   src/
@@ -135,102 +132,22 @@ render.yaml                       Blueprint — 2 services, CORS allowlist, JWT 
 
 ---
 
-## 5. Local-first dev workflow (recommended)
+## 5. Ship workflow
 
-The backend uses `@libsql/client`, which supports `file:` URLs. So local dev
-runs against a plain SQLite file on your Mac — **zero cloud dependency, zero
-risk to prod**.
-
-### Setup once
+Render auto-deploys on push to `main`. Edit, commit, push — that's it.
 
 ```bash
-cd backend
-cp .env.local.example .env
-# edit .env → set ADMIN_EMAILS to your email (so sign-up promotes you to admin)
-# TURSO_DATABASE_URL is already file:local-dev.sqlite — do not change
-npm install
-
-cd ../frontend
-cp .env.local.example .env.local
-# VITE_API_BASE=http://localhost:4000 — do not change
-npm install
+git commit -am "fix X"
+git push                            # Render redeploys
 ```
 
-### Run (2 terminals)
-
-```bash
-# Terminal 1 — backend
-cd backend
-npm run dev            # http://localhost:4000, nodemon-watched
-
-# Terminal 2 — frontend
-cd frontend
-npm run dev            # http://localhost:5173, Vite HMR
-```
-
-### Sign-up locally
-
-- Hit `http://localhost:5173` → Sign up.
-- Backend prints `[mail-fallback]` to its terminal with the 6-digit OTP.
-  Copy-paste it into the UI.
-- Your email in `ADMIN_EMAILS` is auto-promoted to admin.
-
-### Seed a realistic month of data
-
-```bash
-cd backend
-npm run seed -- you@email.com --count=200 --salary=300000 --reset
-```
-
-Seeder script refuses to run unless `TURSO_DATABASE_URL` starts with
-`file:` — it **cannot** touch prod. See `backend/scripts/seed-dev.js`.
-
-### Reset local state
-
-```bash
-rm backend/local-dev.sqlite       # fresh DB on next backend boot
-```
-
-Rate limiting in dev: global limit is 2000/min (vs 120/min in prod) so a
-single-user local box doesn't trip itself. Gated on `NODE_ENV`.
+No local dev environment. All work hits prod on push. Prod data lives in
+Turso (cloud); backend reads `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` from
+Render env vars.
 
 ---
 
-## 6. Dev branch workflow (how to ship)
-
-**Rule**: Render auto-deploys `main`. Everything else is safe.
-
-```bash
-# Default state: work on dev
-git checkout dev
-
-# Make N commits for N fixes
-git commit -am "fix A"
-git commit -am "fix B"
-git commit -am "fix C"
-
-# When ready to ship ALL to prod as ONE deploy:
-git checkout main
-git merge --squash dev
-git commit -m "Batch: X, Y, Z"
-git push                            # Render deploys exactly once
-
-# Go back to dev for next work
-git checkout dev
-git rebase main                     # dev catches up to the squashed main
-```
-
-When switching branches with uncommitted edits, git either refuses the
-switch (if a conflict exists) or carries the edit over (if not). Discipline:
-`git commit -am "wip"` or `git stash` before `git checkout`.
-
-Branches on disk are not duplicate folders — git swaps the working tree to
-match the branch's version instantly. Only one physical copy of each file
-ever exists.
-
----
-
-## 7. Features (current state)
+## 6. Features (current state)
 
 ### Public / landing
 - `/` — Marketing landing (MarketingLanding.tsx) for logged-out visitors: hero + feature grid + live-preview donut + testimonials. Sign in + Sign up CTAs in topbar.
@@ -287,7 +204,7 @@ Overview only. No forms.
 
 ---
 
-## 8. API routes (summary)
+## 7. API routes (summary)
 
 ```
 # public (no auth)
@@ -375,7 +292,7 @@ POST /api/internal/cron/monthly-review                  x-cron-secret header req
 
 ---
 
-## 9. Database schema
+## 8. Database schema
 
 Idempotent `CREATE TABLE IF NOT EXISTS` in `backend/src/db/index.js`. All
 timestamps are SQLite `CURRENT_TIMESTAMP` (UTC). Server TZ pinned to
@@ -424,7 +341,7 @@ per-table cleanup inside a single handler.
 
 ---
 
-## 10. Security posture
+## 9. Security posture
 
 - **HS256 JWT pinned** everywhere it's verified (middleware/auth.js, visits.js). `token_version` + per-session `sid` revocation.
 - **CORS**: refuses to boot in prod without a non-wildcard `CORS_ORIGIN` allowlist. Wrong-origin → 403 JSON. Any `/api/*` miss → JSON 404.
@@ -443,7 +360,7 @@ per-table cleanup inside a single handler.
 
 ---
 
-## 11. Environment variables
+## 10. Environment variables
 
 ### Production — `project-money-api` (Render)
 | Var | Notes |
@@ -464,21 +381,9 @@ per-table cleanup inside a single handler.
 |---|---|
 | `VITE_API_BASE` | `https://project-money-api.onrender.com` (baked at build) |
 
-### Local — `backend/.env`
-See `backend/.env.local.example`. Required:
-- `TURSO_DATABASE_URL=file:local-dev.sqlite` (keep this; don't use cloud)
-- `ADMIN_EMAILS=you@email.com`
-- `JWT_SECRET=any-long-random-string`
-- No `RESEND_API_KEY` → OTPs print to backend stdout.
-
-### Local — `frontend/.env.local`
-```
-VITE_API_BASE=http://localhost:4000
-```
-
 ---
 
-## 12. Deferred / planned
+## 11. Deferred / planned
 
 Already shipped (ignore if you were about to add them):
 - sendLimiter prod key-generator fix
@@ -507,7 +412,7 @@ Still open:
 
 ---
 
-## 13. Caveats / gotchas
+## 12. Caveats / gotchas
 
 - `server.js` route mount order matters: `/api/public`, `/api/internal` and `/api/track` must sit BEFORE routers that call `router.use(authRequired)` globally (finance, trips, admin, feedback, invites).
 - SQLite's `CURRENT_TIMESTAMP` is always UTC regardless of the `TZ` env. For user-local day math we use Node `new Date()` component builders (TZ-aware under the `TZ=Asia/Kolkata` env). Never use `toISOString().slice(0,10)` for day/month.
@@ -521,7 +426,7 @@ Still open:
 
 ---
 
-## 14. Session / sprint history (chronological)
+## 13. Session / sprint history (chronological)
 
 1. Initial scaffold React + Express + SQLite.
 2. Line-by-line Plan page (replaces mini-game).
@@ -549,21 +454,18 @@ Still open:
 24. **4 rounds of audits** — 55 findings, 39 fixed. Highlights: timezone drift, account-delete crash, trip phantom balances, settlement forgery, enumeration oracles, LCP fix, HTML-escape monthly review template, CORS-not-500.
 25. IA cleanup — Home overview-only, Pay+Bills forms on Plan, 5-tab nav.
 26. Scheduled jobs off GitHub — monthly review via `POST /api/internal/cron/*` + cron-job.org; nightly backup replaced by Turso native.
-27. Local-first dev workflow + `dev` branch workflow + seeder script.
-28. Inline bill edit (PATCH `/api/finance/emis/:id`); marketing landing refresh with "Customise everything" tile.
+27. Inline bill edit (PATCH `/api/finance/emis/:id`); marketing landing refresh with "Customise everything" tile.
+28. Value-first onboarding + optimistic add/edit/delete + skeleton shells (kill loading flashes).
 
 ---
 
-## 15. When continuing this project
+## 14. When continuing this project
 
 1. Clone and read this file.
-2. Run local setup (section 5). Verify you can sign up with OTP from the backend terminal.
-3. Create a `dev` branch if one doesn't exist (`git checkout -b dev`).
-4. All work happens on `dev`. Multiple commits are fine.
-5. When ready to ship: `git checkout main && git merge --squash dev && git commit -m "Batch: ..." && git push`.
-6. Render auto-deploys `main` in ~2 min. Hard-refresh the browser; check that the new asset hash is live (`curl -L https://www.project-money.online/ | grep index-`).
-7. Prefer forking an audit (Agent subagent_type `fork`) before shipping anything non-trivial. Rounds 1–4 have each caught 5+ real bugs.
-8. Update this file whenever a sprint lands.
+2. Edit on `main`. Commit, push. Render redeploys in ~2 min.
+3. Hard-refresh the browser; check the new asset hash is live (`curl -L https://www.project-money.online/ | grep index-`).
+4. Prefer forking an audit (Agent subagent_type `fork`) before shipping anything non-trivial. Rounds 1–4 have each caught 5+ real bugs.
+5. Update this file whenever a sprint lands.
 
 ---
 

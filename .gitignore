@@ -1,7 +1,5 @@
 node_modules
 .env
-.env.local
-.env.*.local
 
 # Capacitor / Android native build output
 frontend/android/.gradle
@@ -21,9 +19,6 @@ data.sqlite
 data.sqlite-journal
 data.sqlite-wal
 data.sqlite-shm
-local-dev.sqlite
-local-dev.sqlite-*
-*.sqlite-journal
 dist
 .DS_Store
 
