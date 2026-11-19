@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '../api';
-import { Card, Empty, Field, Money, ProgressBar, Spinner, burst } from '../components/ui';
+import { Card, Empty, Field, Money, PageTitle, ProgressBar, burst } from '../components/ui';
 import { fmtDate, inr, parseAmount, toPaise } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { TripDetailData } from '../types';

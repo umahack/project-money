@@ -7,6 +7,7 @@ import { usePendingInvitesCount } from './InvitesInbox';
 import { SessionWarning } from './SessionWarning';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import { TopbarClock } from './TopbarClock';
+import { WhatWeStoreLink } from './WhatWeStore';
 import { markUserViewPreferred, clearUserViewPreference } from '../userViewPref';
 
 export function Background() {
@@ -192,7 +193,7 @@ export function Shell() {
           <footer className="foot muted tiny center">
             Project Money · UI v2 · Crafted with ♥ by <span className="signature">Umakanth</span>
             <br />
-            <NavLink className="link" to="/privacy">Privacy</NavLink> · <NavLink className="link" to="/terms">Terms</NavLink>
+            <WhatWeStoreLink className="link" /> · <NavLink className="link" to="/settings">Export or delete</NavLink> · <NavLink className="link" to="/privacy">Privacy</NavLink> · <NavLink className="link" to="/terms">Terms</NavLink>
           </footer>
         </main>
       </div>

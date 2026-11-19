@@ -2,16 +2,17 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Card, Donut, Empty, Field, Money, PageTitle, Skeleton, burst } from '../components/ui';
+import { Card, Donut, Empty, Money, PageTitle, burst } from '../components/ui';
 import { buildInsights } from '../insights';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
-import { OnboardingModal } from '../components/OnboardingModal';
-import { TodayStrip } from '../components/TodayStrip';
 import { StreakCard } from '../components/StreakCard';
 import { QuickActions } from '../components/QuickActions';
+import { FiveYearProjection } from '../components/FiveYearProjection';
+import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
+import { readCachedPlan, writeCachedPlan } from '../hooks/useCachedPlan';
 
 /** Compact progress pill — "₹X of ₹Y" with a gradient fill clamped to 100%. */
 function SpendBar({ spent, budget, color }: { spent: number; budget: number; color: string }) {
@@ -48,16 +49,16 @@ interface SalaryRes {
 export function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [emis, setEmis] = useState<Emi[]>([]);
+  // Hydrate from last-known cache so the first paint shows real numbers
+  // instead of a skeleton. Server data overwrites on the first successful
+  // fetch — nothing stale shows for more than one tick.
+  const cached = useMemo(() => readCachedPlan(), []);
+  const [plan, setPlan] = useState<Plan | null>(cached.plan);
+  const [emis, setEmis] = useState<Emi[]>(cached.emis ?? []);
   const [salaryMonth, setSalaryMonth] = useState<string | null>(null);
   const [salary, setSalary] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState('');
-
-  const [label, setLabel] = useState('');
-  const [category, setCategory] = useState<string>('EMI');
-  const [amount, setAmount] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +71,7 @@ export function Dashboard() {
       setSalaryMonth(s.salary?.month ?? null);
       setEmis(e.emis);
       setPlan(p);
+      writeCachedPlan(p, e.emis);
       setLoadErr('');
     } catch (err) {
       setLoadErr(errText(err));
@@ -110,138 +112,79 @@ export function Dashboard() {
     }
   }
 
-  async function addEmi(e: FormEvent) {
-    e.preventDefault();
-    const value = parseAmount(amount);
-    if (!label.trim()) return toast('err', 'Give this payment a name');
-    if (value === null || value <= 0) return toast('err', 'Enter a valid monthly amount');
-    try {
-      await api.post('/finance/emis', { label: label.trim(), amount: value, category });
-      setLabel('');
-      setAmount('');
-      await load();
-      toast('ok', 'Payment added');
-    } catch (err) {
-      toast('err', errText(err));
-    }
-  }
-
-  async function remove(id: number) {
-    try {
-      await api.del(`/finance/emis/${id}`);
-      await load();
-    } catch (err) {
-      toast('err', errText(err));
-    }
-  }
-
   const ins = useMemo(() => (plan ? buildInsights(plan, emis) : null), [plan, emis]);
-  const firstNameEarly = user?.name.split(' ')[0] ?? 'there';
+  const firstName = user?.name.split(' ')[0] ?? 'there';
 
   if (loadErr) return <Card><p className="form-error">{loadErr}</p><button className="btn" onClick={() => void load()}>Retry</button></Card>;
 
-  // Loading shell: paint the layout (headline + today strip + hero card)
-  // immediately with skeleton bars, so LCP fires on the H1 instead of waiting
-  // for the three parallel API fetches to return. The Render free tier can
-  // take ~30s to wake from idle; the user now sees structure instantly.
-  if (!plan || !ins) {
-    return (
-      <>
-        <PageTitle title={`Hey ${firstNameEarly} 👋`} sub="Pulling your month together…" />
-        <TodayStrip />
-        <Card>
-          <div className="row between" style={{ marginBottom: '0.6rem' }}>
-            <Skeleton w={180} h={22} />
-            <Skeleton w={90} h={22} radius={999} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 160px) minmax(0, 1fr)', gap: '1rem', alignItems: 'center' }}>
-            <Skeleton w="100%" h={160} radius={999} style={{ aspectRatio: '1 / 1', maxWidth: 160 }} />
-            <div style={{ display: 'grid', gap: '0.6rem' }}>
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <Skeleton w={10} h={10} radius={999} />
-                  <Skeleton w={100} h={14} />
-                  <Skeleton w={60} h={14} style={{ marginLeft: 'auto' }} />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ marginTop: '1rem' }}>
-            <Skeleton w={120} h={12} />
-            <div style={{ height: 8 }} />
-            <Skeleton w={160} h={32} />
-          </div>
-        </Card>
-        <p className="muted small center" style={{ marginTop: '0.8rem' }} aria-live="polite">
-          If this takes a few seconds, the free API host is waking up.
-        </p>
-      </>
-    );
-  }
-
-  const health = HEALTH[ins.health];
+  // Demo-first: if we don't have real data yet, or the user hasn't set their
+  // pay, render the dashboard filled with a sample "Rohan" month. The user
+  // sees what the app does BEFORE being asked for anything. One field — the
+  // salary input in the banner — replaces the demo with their real plan.
+  const demoMode = !plan || plan.income <= 0;
+  const displayPlan: Plan = demoMode ? DEMO_PLAN : plan;
+  const displayIns = demoMode ? buildInsights(DEMO_PLAN, []) : ins!;
+  const health = HEALTH[displayIns.health];
   const segments = [
-    { label: 'Bills', value: plan.emiTotal, color: 'var(--c-fixed)' },
-    { label: 'Save 💰', value: plan.breakdown.save, color: 'var(--c-save)' },
-    { label: 'Needs 🍔', value: plan.breakdown.needs, color: 'var(--c-need)' },
-    { label: 'Wants 🎮', value: plan.breakdown.wants, color: 'var(--c-want)' },
+    { label: 'Bills', value: displayPlan.emiTotal, color: 'var(--c-fixed)' },
+    { label: 'Save 💰', value: displayPlan.breakdown.save, color: 'var(--c-save)' },
+    { label: 'Needs 🍔', value: displayPlan.breakdown.needs, color: 'var(--c-need)' },
+    { label: 'Wants 🎮', value: displayPlan.breakdown.wants, color: 'var(--c-want)' },
   ];
   const stale = salaryMonth && salaryMonth !== currentMonth();
-  const firstName = user?.name.split(' ')[0] ?? 'there';
-  const hasPay = plan.income > 0;
   const hasBills = emis.length > 0;
 
-  // ----- Brand-new user: single hero card that walks them through step 1. -----
-  if (!hasPay) {
-    return (
-      <>
-        <PageTitle title={`Hey ${firstName} 👋`} sub="Two quick things and your plan is ready." />
-        <TodayStrip />
-        <InvitesInbox />
-        <Card tilt>
-          <div style={{ textAlign: 'center', padding: '0.4rem 0 0.8rem' }}>
-            <div style={{ fontSize: '3rem', lineHeight: 1 }}>💰</div>
-            <h2 style={{ margin: '0.4rem 0 0.2rem' }}>What lands in your bank each month?</h2>
-            <p className="muted" style={{ margin: 0, maxWidth: 480, marginInline: 'auto' }}>
-              Take-home amount, after tax. One number is all we need to generate your plan —
-              bills and expenses can come later.
-            </p>
-          </div>
-          <form onSubmit={saveSalary} className="salary-form">
-            <div className="input-prefix">
-              <span>₹</span>
-              <input value={salary} onChange={(e) => setSalary(e.target.value)} inputMode="decimal" placeholder="e.g. 75,000" aria-label="Monthly pay" maxLength={16} autoFocus />
-            </div>
-            <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
-              {saving ? 'Saving…' : 'Show me my plan →'}
-            </motion.button>
-          </form>
-          <p className="muted tiny center" style={{ marginTop: '0.8rem' }}>
-            🔒 Only you can see this · Change it anytime · No tax math, no bank linking
-          </p>
-        </Card>
-        <OnboardingModal />
-      </>
-    );
-  }
-
-  // ----- Normal state: pay is set. Bills are optional — if none, we just
-  //       show the plan without Fixed/EMIs taken out. No blocking Step 2. -----
   return (
     <>
       <PageTitle
         title={`Hey ${firstName} 👋`}
-        sub="Here's where your money is going this month."
-        right={salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined}
+        sub={demoMode
+          ? `This is ${DEMO_SAMPLE_NAME}'s month. Enter your salary below to see yours.`
+          : "Here's where your money is going this month."}
+        right={!demoMode && salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined}
       />
 
-      <QuickActions />
-      <StreakCard />
-      <InvitesInbox />
+      {demoMode ? (
+        <Card tilt className="demo-banner" style={{ borderColor: 'var(--accent)', boxShadow: '0 0 0 2px rgba(124,108,255,0.2)' }}>
+          <div className="row between wrap" style={{ gap: '0.6rem', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ margin: 0 }}>👇 Make it yours in one number</h2>
+              <p className="muted small" style={{ margin: '0.2rem 0 0' }}>
+                Everything below is a sample plan for ₹{DEMO_PLAN.income.toLocaleString('en-IN')} a month.
+                Enter your take-home and the whole page becomes you.
+              </p>
+            </div>
+          </div>
+          <form onSubmit={saveSalary} className="salary-form" style={{ marginTop: '0.6rem' }}>
+            <div className="input-prefix">
+              <span>₹</span>
+              <input
+                value={salary}
+                onChange={(e) => setSalary(e.target.value)}
+                inputMode="decimal"
+                placeholder="your monthly take-home, e.g. 75,000"
+                aria-label="Monthly pay"
+                maxLength={16}
+                autoFocus
+              />
+            </div>
+            <motion.button className="btn primary" whileTap={{ scale: 0.95 }} disabled={saving} type="submit">
+              {saving ? 'Saving…' : 'Show my real plan →'}
+            </motion.button>
+          </form>
+          <p className="muted tiny" style={{ margin: '0.6rem 0 0' }}>
+            🔒 Only you can see this · Change it anytime · No tax math, no bank linking
+          </p>
+        </Card>
+      ) : (
+        <>
+          <QuickActions />
+          <StreakCard />
+          <InvitesInbox />
+        </>
+      )}
 
-      {/* Non-blocking nudge if the user hasn't set up bills yet — the plan
-          is still accurate without them, but more useful once they're in. */}
-      {!hasBills && (
+      {!demoMode && !hasBills && (
         <div
           className="info-banner"
           style={{
@@ -259,24 +202,26 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* HERO: the plan donut + actual-vs-budget breakdown.
-          Month progress bar lives in the header to save one card of scroll. */}
+      {/* HERO: donut + actual-vs-budget. Renders identically in demo + real
+          mode — the visual payoff is the same. */}
       <Card tilt>
         <div className="row between" style={{ flexWrap: 'wrap', gap: '0.6rem' }}>
-          <h2 style={{ margin: 0 }}>📊 Your money this month</h2>
+          <h2 style={{ margin: 0 }}>📊 {demoMode ? `${DEMO_SAMPLE_NAME}'s money this month` : 'Your money this month'}</h2>
           <span className={`pill ${health.cls}`}>{health.label}</span>
         </div>
         <div className="row" style={{ gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.2rem', alignItems: 'baseline' }}>
           <small className="muted">Pay</small>
-          <strong className="mono">{inr(plan.income)}</strong>
-          <Link
-            to="/plan#pay-form"
-            className="btn ghost sm"
-            style={{ padding: '0.2rem 0.6rem', minHeight: 'auto', fontSize: '0.78rem' }}
-            title="Change your pay on the Plan page"
-          >
-            ✏️ Edit
-          </Link>
+          <strong className="mono">{inr(displayPlan.income)}</strong>
+          {!demoMode && (
+            <Link
+              to="/plan#pay-form"
+              className="btn ghost sm"
+              style={{ padding: '0.2rem 0.6rem', minHeight: 'auto', fontSize: '0.78rem' }}
+              title="Change your pay on the Plan page"
+            >
+              ✏️ Edit
+            </Link>
+          )}
           <span className="muted small" style={{ marginLeft: 'auto' }}>
             Day {new Date().getDate()} of {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()}
           </span>
@@ -289,23 +234,22 @@ export function Dashboard() {
             }}
           />
         </div>
-        {plan.afterFixed > 0 ? (
+        {displayPlan.afterFixed > 0 ? (
           <>
             <div className="plan-grid" style={{ marginTop: '0.6rem' }}>
-              <Donut segments={segments} centerTop="To save" centerBottom={inr(plan.breakdown.save)} />
+              <Donut segments={segments} centerTop="To save" centerBottom={inr(displayPlan.breakdown.save)} />
               <ul className="legend">
                 {segments.map((s) => (
                   <li key={s.label}>
                     <i style={{ background: s.color }} />
                     <span>{s.label}</span>
                     <b className="mono">{inr(s.value)}</b>
-                    <small className="muted">{Math.min(100, Math.max(0, Math.round((s.value / Math.max(plan.income, 1)) * 100)))}%</small>
+                    <small className="muted">{Math.min(100, Math.max(0, Math.round((s.value / Math.max(displayPlan.income, 1)) * 100)))}%</small>
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* ACTUAL vs BUDGET — reshapes every time an expense is added. */}
             <div className="actual-vs-budget">
               <h3 style={{ margin: '0 0 0.4rem', fontSize: '0.95rem' }}>Spent so far</h3>
               <ul className="list" style={{ gap: '0.5rem' }}>
@@ -313,26 +257,26 @@ export function Dashboard() {
                   <span className="avatar">🍔</span>
                   <div className="grow">
                     <strong>Needs</strong>
-                    <small className="muted">{inr(ins.spentOnNeeds)} of {inr(plan.breakdown.needs)}</small>
+                    <small className="muted">{inr(displayIns.spentOnNeeds)} of {inr(displayPlan.breakdown.needs)}</small>
                   </div>
-                  <SpendBar spent={ins.spentOnNeeds} budget={plan.breakdown.needs} color="var(--c-need)" />
+                  <SpendBar spent={displayIns.spentOnNeeds} budget={displayPlan.breakdown.needs} color="var(--c-need)" />
                 </li>
                 <li className="list-item">
                   <span className="avatar">🎮</span>
                   <div className="grow">
                     <strong>Wants</strong>
-                    <small className="muted">{inr(ins.spentOnWants)} of {inr(plan.breakdown.wants)}</small>
+                    <small className="muted">{inr(displayIns.spentOnWants)} of {inr(displayPlan.breakdown.wants)}</small>
                   </div>
-                  <SpendBar spent={ins.spentOnWants} budget={plan.breakdown.wants} color="var(--c-want)" />
+                  <SpendBar spent={displayIns.spentOnWants} budget={displayPlan.breakdown.wants} color="var(--c-want)" />
                 </li>
                 <li className="list-item">
                   <span className="avatar">💰</span>
                   <div className="grow">
                     <strong>Save so far</strong>
-                    <small className="muted">target {inr(plan.breakdown.save)}</small>
+                    <small className="muted">target {inr(displayPlan.breakdown.save)}</small>
                   </div>
-                  <b className="mono" style={{ color: ins.actualSave >= plan.breakdown.save ? 'var(--c-save)' : 'var(--warn)' }}>
-                    {inr(ins.actualSave)}
+                  <b className="mono" style={{ color: displayIns.actualSave >= displayPlan.breakdown.save ? 'var(--c-save)' : 'var(--warn)' }}>
+                    {inr(displayIns.actualSave)}
                   </b>
                 </li>
               </ul>
@@ -340,27 +284,30 @@ export function Dashboard() {
 
             <div className="daily" style={{ marginTop: '0.8rem' }}>
               <span>Left to spend per day</span>
-              <Money value={Math.max(0, Math.round(ins.dailyLeft))} className="big accent" />
+              <Money value={Math.max(0, Math.round(displayIns.dailyLeft))} className="big accent" />
               <small className="muted">
-                {ins.daysRemaining} day{ins.daysRemaining === 1 ? '' : 's'} left · {inr(plan.spentThisMonth ?? 0)} spent so far
+                {displayIns.daysRemaining} day{displayIns.daysRemaining === 1 ? '' : 's'} left · {inr(displayPlan.spentThisMonth ?? 0)} spent so far
               </small>
             </div>
-            <p className="small" style={{ marginTop: '0.4rem' }}>
-              <Link to="/plan">See line-by-line plan →</Link> · <Link to="/spending">Log today's spend →</Link>
-            </p>
+            {!demoMode && (
+              <p className="small" style={{ marginTop: '0.4rem' }}>
+                <Link to="/plan">See line-by-line plan →</Link> · <Link to="/spending">Log today's spend →</Link>
+              </p>
+            )}
           </>
         ) : (
           <Empty emoji="⚠️" title="Your bills use all of your pay" text="Review which bills can be renegotiated, downgraded, or paused." />
         )}
       </Card>
 
-      {/* Pay + Bills forms moved to /plan — Home is overview-only now.
-          Tips live on /plan too. */}
-      <p className="muted small center" style={{ margin: '0.6rem 0 0' }}>
-        Want to edit pay, bills, or see personalised tips? <Link to="/plan">Open the plan →</Link>
-      </p>
+      {/* The point of the app, in one tile. Same math on demo + real. */}
+      <FiveYearProjection plan={displayPlan} demo={demoMode} />
 
-      <OnboardingModal />
+      {!demoMode && (
+        <p className="muted small center" style={{ margin: '0.6rem 0 0' }}>
+          Want to edit pay, bills, or see personalised tips? <Link to="/plan">Open the plan →</Link>
+        </p>
+      )}
     </>
   );
 }

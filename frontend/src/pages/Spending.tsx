@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import { PageTitle, Spinner } from '../components/ui';
+import { Card, PageTitle } from '../components/ui';
 import { SpendingTracker } from '../components/SpendingTracker';
 import { MonthlyHistoryChart } from '../components/MonthlyHistoryChart';
 import { SmartInsights } from '../components/SmartInsights';

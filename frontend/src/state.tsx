@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError, clearAuth, getToken, getUser, setAuth } from './api';
 import type { User } from './types';
+import { clearCachedPlan } from './hooks/useCachedPlan';
 
 // ---------- Toasts ----------
 interface Toast {
@@ -127,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       logout() {
         clearAuth();
+        clearCachedPlan();
         setUser(null);
       },
     }),

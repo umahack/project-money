@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Card, Empty, PageTitle, Spinner } from '../components/ui';
+import { Card, PageTitle } from '../components/ui';
 import { PlanInputs } from '../components/PlanInputs';
 import { buildInsights } from '../insights';
 import { inr } from '../money';
 import { errText } from '../state';
 import type { Emi, Plan as PlanData } from '../types';
+import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
 
 interface Line {
   key: string;
@@ -63,48 +64,34 @@ export function Plan() {
   const ins = useMemo(() => (plan ? buildInsights(plan, emis) : null), [plan, emis]);
 
   if (err) return <Card><p className="form-error">{err}</p></Card>;
-  if (!plan || !ins) {
-    // Skeleton shell — show the page outline immediately instead of a
-    // blank spinner. Header + card lines appear before the data lands.
-    return (
-      <>
-        <PageTitle title="Plan your month 🧾" sub="Loading…" />
-        <Card>
-          <div style={{ display: 'grid', gap: '0.6rem' }}>
-            <div style={{ height: 22, width: 200, background: 'rgba(0,0,0,0.07)', borderRadius: 6 }} />
-            <div style={{ height: 14, width: 320, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} />
-            <div style={{ height: 14, width: 260, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} />
-          </div>
-        </Card>
-      </>
-    );
-  }
 
-  if (!plan.income) {
-    // No pay yet — show just the setup inputs so the user can start here.
-    return (
-      <>
-        <PageTitle title="Plan your month 🧾" sub="Set your pay and monthly bills to generate a 50/30/20 plan." />
-        <PlanInputs onChange={() => window.location.reload()} />
-      </>
-    );
-  }
+  // Demo-first: show the full line-by-line plan using sample data when the
+  // user hasn't set their pay. PlanInputs lives at the top so one keystroke
+  // on their salary replaces the demo with their real breakdown.
+  const demoMode = !plan || plan.income <= 0;
+  const displayPlan: PlanData = demoMode ? DEMO_PLAN : plan;
+  const displayIns = demoMode ? buildInsights(DEMO_PLAN, []) : ins!;
+  const { needs, wants, save } = displayPlan.breakdown;
 
-  const { needs, wants, save } = plan.breakdown;
   return (
     <>
-      <PageTitle title="Your month, line by line 🧾" sub={`Based on ${inr(plan.income)} a month, after ${inr(plan.emiTotal)} in mandatory payments.`} />
+      <PageTitle
+        title={demoMode ? 'Plan your month 🧾' : 'Your month, line by line 🧾'}
+        sub={demoMode
+          ? `Sample plan built from ${DEMO_SAMPLE_NAME}'s ₹${DEMO_PLAN.income.toLocaleString('en-IN')} month. Set your pay to see yours.`
+          : `Based on ${inr(displayPlan.income)} a month, after ${inr(displayPlan.emiTotal)} in mandatory payments.`}
+      />
 
-      {/* Edit your inputs — one place to change pay + bills. Lives here so
-          Home stays an overview and this page owns the money model. */}
+      {/* Pay + bills inputs live here. In demo mode they are the primary CTA
+          — fill pay and the whole page re-renders with real numbers. */}
       <PlanInputs onChange={() => window.location.reload()} />
 
       <Card tilt>
         <div className="grid four">
-          <Total label="Income" value={inr(plan.income)} tone="ok" />
-          <Total label="Fixed / EMIs" value={inr(plan.emiTotal)} tone="bad" />
-          <Total label="Disposable" value={inr(plan.afterFixed)} tone="warn" />
-          <Total label="Emergency fund target" value={inr(ins.emergencyTarget)} tone="info" />
+          <Total label="Income" value={inr(displayPlan.income)} tone="ok" />
+          <Total label="Fixed / EMIs" value={inr(displayPlan.emiTotal)} tone="bad" />
+          <Total label="Disposable" value={inr(displayPlan.afterFixed)} tone="warn" />
+          <Total label="Emergency fund target" value={inr(displayIns.emergencyTarget)} tone="info" />
         </div>
       </Card>
 
@@ -116,7 +103,7 @@ export function Plan() {
         <Card>
           <h2>🧠 Smart recommendations</h2>
           <ul className="recs">
-            {ins.recs.map((r, i) => (
+            {displayIns.recs.map((r, i) => (
               <li key={r.title + i} className={`rec ${r.level}`}>
                 <div>
                   <strong>{r.title}</strong>

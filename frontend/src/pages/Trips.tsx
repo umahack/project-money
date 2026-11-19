@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
-import { Card, Empty, Field, PageTitle, Spinner } from '../components/ui';
+import { Card, Empty, Field, PageTitle } from '../components/ui';
 import { inr, parseAmount } from '../money';
 import { errText, useToast } from '../state';
 import type { Trip } from '../types';

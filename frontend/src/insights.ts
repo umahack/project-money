@@ -24,6 +24,38 @@ export interface Insights {
   recs: Rec[];
 }
 
+export interface Projection {
+  monthlySave: number;           // 20% target save at this income
+  fiveYear: number;              // compounded 5y @ 8% apr
+  fiveYearIfCutWants20: number;  // + save an extra 20% of wants budget
+  wantsBudget: number;           // for display
+}
+
+/** Future value of a monthly SIP compounded monthly at `apr` annual. */
+function futureValueMonthlySIP(monthly: number, years: number, apr: number): number {
+  const r = apr / 12;
+  const n = years * 12;
+  if (monthly <= 0 || r === 0) return monthly * n;
+  return monthly * ((Math.pow(1 + r, n) - 1) / r);
+}
+
+/**
+ * Killer-number math: what the user's plan compounds to in 5 years,
+ * and what cutting their wants by 20% unlocks on top. Returns zeros
+ * when income is absent so callers can render a placeholder.
+ */
+export function buildProjection(plan: Plan): Projection {
+  const monthlySave = plan.breakdown.save;
+  const wantsBudget = plan.breakdown.wants;
+  const extra = Math.round(wantsBudget * 0.2);
+  return {
+    monthlySave,
+    wantsBudget,
+    fiveYear: Math.round(futureValueMonthlySIP(monthlySave, 5, 0.08)),
+    fiveYearIfCutWants20: Math.round(futureValueMonthlySIP(monthlySave + extra, 5, 0.08)),
+  };
+}
+
 const daysThisMonth = (): number => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
