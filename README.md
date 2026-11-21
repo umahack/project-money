@@ -115,6 +115,41 @@ The job is idempotent per `(user_id, month)` via a `monthly_review_log`
 table — accidental double-triggers are safe. Pass `?dry=1` to preview
 without sending.
 
+**Success reports** use the same secret and scheduler:
+`POST /api/internal/cron/clarity-reports` (logic in
+`backend/src/jobs/clarityReports.js`). Trigger it daily shortly after
+00:00 IST: each run materializes newly completed weekly and 28-day periods,
+finishes deferred action metrics, and deletes product events older than 13
+months. It is idempotent; `?dry=1` lists work without writing. Admins read the
+aggregates at `GET /api/admin/clarity-reports?periodType=&limit=`.
+
+### Operational logs and rollback
+
+Server logs are one JSON object per line from `backend/src/observability/operationalLog.js`.
+A line holds a fixed `event` code and only allowlisted fields: request ID, route
+pattern (`/api/finance/goals/:id`, never the raw path), method, HTTP status, a
+duration bucket, an outcome kind, a stable error code, a record type and numeric
+ID, and the account ID on server failures. A field that is not on the allowlist,
+or whose value does not match its fixed format, is dropped and only counted in
+`droppedFields`. Amounts, names, notes, split JSON, emails, tokens, request or
+response bodies, user-agent text, and error messages or stacks are never logged.
+Set `OPERATIONAL_LOG_LEVEL` to `debug`, `info` (default), `warn`, `error`, or
+`silent` (the default under `NODE_ENV=test`).
+
+Every response carries a server-generated `X-Request-Id`. An unexpected error on
+a clarity route, or on any request that sends `X-Clarity-Contract: 1`, returns
+`{ error: { code, message, retryable, correlationId } }` where `correlationId` is
+that request ID. Other routes keep `{ "error": "Server error" }`. In production
+the structured `REQUEST_COMPLETED` event replaces the morgan access log, which
+recorded raw URLs, IP addresses, and user agents.
+
+Rollback needs no data change. Set `VITE_FINANCIAL_CLARITY_ENABLED=false` and
+rebuild the SPA to return to the legacy UI and read contract, set
+`MONTHLY_REVIEW_CALCULATION_MODE=legacy` to send monthly reviews from the legacy
+calculation, and leave `CLARITY_SHADOW_COMPARE` off (it logs only mismatch codes
+when on). The additive tables and columns stay in place and no record is
+deleted or rewritten.
+
 ### Backups
 
 Turso provides **automatic point-in-time backups** on every plan,

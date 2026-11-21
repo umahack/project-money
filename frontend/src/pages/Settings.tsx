@@ -5,6 +5,7 @@ import { ExportData } from '../components/ExportData';
 import { CategoryManager } from '../components/CategoryManager';
 import { ProfileSettings } from '../components/ProfileSettings';
 import { DangerZone } from '../components/DangerZone';
+import { AnalyticsControl } from '../components/clarity/AnalyticsControl';
 
 export function Settings() {
   return (
@@ -17,6 +18,7 @@ export function Settings() {
       <DevicesPanel />
       <CategoryManager />
       <ChangePassword />
+      <AnalyticsControl />
       <ExportData />
       <DangerZone />
     </>

@@ -2,17 +2,71 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
-import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
+import measurementRepository from '../repositories/measurementRepository.js';
 
-const router = Router();
+/**
+ * Visits are stored as fixed route keys, never as raw paths. Signed-in routes
+ * are stored only for consenting authenticated users. Anonymous visitors can
+ * only record the public routes.
+ */
+export const PUBLIC_VISIT_ROUTES = Object.freeze([
+  'login',
+  'register',
+  'forgot_password',
+  'admin_login',
+  'public_trip_share',
+  'privacy',
+  'terms',
+  'other',
+]);
+export const PRIVATE_VISIT_ROUTES = Object.freeze([
+  'home',
+  'spending',
+  'plan',
+  'recurring',
+  'goals',
+  'trips',
+  'trip_detail',
+  'settings',
+  'arcade',
+  'admin_overview',
+  'admin_users',
+  'admin_feedback',
+  'admin_traffic',
+  'admin_broadcast',
+  'admin_account',
+]);
 
-const trackLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const PUBLIC_ROUTE_SET = new Set(PUBLIC_VISIT_ROUTES);
+const VISIT_ROUTE_SET = new Set([...PUBLIC_VISIT_ROUTES, ...PRIVATE_VISIT_ROUTES]);
+
+// Exact, already-normalized paths sent by the existing client. Anything not
+// listed becomes 'other'; the submitted text is never stored.
+const LEGACY_PATH_ROUTES = new Map([
+  ['/', 'home'],
+  ['/login', 'login'],
+  ['/register', 'register'],
+  ['/forgot-password', 'forgot_password'],
+  ['/admin-login', 'admin_login'],
+  ['/share/trip/*', 'public_trip_share'],
+  ['/privacy', 'privacy'],
+  ['/terms', 'terms'],
+  ['/spending', 'spending'],
+  ['/plan', 'plan'],
+  ['/recurring', 'recurring'],
+  ['/goals', 'goals'],
+  ['/trips', 'trips'],
+  ['/trips/:id', 'trip_detail'],
+  ['/settings', 'settings'],
+  ['/arcade', 'arcade'],
+  ['/admin', 'admin_overview'],
+  ['/admin/users', 'admin_users'],
+  ['/admin/feedback', 'admin_feedback'],
+  ['/admin/traffic', 'admin_traffic'],
+  ['/admin/broadcast', 'admin_broadcast'],
+  ['/admin/account', 'admin_account'],
+]);
 
 /**
  * Hash the IP + a daily salt. The hash rotates every day so we can count unique
@@ -63,22 +117,58 @@ async function optionalUserId(req) {
   }
 }
 
-router.post(
-  '/track',
-  trackLimiter,
-  [body('path').isString().isLength({ min: 1, max: 200 })],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: 'Bad path' });
-    const path = String(req.body.path).slice(0, 200);
-    // Cap UA length to keep rows small; never store `null` as the string literal.
-    const ua = String(req.headers['user-agent'] || '').slice(0, 240) || null;
-    const ip = req.ip || req.socket?.remoteAddress || '';
-    await db
-      .prepare('INSERT INTO visits (user_id, path, ip_hash, user_agent) VALUES (?, ?, ?, ?)')
-      .run(await optionalUserId(req), path, dailyIpHash(ip), ua);
-    res.status(204).end();
-  }
-);
+/**
+ * Accept exactly one of `route` (a fixed route key) or the legacy `path`
+ * string. Returns the fixed route key, or null when the body is not accepted.
+ */
+function parseVisitRoute(body) {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
+  const keys = Object.keys(body);
+  if (keys.length !== 1) return null;
 
-export default router;
+  if (keys[0] === 'route') {
+    return typeof body.route === 'string' && VISIT_ROUTE_SET.has(body.route) ? body.route : null;
+  }
+  if (keys[0] === 'path') {
+    if (typeof body.path !== 'string' || body.path.length < 1 || body.path.length > 200) return null;
+    return LEGACY_PATH_ROUTES.get(body.path) ?? 'other';
+  }
+  return null;
+}
+
+export function createVisitsRouter({
+  repository = measurementRepository,
+  resolveUserId = optionalUserId,
+} = {}) {
+  const router = Router();
+
+  const trackLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  router.post('/track', trackLimiter, async (req, res) => {
+    const route = parseVisitRoute(req.body);
+    if (!route) return res.status(400).json({ error: 'Bad route' });
+
+    // Cap UA length to keep rows small; never store `null` as the string literal.
+    const userAgent = String(req.headers['user-agent'] || '').slice(0, 240) || null;
+    const ipHash = dailyIpHash(req.ip || req.socket?.remoteAddress || '');
+    const userId = await resolveUserId(req);
+
+    if (userId) {
+      // Consent is checked by the insert itself, so an opt-out wins over this request.
+      await repository.recordConsentedVisit({ userId, route, ipHash, userAgent });
+    } else if (PUBLIC_ROUTE_SET.has(route)) {
+      await repository.recordAnonymousVisit({ route, ipHash, userAgent });
+    }
+    // Signed-in routes without a valid signed-in session are dropped.
+    return res.status(204).end();
+  });
+
+  return router;
+}
+
+export default createVisitsRouter();

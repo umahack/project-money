@@ -1,3 +1,16 @@
+/**
+ * ROLLBACK-ONLY browser calculations (task 17.2).
+ *
+ * `buildInsights` and `buildProjection` derive health, daily allowance, and
+ * recommendation figures in the browser from the legacy `/finance/plan` body.
+ * They are used only by the flag-off legacy pages (`LegacyPlan`,
+ * `LegacyDashboard`, `FiveYearProjection`) that `VITE_FINANCIAL_CLARITY_ENABLED`
+ * selects when rolling back. Clarity pages render server-calculated outcomes and
+ * must not import this module; `src/clarity/rollbackBoundary.test.ts` enforces
+ * that. Delete the file together with the legacy pages once old clients are no
+ * longer served.
+ */
+import { DEMO_PLAN } from './demoData';
 import { inr } from './money';
 import type { Emi, Plan } from './types';
 
@@ -197,4 +210,12 @@ export function buildInsights(plan: Plan, emis: Emi[]): Insights {
     overspentWants,
     recs,
   };
+}
+
+let demoInsights: Insights | undefined;
+
+/** Insights for the immutable sample plan, computed on first use by a legacy page rather than at import. */
+export function legacyDemoInsights(): Insights {
+  demoInsights ??= buildInsights(DEMO_PLAN, []);
+  return demoInsights;
 }

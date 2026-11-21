@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
 import { errText, useAuth, useToast } from '../state';
 import { clearUserViewPreference } from '../userViewPref';
+import { parseJourneyIntent, postAuthDestination, withJourneyIntent } from '../clarity/journeys';
 
 import { PW_RULES as RULES } from '../passwordRules';
 
@@ -21,6 +22,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { login, registerStart, registerFinish, registerResend } = useAuth();
   const { toast } = useToast();
   const nav = useNavigate();
+  const { search } = useLocation();
+  // A fixed outcome key from the link that brought the user here. Any other value is ignored.
+  const intent = parseJourneyIntent(search);
   const isLogin = mode === 'login';
 
   useEffect(() => {
@@ -52,7 +56,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     try {
       const u = await login(email.trim(), password);
       clearUserViewPreference();
-      nav(u.is_admin ? '/admin' : '/', { replace: true });
+      nav(postAuthDestination({ isAdmin: u.is_admin, search, registered: false }), { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'login'));
       setBusy(false);
@@ -85,7 +89,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setBusy(true);
     try {
       const u = await registerFinish(email.trim(), code);
-      nav(u.is_admin ? '/admin' : '/', { replace: true });
+      nav(postAuthDestination({ isAdmin: u.is_admin, search, registered: true }), { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'register'));
       setBusy(false);
@@ -149,9 +153,9 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         <div className="top-actions">
           {/* Show only the OTHER page's button so clicking it always navigates. */}
           {isLogin ? (
-            <Link to="/register" className="btn primary sm">Sign up</Link>
+            <Link to={withJourneyIntent('/register', intent)} className="btn primary sm">Sign up</Link>
           ) : (
-            <Link to="/login" className="btn primary sm">Sign in</Link>
+            <Link to={withJourneyIntent('/login', intent)} className="btn primary sm">Sign in</Link>
           )}
         </div>
       </header>
@@ -179,7 +183,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                     <Link className="link" to="/forgot-password">Forgot password?</Link>
                   </p>
                   <p className="muted small center" style={{ marginTop: '0.4rem' }}>
-                    New here? <Link className="link" to="/register">Create an account</Link>
+                    New here? <Link className="link" to={withJourneyIntent('/register', intent)}>Create an account</Link>
                   </p>
                 </motion.form>
               )}
@@ -203,7 +207,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                     {busy ? 'Sending code…' : 'Send verification code'}
                   </motion.button>
                   <p className="muted small center" style={{ marginTop: '0.6rem' }}>
-                    Already have an account on this email? Check your inbox — we'll send a sign-in reminder instead of a signup code. Or just <Link className="link" to="/login">sign in here</Link>.
+                    Already have an account on this email? Check your inbox — we'll send a sign-in reminder instead of a signup code. Or just <Link className="link" to={withJourneyIntent('/login', intent)}>sign in here</Link>.
                   </p>
                 </motion.form>
               )}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { AdminOverview } from './pages/admin/AdminOverview';
@@ -23,14 +23,27 @@ import { Goals } from './pages/Goals';
 import { Settings } from './pages/Settings';
 import { PublicTrip } from './pages/PublicTrip';
 import { MarketingLanding } from './pages/MarketingLanding';
+import { GuidedJourneyPage } from './pages/GuidedJourneyPage';
+import { postAuthDestination } from './clarity/journeys';
+import { selectFinancialClarityRollout } from './clarity/rollout';
 import { useAuth } from './state';
 import { useVisitTracker } from './hooks/useVisitTracker';
 import { wantsUserView } from './userViewPref';
 
-/** Signed-in users go straight to the app; everyone else sees the login or register page. */
-function Guest({ children }: { children: ReactNode }) {
+/**
+ * Signed-in users go straight to the app; everyone else sees the login or register page.
+ * With the clarity rollout on, a sign-up that just finished goes to the guided journey, and
+ * a valid `?start=<outcome>` intent starts that journey. With it off the target is unchanged.
+ */
+function Guest({ children, mode }: { children: ReactNode; mode?: 'login' | 'register' }) {
   const { user } = useAuth();
-  if (user) return <Navigate to={user.is_admin ? '/admin' : '/'} replace />;
+  const { search } = useLocation();
+  // Someone who was already signed in when this page opened did not just register.
+  const signedInOnArrival = useRef(!!user);
+  if (user) {
+    const registered = mode === 'register' && !signedInOnArrival.current;
+    return <Navigate to={postAuthDestination({ isAdmin: user.is_admin, search, registered })} replace />;
+  }
   return <>{children}</>;
 }
 
@@ -55,10 +68,12 @@ function Private() {
 
 export default function App() {
   useVisitTracker();
+  // With the rollout off there is no /start route at all, so it falls through to the catch-all.
+  const guidedJourney = selectFinancialClarityRollout().enabled;
   return (
     <Routes>
-      <Route path="/login" element={<Guest><AuthPage mode="login" /></Guest>} />
-      <Route path="/register" element={<Guest><AuthPage mode="register" /></Guest>} />
+      <Route path="/login" element={<Guest mode="login"><AuthPage mode="login" /></Guest>} />
+      <Route path="/register" element={<Guest mode="register"><AuthPage mode="register" /></Guest>} />
       <Route path="/share/trip/:token" element={<PublicTrip />} />
       <Route path="/admin-login" element={<Guest><AdminLogin /></Guest>} />
       <Route path="/forgot-password" element={<Guest><ForgotPassword /></Guest>} />
@@ -66,6 +81,7 @@ export default function App() {
       <Route path="/terms" element={<Terms />} />
       <Route element={<Private />}>
         <Route index element={<Dashboard />} />
+        {guidedJourney && <Route path="start" element={<GuidedJourneyPage />} />}
         <Route path="spending" element={<Spending />} />
         <Route path="plan" element={<Plan />} />
         <Route path="recurring" element={<Recurring />} />

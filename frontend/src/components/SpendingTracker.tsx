@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
 import { Card, Field, Money, ProgressBar } from './ui';
-import { inr, parseAmount } from '../money';
+import { currentMonth, inr, parseAmount } from '../money';
 import { errText, useToast } from '../state';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { ClaritySpendingTracker, type ClaritySpendingTrackerProps } from './spending/ClaritySpendingTracker';
 
 interface ExpenseRow {
   id: number;
@@ -21,7 +23,45 @@ interface ExpensesResponse {
   expenses: ExpenseRow[];
 }
 
-export function SpendingTracker({ disposable, onChange }: { disposable: number; onChange?: () => void }) {
+export interface SpendingTrackerProps {
+  /** Legacy only: this month's disposable amount. */
+  disposable?: number;
+  /** Legacy only: called after a change. The legacy Spending page refreshes its other sections here. */
+  onChange?: () => void;
+  /** Clarity only: the exact month the page shows. */
+  month?: ClaritySpendingTrackerProps['month'];
+  /** Clarity only: newest confirmed snapshot with pending patches applied. */
+  snapshot?: ClaritySpendingTrackerProps['snapshot'];
+  /** Clarity only: an expense named by the link that opened the page. */
+  focusExpenseId?: ClaritySpendingTrackerProps['focusExpenseId'];
+  /** Clarity only: called after each confirmed expense or treatment change. */
+  onConfirmed?: ClaritySpendingTrackerProps['onConfirmed'];
+  /** Clarity only: re-reads the confirmed snapshot. */
+  onRefresh?: ClaritySpendingTrackerProps['onRefresh'];
+}
+
+/**
+ * Expense log, category totals, and recent entries. With the rollout flag off this
+ * is the original tracker, unchanged. With it on, every log, correction, delete,
+ * and treatment change is its own scoped mutation and every total is the server's.
+ */
+export function SpendingTracker({ disposable, onChange, month, snapshot, focusExpenseId, onConfirmed, onRefresh }: SpendingTrackerProps) {
+  if (selectFinancialClarityRollout().enabled) {
+    return (
+      <ClaritySpendingTracker
+        month={month ?? currentMonth()}
+        snapshot={snapshot}
+        focusExpenseId={focusExpenseId}
+        onConfirmed={onConfirmed}
+        onRefresh={onRefresh}
+      />
+    );
+  }
+  return <LegacySpendingTracker disposable={disposable ?? 0} onChange={onChange} />;
+}
+
+// ROLLBACK-ONLY: the flag-off expense tracker. Clarity code must not use it (src/clarity/rollbackBoundary.test.ts).
+function LegacySpendingTracker({ disposable, onChange }: { disposable: number; onChange?: () => void }) {
   const { toast } = useToast();
   const [data, setData] = useState<ExpensesResponse | null>(null);
   const [budgets, setBudgets] = useState<Record<string, number>>({});
@@ -169,7 +209,7 @@ export function SpendingTracker({ disposable, onChange }: { disposable: number; 
         </>
       )}
 
-      <form onSubmit={add} className="stack-sm" style={{ marginTop: '0.6rem' }}>
+      <form id="expense-form" tabIndex={-1} onSubmit={add} className="stack-sm" style={{ marginTop: '0.6rem' }}>
         <div className="row-sm" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
           <Field label="Amount">
             <input
@@ -202,7 +242,7 @@ export function SpendingTracker({ disposable, onChange }: { disposable: number; 
       </form>
 
       {(byCategory.length > 0 || Object.keys(budgets).length > 0) && (
-        <ul className="list" style={{ marginTop: '0.8rem' }}>
+        <ul id="category-budgets" tabIndex={-1} className="list" style={{ marginTop: '0.8rem' }}>
           {Array.from(new Set([...byCategory.map(([c]) => c), ...Object.keys(budgets)])).map((cat) => {
             const sum = byCategory.find(([c]) => c === cat)?.[1] ?? 0;
             const budget = budgets[cat] ?? 0;

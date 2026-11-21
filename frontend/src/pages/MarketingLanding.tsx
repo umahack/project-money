@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Background } from '../components/Shell';
 import { Donut } from '../components/ui';
+import { JOURNEY_OUTCOMES, withJourneyIntent } from '../clarity/journeys';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
 
 /**
  * Public landing page shown at "/" to unauthenticated visitors. Loud marketing
@@ -98,6 +100,23 @@ export function MarketingLanding() {
             <Donut segments={PREVIEW_SEGMENTS} centerTop="₹65,000" centerBottom="to allocate" />
           </div>
         </div>
+
+        {selectFinancialClarityRollout().enabled && (
+          <section aria-labelledby="landing-journeys">
+            <h2 id="landing-journeys" className="landing-section-title">Start with one goal</h2>
+            <ul className="landing-features" style={{ listStyle: 'none', padding: 0 }}>
+              {JOURNEY_OUTCOMES.map((outcome) => (
+                <li key={outcome.key}>
+                  <Link className="landing-feature plain" to={withJourneyIntent('/register', outcome.key)} style={{ display: 'block' }}>
+                    <h3>{outcome.title}</h3>
+                    <p className="muted small">{outcome.description}</p>
+                    <span className="open-link">Create a free account →</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <h2 id="features" className="landing-section-title">Everything you get, right out of the box</h2>
         <div className="landing-features">

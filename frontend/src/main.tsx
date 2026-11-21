@@ -1,12 +1,18 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import '@fontsource-variable/outfit';
 import '@fontsource-variable/jetbrains-mono';
 import '@fontsource-variable/fraunces';
 import './styles.css';
 import App from './App';
 import { AuthProvider, ToastProvider } from './state';
+import { queryClient } from './clarity/queryClient';
+import { FinancialClarityProvider } from './clarity/FinancialClarityProvider';
+import { MutationStatusProvider } from './clarity/MutationStatusProvider';
+import { RenderErrorBoundary } from './components/clarity/RenderErrorBoundary';
+import { MotionPreferences } from './components/MotionPreferences';
 import { Capacitor } from '@capacitor/core';
 
 // Capacitor native-only setup. On Android 15 (API 35+) the system enables
@@ -37,12 +43,24 @@ try {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <ToastProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    <MotionPreferences>
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            <AuthProvider>
+              <FinancialClarityProvider>
+                <MutationStatusProvider>
+                  {/* Last resort for failures outside the app shell (sign-in, public
+                      pages). It sits inside the providers, so confirmed state survives. */}
+                  <RenderErrorBoundary scope="app" label="Project Money">
+                    <App />
+                  </RenderErrorBoundary>
+                </MutationStatusProvider>
+              </FinancialClarityProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </QueryClientProvider>
+      </BrowserRouter>
+    </MotionPreferences>
   </StrictMode>,
 );

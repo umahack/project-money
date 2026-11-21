@@ -1,0 +1,54 @@
+/* Guided journey. One column first; long text wraps; no fixed widths. Motion
+   is limited to the app-wide transitions, which the global reduced-motion rule
+   already switches off. */
+.journey-page { display: grid; gap: 1rem; }
+.journey-page, .journey-page * { overflow-wrap: anywhere; }
+.journey-intro { margin: 0; }
+.journey-status { min-height: 1.4em; margin: 0; }
+
+.journey-choices {
+  display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5rem), 1fr));
+}
+.journey-choice {
+  display: grid; gap: 0.35rem; width: 100%; min-height: 44px; text-align: left;
+  padding: 0.9rem 1rem; border-radius: var(--radius, 14px);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.35));
+  background: var(--card, transparent); color: var(--text, inherit);
+  font: inherit; cursor: pointer;
+}
+.journey-choice[aria-disabled='true'] { cursor: progress; opacity: 0.7; }
+.journey-choice:hover:not([aria-disabled='true']) { border-color: var(--clarity-focus, currentColor); }
+.journey-choice:focus-visible { outline: 3px solid var(--clarity-focus, currentColor); outline-offset: 2px; }
+.journey-choice-title { font-size: 1.05rem; }
+.journey-choice-text { display: grid; gap: 0.25rem; }
+
+.journey-heading:focus-visible { outline: 3px solid var(--clarity-focus, currentColor); outline-offset: 3px; }
+.journey-step-panel, .journey-panel { display: grid; gap: 0.75rem; }
+.journey-progress { display: grid; gap: 0.5rem; }
+.journey-progress-text { margin: 0; }
+.journey-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.4rem; }
+.journey-steps li {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem; border-radius: 10px;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+}
+.journey-steps li[aria-current='step'] { border-width: 2px; border-color: var(--clarity-focus, currentColor); }
+.journey-step-state { display: inline-flex; align-items: center; font-weight: 600; }
+.journey-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.journey-failure { margin: 0; }
+.journey-failure:focus-visible { outline: 3px solid var(--clarity-focus, currentColor); outline-offset: 2px; }
+.journey-trip-step { display: grid; gap: 0.75rem; }
+.journey-values { display: grid; gap: 0.5rem; }
+.journey-update { display: grid; gap: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border, rgba(127, 127, 127, 0.3)); }
+.journey-unlocked { margin: 0; }
+.journey-optional { display: grid; gap: 0.75rem; }
+.journey-question { display: grid; gap: 0.5rem; }
+.journey-question:focus-visible { outline: 3px solid var(--clarity-focus, currentColor); outline-offset: 2px; }
+.journey-question-title, .journey-question-result { margin: 0; }
+.journey-summary { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.4rem; }
+.journey-summary li {
+  display: grid; gap: 0.15rem; padding: 0.5rem 0.75rem; border-radius: 10px;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.3));
+}
+.journey-return { margin: 0 0 0.5rem; }

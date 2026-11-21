@@ -5,6 +5,9 @@ import { buildProjection } from '../insights';
 import type { Plan } from '../types';
 
 /**
+ * ROLLBACK-ONLY: rendered only by the flag-off legacy Home page, because it compounds
+ * the legacy plan in the browser (`buildProjection`). Clarity pages must not use it.
+ *
  * The "point of the app" in one tile. Shows what the user's monthly save
  * compounds to over 5 years at an 8% SIP, and what cutting wants by 20%
  * unlocks on top. Not advice — math.

@@ -1,14 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { Card } from './ui';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
 import { errText, useToast } from '../state';
+import { ClarityTripShare } from './trips/ClarityTripShare';
 
 interface ShareState {
   enabled: boolean;
   token: string | null;
 }
 
+/**
+ * Public share link card. With `VITE_FINANCIAL_CLARITY_ENABLED` on, creating or
+ * replacing a link first shows the exact public fields and needs a confirmation.
+ * With it off this is the original card, unchanged.
+ */
 export function TripShareLink({ tripId }: { tripId: number }) {
+  return selectFinancialClarityRollout().enabled
+    ? <ClarityTripShare tripId={tripId} />
+    : <LegacyTripShareLink tripId={tripId} />;
+}
+
+function LegacyTripShareLink({ tripId }: { tripId: number }) {
   const { toast } = useToast();
   const [state, setState] = useState<ShareState | null>(null);
   const [busy, setBusy] = useState(false);

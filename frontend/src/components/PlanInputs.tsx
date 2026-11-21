@@ -5,16 +5,51 @@ import { Card, Field, Money, burst } from './ui';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useToast } from '../state';
 import type { Emi } from '../types';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { ClarityPlanInputs, type ClarityPlanInputsProps } from './plan/ClarityPlanInputs';
 
 export const EMI_CATEGORIES = ['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other'] as const;
 const CAT_ICON: Record<string, string> = { EMI: '🏦', Rent: '🏠', Utility: '💡', Insurance: '🛡️', Subscription: '📺', Other: '📌' };
+
+export interface PlanInputsProps {
+  /** Legacy only: called after a change. The legacy Plan page reloads the document here. */
+  onChange?: () => void;
+  /** Clarity only: the exact month the inputs apply to. */
+  month?: string;
+  /** Clarity only: newest confirmed snapshot with pending patches applied. */
+  snapshot?: ClarityPlanInputsProps['snapshot'];
+  /** Clarity only: called after each confirmed salary or bill change. */
+  onConfirmed?: ClarityPlanInputsProps['onConfirmed'];
+  /** Clarity only: re-reads the confirmed snapshot. */
+  onRefresh?: ClarityPlanInputsProps['onRefresh'];
+}
+
+/**
+ * Pay + Monthly bills setup, where users CHANGE their inputs. With the rollout
+ * flag off this is the original component, unchanged. With it on, each salary and
+ * bill is its own scoped mutation: no reload, no component-wide saving state.
+ */
+export function PlanInputs({ onChange, month, snapshot, onConfirmed, onRefresh }: PlanInputsProps) {
+  if (selectFinancialClarityRollout().enabled) {
+    return (
+      <ClarityPlanInputs
+        month={month ?? currentMonth()}
+        snapshot={snapshot}
+        onConfirmed={onConfirmed}
+        onRefresh={onRefresh}
+      />
+    );
+  }
+  return <LegacyPlanInputs onChange={onChange} />;
+}
 
 /**
  * Pay + Monthly bills setup. Moved off the Home page so Home is a pure
  * overview and this is where users go to CHANGE their inputs. Mounted on
  * /plan so there's one place to adjust the money model.
  */
-export function PlanInputs({ onChange }: { onChange?: () => void }) {
+// ROLLBACK-ONLY: the flag-off pay and bills form. Clarity code must not use it (src/clarity/rollbackBoundary.test.ts).
+function LegacyPlanInputs({ onChange }: { onChange?: () => void }) {
   const { toast } = useToast();
   const [salaryMonth, setSalaryMonth] = useState<string | null>(null);
   const [salary, setSalary] = useState('');
@@ -139,7 +174,7 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
   return (
     <div className="grid two gap-top">
       <Card>
-        <h2 id="pay-form">💰 Monthly pay</h2>
+        <h2 id="pay-form" tabIndex={-1}>💰 Monthly pay</h2>
         <p className="muted small" style={{ marginTop: 0 }}>
           <strong>Why we ask:</strong> we subtract your bills from this, then split what's left
           into Needs 50 / Wants 30 / Save 20 — the daily-spend number is derived from here.
@@ -163,7 +198,7 @@ export function PlanInputs({ onChange }: { onChange?: () => void }) {
       </Card>
 
       <Card>
-        <h2 id="bills-form">📄 Monthly bills <small className="muted" style={{ fontWeight: 400 }}>(optional)</small></h2>
+        <h2 id="bills-form" tabIndex={-1}>📄 Monthly bills <small className="muted" style={{ fontWeight: 400 }}>(optional)</small></h2>
         <p className="muted small" style={{ marginTop: 0 }}>
           <strong>Why we ask:</strong> these come out of your pay before anything else, so we
           remove them first — otherwise the plan would suggest spending money you don't actually

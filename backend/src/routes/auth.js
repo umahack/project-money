@@ -4,9 +4,19 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
+import {
+  ACCOUNT_DATA_SUPPORT,
+  buildIncompleteDeletionResponse,
+  deleteAccountRecords,
+} from '../db/accountDeletion.js';
 import { adminEmails } from '../middleware/admin.js';
 import { authRequired } from '../middleware/auth.js';
 import { audit } from '../audit.js';
+import {
+  logBackgroundFailure,
+  operationalLogger,
+  safeErrorName,
+} from '../observability/operationalLog.js';
 import { createSession, revokeSession } from '../sessions.js';
 import { generateCode, hashCode, matches, expiresAt, isExpired, MAX_VERIFY_ATTEMPTS } from '../otp.js';
 import {
@@ -16,6 +26,12 @@ import {
   passwordResetEmail,
   alreadyRegisteredEmail,
 } from '../mailer.js';
+
+// Delivery failures are logged by operation only. The recipient address and the
+// provider's error text (which can echo the address) are never written.
+function logMailFailure(operation) {
+  operationalLogger.warn({ event: 'MAIL_DELIVERY_FAILED', operation });
+}
 
 const router = Router();
 
@@ -109,7 +125,7 @@ async function sweepExpiredPending() {
       db.prepare('DELETE FROM pending_password_resets WHERE verify_expires_at < ?').run(new Date().toISOString()),
     ]);
   } catch (e) {
-    console.error('[pending-sweep] skipped:', e?.message);
+    logBackgroundFailure('pending_sweep', e);
   }
 }
 
@@ -186,7 +202,7 @@ router.post(
       const { subject, text, html } = registerVerifyEmail(code, name);
       mailResult = await sendMail({ to: email, subject, text, html });
     }
-    if (mailResult?.ok === false) console.error('[mail-outcome] register-start to', email, '-', mailResult.error);
+    if (mailResult?.ok === false) logMailFailure('auth.register_start');
     res.json({ ok: true, email, mail: { sent: !!mailResult.ok, fallback: !!mailResult.fallback } });
   }
 );
@@ -215,7 +231,7 @@ router.post(
         .run(await hashCode(code), expiresAt(), email);
       const { subject, text, html } = registerVerifyEmail(code, row.name);
       mailResult = await sendMail({ to: email, subject, text, html });
-      if (mailResult?.ok === false) console.error('[mail-outcome] register-resend to', email, '-', mailResult.error);
+      if (mailResult?.ok === false) logMailFailure('auth.register_resend');
     }
     res.json({ ok: true, mail: { sent: !!mailResult.ok, fallback: !!mailResult.fallback } });
   }
@@ -381,7 +397,7 @@ router.post(
         .run(email, codeHash, expiresAt());
       const { subject, text, html } = passwordResetEmail(code, user.name);
       const mr = await sendMail({ to: email, subject, text, html });
-      if (mr?.ok === false) console.error('[mail-outcome] password-reset-start to', email, '-', mr.error);
+      if (mr?.ok === false) logMailFailure('auth.password_reset');
     }
     // Always ok. Caller shows "If that email is on file, a code is on the way."
     res.json({ ok: true });
@@ -550,7 +566,7 @@ router.patch(
         )
         .run(name, current.name, req.user.id);
     } catch (e) {
-      console.error('[profile.rename-sync] skipped:', e?.message);
+      logBackgroundFailure('profile_rename_sync', e);
     }
     const u = await db
       .prepare('SELECT id, email, name, is_admin, token_version FROM users WHERE id = ?')
@@ -612,7 +628,7 @@ router.post(
         .run(req.user.id, newEmail, await hashCode(code), expiresAt());
       const { subject, text, html } = emailChangeVerifyEmail(code, me.email);
       const mr = await sendMail({ to: newEmail, subject, text, html });
-      if (mr?.ok === false) console.error('[mail-outcome] email-change-start to', newEmail, '-', mr.error);
+      if (mr?.ok === false) logMailFailure('auth.email_change');
     }
     res.json({ ok: true, newEmail, mail: { sent: true, fallback: false } });
   }
@@ -716,62 +732,261 @@ router.post('/refresh', authRequired, async (req, res) => {
 });
 
 // ---------- Account export & delete ----------
-// Return every row this user owns as a single JSON blob. The client offers it
-// as a download. Trip data where the user is a member (not owner) is included.
-router.get('/export', authRequired, async (req, res) => {
-  const uid = req.user.id;
-  const user = await db
-    .prepare('SELECT id, email, name, is_admin, created_at FROM users WHERE id = ?')
-    .get(uid);
-  if (!user) return res.status(401).json({ error: 'Session expired' });
-  const [
-    salary,
-    emis,
-    expenses,
-    categoryBudgets,
-    recurring,
-    goals,
-    userCategories,
-    sessions,
-    tripsOwned,
-    tripMemberships,
-    feedback,
-  ] = await Promise.all([
-    db.prepare('SELECT * FROM salary_entries WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM emis WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM expense_log WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM category_budgets WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM recurring_expenses WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM savings_goals WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM user_categories WHERE user_id = ?').all(uid),
-    db.prepare('SELECT id, device_label, created_at, last_seen_at, revoked_at, revoked_reason FROM sessions WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM trips WHERE user_id = ?').all(uid),
-    db.prepare('SELECT * FROM trip_members WHERE user_id = ?').all(uid),
-    db.prepare('SELECT id, rating, message, created_at FROM feedback WHERE user_id = ?').all(uid),
-  ]);
-  res.setHeader('Content-Disposition', `attachment; filename="project-money-${uid}-${Date.now()}.json"`);
-  res.json({
-    exported_at: new Date().toISOString(),
-    user,
-    data: {
-      salary_entries: salary,
-      emis,
-      expenses,
-      category_budgets: categoryBudgets,
-      recurring_expenses: recurring,
-      savings_goals: goals,
-      user_categories: userCategories,
-      sessions,
-      trips_owned: tripsOwned,
-      trip_memberships: tripMemberships,
-      feedback,
-    },
-  });
+const EXPORT_SCHEMA_VERSION = 1;
+const EXPORT_TABLE_DESCRIPTIONS = Object.freeze({
+  salary_entries: 'Confirmed take-home income records by applicable month.',
+  emis: 'Confirmed bills and fixed obligations used by monthly plans.',
+  expenses: 'Confirmed personal expenses, including expenses created from trip shares.',
+  category_budgets: 'Personal expense-category budget settings.',
+  recurring_expenses: 'Recurring personal expense definitions and materialization state.',
+  savings_goals: 'Confirmed savings goals, progress, and target dates.',
+  user_categories: 'Personal expense categories added by the account holder.',
+  sessions: 'Device sessions, including revocation and last-seen state; network fingerprints are omitted.',
+  trips_owned: 'Private trip records owned by the account, including public-sharing columns.',
+  trips_shared: 'Private trip records the account can access through a linked membership.',
+  trip_memberships: 'Trip-member rows linked directly to the account.',
+  trip_members: 'Member rows for trips the account owns or can access.',
+  trip_expenses: 'Shared expenses for trips the account owns or can access.',
+  feedback: 'Feedback submitted while linked to the account.',
+  user_financial_state: 'Financial data version, data-use acknowledgement, and Product Analytics consent state.',
+  product_analytics_settings: 'A focused view of the Product Analytics consent setting and version.',
+  guided_journeys: 'Guided Journey intent, progress, and completion state.',
+  expense_category_treatments: 'Needs or Wants treatment choices for expense categories.',
+  trip_expense_personal_links: 'Links between an allocated trip share and a confirmed personal expense.',
+  financial_record_changes: 'Confirmed change receipts. The internal request-fingerprint HMAC is omitted.',
+  public_sharing_settings: 'Public-link enabled state and token for each owned trip.',
+  product_measurement_events: 'Consent-gated Product Analytics events linked to the account.',
+  visits: 'Visit records that remain linked to the account.',
 });
 
-// Delete the account. Requires currentPassword as a confirmation. Cascading FK
-// cleans up every user-owned row; trips/feedback/visits/audit set user to NULL
-// (we keep them for aggregates and admin history, now orphaned).
+class AccountExportError extends Error {
+  constructor(category, options = {}) {
+    super('Account export was unsuccessful.', options);
+    this.code = 'EXPORT_FAILED';
+    this.category = category;
+  }
+}
+
+async function readExportRecord(category, sql, ...args) {
+  try {
+    return await db.prepare(sql).get(...args);
+  } catch (cause) {
+    throw new AccountExportError(category, { cause });
+  }
+}
+
+async function readExportRows(category, sql, ...args) {
+  try {
+    return await db.prepare(sql).all(...args);
+  } catch (cause) {
+    throw new AccountExportError(category, { cause });
+  }
+}
+
+function logExportFailure(req, error) {
+  operationalLogger.error({
+    event: 'ACCOUNT_EXPORT_FAILED',
+    requestId: req.requestId,
+    code: 'EXPORT_FAILED',
+    category: typeof error?.category === 'string' ? error.category : undefined,
+    errorName: safeErrorName(error?.cause ?? error),
+    userId: req.user?.id,
+  });
+}
+
+function exportFailureResponse(category) {
+  const description = EXPORT_TABLE_DESCRIPTIONS[category]
+    ?? 'Account profile and account-linked records.';
+  return {
+    error: 'Account export was unsuccessful. Your records are unchanged.',
+    code: 'EXPORT_FAILED',
+    status: 'unsuccessful',
+    failed_record_categories: [{ key: category, description }],
+    retry: {
+      method: 'GET',
+      path: '/api/auth/export',
+    },
+    support: ACCOUNT_DATA_SUPPORT,
+  };
+}
+
+// Return every account-owned or account-accessible record as one described,
+// versioned JSON document. Export queries are reads only, so failures cannot
+// change source records.
+router.get('/export', authRequired, async (req, res) => {
+  const uid = req.user.id;
+  let user;
+  try {
+    user = await readExportRecord(
+      'account_profile',
+      'SELECT id, email, name, is_admin, created_at FROM users WHERE id = ?',
+      uid
+    );
+  } catch (error) {
+    logExportFailure(req, error);
+    return res.status(500).json(exportFailureResponse(error.category));
+  }
+  if (!user) return res.status(401).json({ error: 'Session expired' });
+
+  try {
+    const [
+      salary,
+      emis,
+      expenses,
+      categoryBudgets,
+      recurring,
+      goals,
+      userCategories,
+      sessions,
+      tripsOwned,
+      tripsShared,
+      tripMemberships,
+      tripMembers,
+      tripExpenses,
+      feedback,
+      financialState,
+      journeys,
+      treatments,
+      personalLinks,
+      changes,
+      measurementEvents,
+      visits,
+    ] = await Promise.all([
+      readExportRows('salary_entries', 'SELECT * FROM salary_entries WHERE user_id = ?', uid),
+      readExportRows('emis', 'SELECT * FROM emis WHERE user_id = ?', uid),
+      readExportRows('expenses', 'SELECT * FROM expense_log WHERE user_id = ?', uid),
+      readExportRows('category_budgets', 'SELECT * FROM category_budgets WHERE user_id = ?', uid),
+      readExportRows('recurring_expenses', 'SELECT * FROM recurring_expenses WHERE user_id = ?', uid),
+      readExportRows('savings_goals', 'SELECT * FROM savings_goals WHERE user_id = ?', uid),
+      readExportRows('user_categories', 'SELECT * FROM user_categories WHERE user_id = ?', uid),
+      readExportRows(
+        'sessions',
+        `SELECT id, device_label, created_at, last_seen_at, revoked_at, revoked_reason
+           FROM sessions WHERE user_id = ?`,
+        uid
+      ),
+      readExportRows('trips_owned', 'SELECT * FROM trips WHERE user_id = ?', uid),
+      readExportRows(
+        'trips_shared',
+        `SELECT * FROM trips
+          WHERE user_id != ?
+            AND id IN (SELECT trip_id FROM trip_members WHERE user_id = ?)`,
+        uid,
+        uid
+      ),
+      readExportRows('trip_memberships', 'SELECT * FROM trip_members WHERE user_id = ?', uid),
+      readExportRows(
+        'trip_members',
+        `SELECT * FROM trip_members
+          WHERE trip_id IN (
+            SELECT id FROM trips WHERE user_id = ?
+            UNION
+            SELECT trip_id FROM trip_members WHERE user_id = ?
+          )`,
+        uid,
+        uid
+      ),
+      readExportRows(
+        'trip_expenses',
+        `SELECT * FROM trip_expenses
+          WHERE trip_id IN (
+            SELECT id FROM trips WHERE user_id = ?
+            UNION
+            SELECT trip_id FROM trip_members WHERE user_id = ?
+          )`,
+        uid,
+        uid
+      ),
+      readExportRows(
+        'feedback',
+        'SELECT id, rating, message, created_at FROM feedback WHERE user_id = ?',
+        uid
+      ),
+      readExportRows('user_financial_state', 'SELECT * FROM user_financial_state WHERE user_id = ?', uid),
+      readExportRows('guided_journeys', 'SELECT * FROM guided_journeys WHERE user_id = ?', uid),
+      readExportRows(
+        'expense_category_treatments',
+        'SELECT * FROM expense_category_treatments WHERE user_id = ?',
+        uid
+      ),
+      readExportRows(
+        'trip_expense_personal_links',
+        'SELECT * FROM trip_expense_personal_links WHERE user_id = ?',
+        uid
+      ),
+      readExportRows(
+        'financial_record_changes',
+        `SELECT id, user_id, idempotency_key, operation, record_type,
+                record_id, record_version, status, occurred_at
+           FROM financial_record_changes
+          WHERE user_id = ?`,
+        uid
+      ),
+      readExportRows(
+        'product_measurement_events',
+        'SELECT * FROM product_measurement_events WHERE user_id = ?',
+        uid
+      ),
+      readExportRows('visits', 'SELECT * FROM visits WHERE user_id = ?', uid),
+    ]);
+
+    const productAnalyticsSettings = financialState.map((state) => ({
+      user_id: state.user_id,
+      analytics_enabled: state.analytics_enabled,
+      analytics_consent_version: state.analytics_consent_version,
+      analytics_changed_at: state.analytics_changed_at,
+    }));
+    const publicSharingSettings = tripsOwned.map((trip) => ({
+      trip_id: trip.id,
+      public_enabled: trip.public_enabled,
+      public_token: trip.public_token,
+    }));
+
+    res.setHeader('Content-Disposition', `attachment; filename="project-money-${uid}-${Date.now()}.json"`);
+    return res.json({
+      schema: {
+        version: EXPORT_SCHEMA_VERSION,
+        description: 'Project Money account export. Collections contain confirmed source records and account-linked settings; calculated outcomes can be reproduced from these records.',
+        account: 'Account profile fields that identify and describe the account.',
+        tables: EXPORT_TABLE_DESCRIPTIONS,
+      },
+      exported_at: new Date().toISOString(),
+      user,
+      data: {
+        salary_entries: salary,
+        emis,
+        expenses,
+        category_budgets: categoryBudgets,
+        recurring_expenses: recurring,
+        savings_goals: goals,
+        user_categories: userCategories,
+        sessions,
+        trips_owned: tripsOwned,
+        trips_shared: tripsShared,
+        trip_memberships: tripMemberships,
+        trip_members: tripMembers,
+        trip_expenses: tripExpenses,
+        feedback,
+        user_financial_state: financialState,
+        product_analytics_settings: productAnalyticsSettings,
+        guided_journeys: journeys,
+        expense_category_treatments: treatments,
+        trip_expense_personal_links: personalLinks,
+        financial_record_changes: changes,
+        public_sharing_settings: publicSharingSettings,
+        product_measurement_events: measurementEvents,
+        visits,
+      },
+    });
+  } catch (error) {
+    logExportFailure(req, error);
+    return res.status(500).json(exportFailureResponse(error.category ?? 'account_profile'));
+  }
+});
+
+// Delete the account. Requires currentPassword as confirmation. The complete
+// user-linked deletion set runs as one write batch so a failed statement
+// preserves the account and every related record for a safe retry.
 router.delete(
   '/account',
   authRequired,
@@ -799,38 +1014,28 @@ router.delete(
       }
     }
     const uid = req.user.id;
-    // Explicit cleanup (don't rely on PRAGMA foreign_keys being on).
-    const tx = [
-      // trip_expenses rows reference the payer by name string, not user_id,
-      // so there is nothing to delete directly here. They are rolled up when
-      // the parent trip is deleted below via ON DELETE CASCADE.
-      ['DELETE FROM trip_members WHERE user_id = ?', [uid]],
-      ['DELETE FROM trip_invites WHERE inviter_id = ? OR invitee_id = ?', [uid, uid]],
-      // trips.user_id uses ON DELETE SET NULL; we also delete trips the user owned
-      // outright to avoid leaving ownerless trips cluttering the DB.
-      ['DELETE FROM trips WHERE user_id = ?', [uid]],
-      ['DELETE FROM salary_entries WHERE user_id = ?', [uid]],
-      ['DELETE FROM emis WHERE user_id = ?', [uid]],
-      ['DELETE FROM expense_log WHERE user_id = ?', [uid]],
-      ['DELETE FROM category_budgets WHERE user_id = ?', [uid]],
-      ['DELETE FROM recurring_expenses WHERE user_id = ?', [uid]],
-      ['DELETE FROM savings_goals WHERE user_id = ?', [uid]],
-      ['DELETE FROM user_categories WHERE user_id = ?', [uid]],
-      ['DELETE FROM user_aliases WHERE user_id = ?', [uid]],
-      ['DELETE FROM sessions WHERE user_id = ?', [uid]],
-      ['DELETE FROM pending_email_changes WHERE user_id = ?', [uid]],
-      ['DELETE FROM pending_registrations WHERE email = ?', [row.email]],
-      ['DELETE FROM pending_password_resets WHERE email = ?', [row.email]],
-      ['UPDATE feedback SET user_id = NULL WHERE user_id = ?', [uid]],
-      ['UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?', [uid]],
-      ['UPDATE visits SET user_id = NULL WHERE user_id = ?', [uid]],
-      ['DELETE FROM users WHERE id = ?', [uid]],
-    ];
-    for (const [sql, args] of tx) {
-      await db.prepare(sql).run(...args);
+    try {
+      await deleteAccountRecords({ database: db, userId: uid, email: row.email });
+    } catch (error) {
+      if (error?.code === 'ACCOUNT_DELETION_INCOMPLETE') {
+        operationalLogger.error({
+          event: 'ACCOUNT_DELETION_INCOMPLETE',
+          requestId: req.requestId,
+          code: 'ACCOUNT_DELETION_INCOMPLETE',
+          errorName: safeErrorName(error?.cause ?? error),
+          userId: uid,
+        });
+        return res.status(500).json(
+          buildIncompleteDeletionResponse(error, '/api/auth/account')
+        );
+      }
+      throw error;
     }
+    // The user row no longer exists, so retain the actor email in the audit
+    // entry without writing a dangling actor_id foreign key.
+    req.user = { ...req.user, id: null };
     await audit(req, { action: 'account.self_delete', details: `email=${row.email}` });
-    res.json({ ok: true });
+    return res.json({ ok: true });
   }
 );
 

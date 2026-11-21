@@ -1,0 +1,25 @@
+/* Goals page in the clarity branch. Reuses the app tokens and the shared clarity classes. */
+.goals-list-title, .goals-form-title { margin: 0.8rem 0 0.4rem; font-size: 1rem; }
+.goal-item { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+/* Full opacity keeps muted text at 4.5:1; the dashed edge and the pending text mark the row. */
+.goal-item.is-pending { border-style: dashed; border-color: var(--border); }
+.goal-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.goal-head .grow { min-width: min(10rem, 100%); }
+.goal-head small { display: block; }
+.goal-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.goal-wide { flex: 1 1 100%; min-width: 0; }
+.goal-outcome { margin: 0; }
+.goal-values { display: grid; gap: 0.1rem; }
+.goal-values p { margin: 0.2rem 0 0.4rem; }
+.goal-feasibility, .goal-revision, .goal-correction {
+  display: grid; gap: 0.3rem; margin: 0.5rem 0 0; padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border); border-radius: 14px;
+}
+.goal-feasibility p, .goal-revision p, .goal-correction p { margin: 0; }
+.goal-revision, .goal-correction { border-color: var(--clarity-warn); }
+.goal-correction { border: 0; padding: 0; margin: 0.3rem 0 0; }
+.goal-panel { display: grid; gap: 0.3rem; padding: 0.6rem 0.8rem; border-radius: 14px; border: 1px solid var(--border); }
+.goal-panel .field { margin-bottom: 0.3rem; }
+.goal-panel p { margin: 0; }
+.goal-no-outcome { margin: 0; }
+.goal-form .clarity-field-error { grid-column: 1 / -1; }

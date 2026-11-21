@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // vite/client types `import.meta.env`, which the shared src/ fixtures the specs import reference.
+    "types": ["node", "@playwright/test", "vite/client"]
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"]
+}

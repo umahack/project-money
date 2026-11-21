@@ -1,0 +1,43 @@
+@import './clarity.css';
+/* Purpose explanation and input benefit preview. Uses the app tokens from
+   styles.css so both themes keep the warm palette. Required/optional and
+   example/confirmed are stated in text; color only reinforces them. */
+.clarity-purpose,
+.clarity-benefit {
+  background: var(--glass);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  margin: 0 0 0.8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.clarity-purpose { border-left: 4px solid var(--clarity-info, var(--accent)); }
+.clarity-benefit { border-left: 4px solid var(--clarity-ok, var(--accent)); }
+.clarity-benefit[data-source='example'] { border-left-style: dashed; border-left-color: var(--clarity-warn, var(--warn)); }
+.clarity-purpose-title,
+.clarity-benefit-title {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem;
+  margin: 0 0 0.3rem; font-weight: 600;
+}
+.clarity-purpose-text,
+.clarity-purpose-lead,
+.clarity-benefit-basis { margin: 0.25rem 0; }
+.clarity-benefit-basis { color: var(--muted); font-size: 0.9rem; }
+.clarity-purpose-terms { margin: 0.25rem 0; padding-left: 1.2rem; display: grid; gap: 0.2rem; }
+.clarity-purpose-term { font-style: normal; font-weight: 600; }
+.clarity-purpose-skip { margin-top: 0.6rem; display: grid; gap: 0.4rem; justify-items: start; }
+.clarity-purpose-skip-text { margin: 0; color: var(--muted); }
+.clarity-purpose-skip .btn { white-space: normal; text-align: center; }
+.clarity-purpose-skipped { margin: 0; }
+.clarity-purpose-skipped:empty { display: none; }
+.clarity-benefit-lines { margin: 0.3rem 0 0; display: grid; gap: 0.3rem; }
+.clarity-benefit-line { display: flex; flex-wrap: wrap; gap: 0.1rem 0.6rem; align-items: baseline; }
+.clarity-benefit-line dt { color: var(--muted); font-size: 0.9rem; }
+.clarity-benefit-line dd { margin: 0; font-weight: 600; min-width: 0; }
+.clarity-purpose :focus-visible,
+.clarity-benefit :focus-visible {
+  outline: 3px solid var(--clarity-focus);
+  outline-offset: 2px;
+}

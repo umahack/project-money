@@ -10,6 +10,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Render terminates public traffic and forwards it into this container.
+      - key: HOST
+        value: 0.0.0.0
       # Pin the server timezone to IST so monthKey/day-of-month/CSV dates
       # match the frontend (which reads the user's local clock). Prevents the
       # 5h30m month-boundary mismatch between IST users and UTC server.
@@ -17,8 +20,14 @@ services:
         value: Asia/Kolkata
       - key: JWT_SECRET
         generateValue: true
+      # Dedicated HMAC key for idempotent financial mutation fingerprints.
+      - key: FINANCIAL_MUTATION_HMAC_KEY
+        generateValue: true
       - key: CORS_ORIGIN
         sync: false
+      # Shadow comparison is opt-in and emits mismatch codes only.
+      - key: CLARITY_SHADOW_COMPARE
+        value: "false"
       - key: ADMIN_EMAILS
         sync: false
       - key: TURSO_DATABASE_URL
@@ -49,6 +58,9 @@ services:
     envVars:
       - key: VITE_API_BASE
         sync: false
+      # Roll back to the established UI/read path unless explicitly enabled.
+      - key: VITE_FINANCIAL_CLARITY_ENABLED
+        value: "false"
     routes:
       - type: rewrite
         source: /*

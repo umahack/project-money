@@ -1,0 +1,30 @@
+/* Spending page in the clarity branch. Reuses the app tokens and the shared clarity classes. */
+.spending-values { display: grid; gap: 0.1rem; }
+.spending-values p { margin: 0.2rem 0 0.4rem; }
+.spending-change { margin-top: 0.8rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.spending-change p { margin: 0; }
+.spending-excess {
+  display: grid; gap: 0.4rem; margin: 0.8rem 0 0; padding: 0.7rem 0.8rem;
+  border: 1px solid var(--clarity-warn); border-radius: 14px;
+}
+.spending-excess p { margin: 0; }
+
+.spending-expense { flex-wrap: wrap; }
+/* A pending row keeps full opacity (a faded row drops its muted text below 4.5:1). The dashed edge and the "Saving" text mark it. */
+.spending-expense.is-pending { border-style: dashed; border-color: var(--border); }
+.spending-wide { flex: 1 1 100%; min-width: 0; }
+.spending-moving { display: block; }
+.spending-edit { display: grid; gap: 0.2rem; flex: 1 1 100%; min-width: 0; }
+.spending-edit .field { margin-bottom: 0.3rem; }
+
+.spending-categories { margin-top: 1rem; }
+.spending-categories h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.spending-category { flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: flex-start; }
+.spending-treatment, .spending-limit { display: grid; gap: 0.25rem; min-width: 0; flex: 1 1 14rem; }
+.spending-treatment-buttons { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.spending-limit { grid-auto-flow: row; }
+.spending-limit-form { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.spending-limit-form input { width: 9rem; }
+.spending-limit p { margin: 0; }
+.spending-entries-title { margin-top: 1rem; }
+.spending-form .clarity-field-error { grid-column: 1 / -1; }

@@ -2,11 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '../api';
-import { Card, Empty, Field, Money, PageTitle, ProgressBar, burst } from '../components/ui';
+import { Card, Empty, Field, Money, ProgressBar, burst } from '../components/ui';
+import { ClarityPageHeader } from '../components/clarity/ClarityPageHeader';
+import { DecisionActionHeader } from '../components/clarity/DecisionActionHeader';
+import type { ActionableInsight } from '../clarity/contracts';
+import { PAGE_DECISIONS, tabForAction, tripDetailFallback } from '../clarity/actionContext';
+import { useActionArrival } from '../clarity/useActionArrival';
+import { useHeaderAction } from '../clarity/useHeaderAction';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
 import { fmtDate, inr, parseAmount, toPaise } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { TripDetailData } from '../types';
 import { TripShareLink } from '../components/TripShareLink';
+import { ClarityTripDetail } from '../components/trips/ClarityTripDetail';
 
 /**
  * The API has no separate "settlement" record. A settlement is stored as a normal expense paid by the
@@ -24,13 +32,27 @@ const TAB_LABELS: Record<TripTab, string> = {
   share: '🔗 Share',
 };
 
+/**
+ * Trip detail. With `VITE_FINANCIAL_CLARITY_ENABLED` off this is the original page,
+ * unchanged. With it on, allocations, balances, and the settlement come from the
+ * server's snapshot and each trip change saves on its own.
+ */
 export function TripDetail() {
+  return selectFinancialClarityRollout().enabled ? <ClarityTripDetail /> : <LegacyTripDetail />;
+}
+
+// ROLLBACK-ONLY: the flag-off trip detail page. Clarity code must not use it (src/clarity/rollbackBoundary.test.ts).
+function LegacyTripDetail() {
   const { id } = useParams();
   const { toast } = useToast();
   const [d, setD] = useState<TripDetailData | null>(null);
   const [missing, setMissing] = useState(false);
   const [params, setParams] = useSearchParams();
-  const raw = params.get('tab');
+  // Opens the tab and focuses the form named by the link that opened this page.
+  const arrival = useActionArrival('trip-detail');
+  const routeTripId = /^[1-9][0-9]{0,8}$/.test(id ?? '') ? Number(id) : undefined;
+  const rankedAction = useHeaderAction('trip-detail', { tripId: routeTripId });
+  const raw = params.get('tab') ?? tabForAction(arrival.action);
   const tab: TripTab = raw === 'balances' || raw === 'people' || raw === 'share' ? raw : 'expenses';
   const setTab = (next: TripTab) => setParams({ tab: next }, { replace: true });
 
@@ -58,7 +80,12 @@ export function TripDetail() {
   if (!d) {
     return (
       <>
-        <PageTitle title="Trip ✈️" sub="Opening the trip…" />
+        <ClarityPageHeader
+          legacy={{ title: 'Trip ✈️', sub: 'Opening the trip…' }}
+          title="Trip balance"
+          decision={PAGE_DECISIONS['trip-detail']}
+          action={rankedAction}
+        />
         <Card><div style={{ height: 20, width: 220, background: 'rgba(0,0,0,0.07)', borderRadius: 6, marginBottom: 10 }} /><div style={{ height: 14, width: 180, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} /></Card>
       </>
     );
@@ -73,7 +100,7 @@ export function TripDetail() {
   return (
     <>
       <div className="crumbs"><Link to="/trips">← All trips</Link></div>
-      <Header d={d} />
+      <Header d={d} action={rankedAction} />
 
       <nav className="trip-tabs" role="tablist" aria-label="Trip sections">
         {availableTabs.map((t) => (
@@ -104,14 +131,33 @@ export function TripDetail() {
   );
 }
 
-function Header({ d }: { d: TripDetailData }) {
+function Header({ d, action }: { d: TripDetailData; action: ActionableInsight | null }) {
   const spent = d.expenses.filter((e) => !isSettlement(e.description)).reduce((s, e) => s + e.amount, 0);
   const left = d.trip.budget - spent;
+  // With the rollout on, the decision header is the page's h1 and the trip name becomes the card's h2.
+  const clarity = selectFinancialClarityRollout().enabled;
+  const Heading = clarity ? 'h2' : 'h1';
+  const nextKind = d.settlement.transactions.length > 0 ? 'settle' : d.members.length === 0 ? 'add-member' : 'add-expense';
+  return (
+    <>
+      {clarity && (
+        <DecisionActionHeader
+          title="Trip balance"
+          decision={PAGE_DECISIONS['trip-detail']}
+          action={action}
+          fallbackAction={tripDetailFallback(nextKind, d.trip.id) ?? undefined}
+        />
+      )}
+      <TripSummaryCard d={d} spent={spent} left={left} Heading={Heading} />
+    </>
+  );
+}
+function TripSummaryCard({ d, spent, left, Heading }: { d: TripDetailData; spent: number; left: number; Heading: 'h1' | 'h2' }) {
   return (
     <Card tilt className="trip-header">
       <div className="row between wrap">
         <div>
-          <h1>{d.trip.name}</h1>
+          <Heading>{d.trip.name}</Heading>
           <p className="muted">📍 {d.trip.destination || 'No destination'} · 📅 {d.trip.start_date || '—'} → {d.trip.end_date || '—'}</p>
         </div>
       </div>
@@ -192,7 +238,7 @@ function AddExpense({ d, reload }: { d: TripDetailData; reload: () => Promise<vo
 
   if (d.members.length === 0) {
     return (
-      <Card>
+      <Card id="trip-expense-form" tabIndex={-1}>
         <h2>➕ Add an expense</h2>
         <Empty emoji="👥" title="Add your crew first" text="Add yourself and your friends in “Friends on this trip”, then you can split expenses." />
       </Card>
@@ -200,7 +246,7 @@ function AddExpense({ d, reload }: { d: TripDetailData; reload: () => Promise<vo
   }
 
   return (
-    <Card>
+    <Card id="trip-expense-form" tabIndex={-1}>
       <h2>➕ Add an expense</h2>
       <form onSubmit={submit} className="expense-form">
         <div className="grid two tight">
@@ -307,7 +353,7 @@ function Balances({ d, reload }: { d: TripDetailData; reload: () => Promise<void
   }
 
   return (
-    <Card tilt>
+    <Card tilt id="trip-balances" tabIndex={-1}>
       <h2>⚖️ Who owes whom</h2>
       {rows.length === 0 ? (
         <p className="muted">Add people and expenses to see balances.</p>
@@ -398,7 +444,7 @@ function People({ d, reload }: { d: TripDetailData; reload: () => Promise<void> 
   const meMissing = !!user && !d.members.some((m) => m.email?.toLowerCase() === user.email.toLowerCase() || m.name.toLowerCase() === user.name.toLowerCase());
 
   return (
-    <Card>
+    <Card id="trip-people-form" tabIndex={-1}>
       <h2>👥 Friends on this trip</h2>
       {d.members.length === 0 ? (
         <p className="muted">Nobody yet. Add yourself and your crew.</p>

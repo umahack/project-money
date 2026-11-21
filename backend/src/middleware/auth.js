@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import db from '../db/index.js';
+import { logBackgroundFailure } from '../observability/operationalLog.js';
 
 /**
  * Validate the Bearer JWT and resolve to a live, non-revoked session row.
@@ -51,7 +52,7 @@ export async function authRequired(req, res, next) {
   // issues aren't invisible.
   db.prepare('UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(session.id)
-    .catch?.((e) => console.error('[session.last_seen_at] skipped:', e?.message));
+    .catch?.((e) => logBackgroundFailure('session_touch', e));
 
   req.user = { id: user.id, email: user.email, sid: Number(session.id) };
   next();

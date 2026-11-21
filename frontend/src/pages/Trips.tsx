@@ -2,12 +2,27 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
-import { Card, Empty, Field, PageTitle } from '../components/ui';
+import { Card, Empty, Field } from '../components/ui';
+import { ClarityPageHeader } from '../components/clarity/ClarityPageHeader';
+import { FALLBACK_ACTIONS, PAGE_DECISIONS, tripBalancesFallback } from '../clarity/actionContext';
+import { useActionArrival } from '../clarity/useActionArrival';
+import { useHeaderAction } from '../clarity/useHeaderAction';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { ClarityTrips } from '../components/trips/ClarityTrips';
 import { inr, parseAmount } from '../money';
 import { errText, useToast } from '../state';
 import type { Trip } from '../types';
 
+/**
+ * Trips. With `VITE_FINANCIAL_CLARITY_ENABLED` off this is the original page,
+ * unchanged. With it on, trips are ordered by the server's nearest settlement.
+ */
 export function Trips() {
+  return selectFinancialClarityRollout().enabled ? <ClarityTrips /> : <LegacyTrips />;
+}
+
+// ROLLBACK-ONLY: the flag-off Trips page. Clarity code must not use it (src/clarity/rollbackBoundary.test.ts).
+function LegacyTrips() {
   const { toast } = useToast();
   const nav = useNavigate();
   const [trips, setTrips] = useState<Trip[] | null>(null);
@@ -18,6 +33,12 @@ export function Trips() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [busy, setBusy] = useState(false);
+  // Opens and focuses the new-trip form when the page was reached through the fixed "new-trip" action.
+  const arrival = useActionArrival('trips');
+  const rankedAction = useHeaderAction('trips');
+  useEffect(() => {
+    if (arrival.action === 'new-trip') setOpen(true);
+  }, [arrival.action, arrival.arrivalKey]);
 
   const load = useCallback(async () => {
     try {
@@ -57,25 +78,40 @@ export function Trips() {
   if (!trips) {
     return (
       <>
-        <PageTitle title="Trips ✈️" sub="Loading your trips…" />
+        <ClarityPageHeader
+          legacy={{ title: 'Trips ✈️', sub: 'Loading your trips…' }}
+          title="Trips"
+          decision={PAGE_DECISIONS.trips}
+          action={rankedAction}
+        />
         <Card><div style={{ height: 18, width: 260, background: 'rgba(0,0,0,0.06)', borderRadius: 6, marginBottom: 10 }} /><div style={{ height: 14, width: 200, background: 'rgba(0,0,0,0.05)', borderRadius: 6 }} /></Card>
       </>
     );
   }
 
+  const firstTrip = trips[0];
+  const newTripButton = <button className="btn primary" onClick={() => setOpen(!open)}>{open ? 'Close' : '+ New trip'}</button>;
+
   return (
     <>
-      <PageTitle
-        title="Trips & splits ✈️"
-        sub="Plan a trip budget, add your crew, and split costs like Splitwise."
-        right={<button className="btn primary" onClick={() => setOpen(!open)}>{open ? 'Close' : '+ New trip'}</button>}
+      <ClarityPageHeader
+        legacy={{
+          title: 'Trips & splits ✈️',
+          sub: 'Plan a trip budget, add your crew, and split costs like Splitwise.',
+          right: newTripButton,
+        }}
+        title="Trips"
+        decision={PAGE_DECISIONS.trips}
+        action={rankedAction}
+        fallbackAction={firstTrip ? tripBalancesFallback(firstTrip.id) : FALLBACK_ACTIONS.tripsNew}
+        right={newTripButton}
       />
 
       <AnimatePresence>
         {open && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
             <Card>
-              <form onSubmit={create}>
+              <form id="new-trip-form" tabIndex={-1} onSubmit={create}>
                 <div className="grid two tight">
                   <Field label="Trip name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Goa with the gang" maxLength={60} autoFocus /></Field>
                   <Field label="Destination"><input value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Goa" maxLength={80} /></Field>

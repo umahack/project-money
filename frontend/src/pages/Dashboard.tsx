@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Card, Donut, Empty, Money, PageTitle, burst } from '../components/ui';
-import { buildInsights } from '../insights';
+import { Card, Donut, Empty, Money, burst } from '../components/ui';
+import { ClarityPageHeader } from '../components/clarity/ClarityPageHeader';
+import { RegionBoundary } from '../components/clarity/RegionBoundary';
+import { MonthlyClaritySummary } from '../components/dashboard/MonthlyClaritySummary';
+import { selectHomeSummary } from '../components/dashboard/homeSummary';
+import { FALLBACK_ACTIONS, PAGE_DECISIONS } from '../clarity/actionContext';
+import { useFinancialClarity } from '../clarity/FinancialClarityProvider';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { useActionArrival } from '../clarity/useActionArrival';
+import { useClaritySnapshotQuery } from '../clarity/useClaritySnapshot';
+import { useHeaderAction } from '../clarity/useHeaderAction';
+import { buildInsights, legacyDemoInsights } from '../insights';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
@@ -13,10 +23,6 @@ import { QuickActions } from '../components/QuickActions';
 import { FiveYearProjection } from '../components/FiveYearProjection';
 import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
 import { readCachedPlan, writeCachedPlan } from '../hooks/useCachedPlan';
-
-// Precomputed once — the demo plan is immutable, so there is no need to
-// re-run buildInsights on every render in demo mode.
-const DEMO_INSIGHTS = buildInsights(DEMO_PLAN, []);
 
 /** Compact progress pill — "₹X of ₹Y" with a gradient fill clamped to 100%. */
 function SpendBar({ spent, budget, color }: { spent: number; budget: number; color: string }) {
@@ -50,7 +56,113 @@ interface SalaryRes {
   salary: { month: string; amount: number } | null;
 }
 
+/**
+ * Home. With `VITE_FINANCIAL_CLARITY_ENABLED` off this is the legacy page,
+ * unchanged. With it on, Home renders the server's Monthly Clarity Summary.
+ */
 export function Dashboard() {
+  return selectFinancialClarityRollout().enabled ? <ClarityDashboard /> : <LegacyDashboard />;
+}
+
+/** Thanks shown once after the feedback prompt on the previous sign-out. */
+function useFeedbackThanks(): void {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('pm_feedback_thanks') === '1') {
+        localStorage.removeItem('pm_feedback_thanks');
+        toast('ok', `Welcome back, ${user?.name.split(' ')[0] || 'friend'}. Thanks for the feedback last time!`);
+      }
+    } catch {
+      /* storage blocked */
+    }
+  }, [toast, user?.name]);
+}
+
+function ClarityDashboard() {
+  const { user } = useAuth();
+  const month = currentMonth();
+  const arrival = useActionArrival('home');
+  const rankedAction = useHeaderAction('home');
+  const query = useClaritySnapshotQuery(month);
+  const view = useFinancialClarity(month);
+  const [retryingOutcomeId, setRetryingOutcomeId] = useState<string | null>(null);
+  useFeedbackThanks();
+
+  // The newest confirmed snapshot with pending patches. The query result covers the
+  // moment between a response arriving and the store installing it.
+  const snapshot = view.snapshot ?? query.data;
+  const model = useMemo(() => (snapshot ? selectHomeSummary(snapshot) : null), [snapshot]);
+  const { refetch } = query;
+  const retry = useCallback(async (outcomeId?: string) => {
+    setRetryingOutcomeId(outcomeId ?? null);
+    try {
+      await refetch();
+    } finally {
+      setRetryingOutcomeId(null);
+    }
+  }, [refetch]);
+
+  // Home has no pay form. An old `?action=set-pay` link goes to the existing Plan form.
+  if (arrival.action === 'set-pay') return <Navigate to={FALLBACK_ACTIONS.planSetPay.to} replace />;
+
+  const firstName = user?.name.split(' ')[0] ?? 'there';
+  return (
+    <>
+      <ClarityPageHeader
+        legacy={{ title: `Hey ${firstName} 👋` }}
+        title={`Hey ${firstName} 👋`}
+        decision={PAGE_DECISIONS.home}
+        action={rankedAction}
+        fallbackAction={model?.headerFallback}
+        noActionText={model?.noActionNeeded ? `No action is needed for ${monthLabel(month)}.` : undefined}
+        right={<span className="pill info">{monthLabel(month)}</span>}
+      />
+
+      <RegionBoundary
+        regionKey="summary"
+        label="Monthly summary"
+        hasData={!!snapshot}
+        loading={query.isFetching}
+        error={query.isError ? query.error : undefined}
+        onRetry={() => void retry()}
+        minHeight={240}
+      >
+        {snapshot && model && (
+          <MonthlyClaritySummary
+            snapshot={snapshot}
+            model={model}
+            retryingOutcomeId={retryingOutcomeId}
+            onRetry={(outcomeId) => retry(outcomeId)}
+          />
+        )}
+      </RegionBoundary>
+      {!snapshot && !query.isError && (
+        <p className="muted small center" style={{ marginTop: '0.8rem' }} aria-live="polite">
+          If this takes a few seconds, the free API host is waking up.
+        </p>
+      )}
+
+      <section className="card" aria-labelledby="home-guided-journey">
+        <h2 id="home-guided-journey">Guided journey</h2>
+        <p className="muted small">Pick one goal and reach a first result in a few steps. An open journey continues where you left it.</p>
+        <Link className="btn" to="/start">Start or continue a guided journey</Link>
+      </section>
+
+      <QuickActions />
+      <StreakCard />
+      <InvitesInbox />
+    </>
+  );
+}
+
+/**
+ * ROLLBACK-ONLY: the flag-off Home page, selected when `VITE_FINANCIAL_CLARITY_ENABLED`
+ * is off. It keeps its legacy reads, browser math (`buildInsights`) and session cache
+ * (`useCachedPlan`) so rollback restores the old behavior. Clarity code must not use it.
+ */
+function LegacyDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   // Hydrate from last-known cache so a tab-reload shows real numbers
@@ -68,6 +180,9 @@ export function Dashboard() {
   // users with an empty cache would briefly see "Rohan's month" instead of
   // a quiet loading state.
   const [loaded, setLoaded] = useState<boolean>(cached.plan !== null);
+  // Scrolls to and focuses the pay form named by the link that opened this page.
+  useActionArrival('home');
+  const rankedAction = useHeaderAction('home');
 
   const load = useCallback(async () => {
     try {
@@ -138,7 +253,12 @@ export function Dashboard() {
   if (!loaded && !plan) {
     return (
       <>
-        <PageTitle title={`Hey ${firstName} 👋`} sub="Pulling your month together…" />
+        <ClarityPageHeader
+          legacy={{ title: `Hey ${firstName} 👋`, sub: 'Pulling your month together…' }}
+          title={`Hey ${firstName} 👋`}
+          decision={PAGE_DECISIONS.home}
+          action={rankedAction}
+        />
         <p className="muted small center" style={{ marginTop: '0.8rem' }} aria-live="polite">
           If this takes a few seconds, the free API host is waking up.
         </p>
@@ -150,7 +270,7 @@ export function Dashboard() {
   // user hasn't set their pay. We never fall into demo during loading.
   const demoMode = loaded && (!plan || plan.income <= 0);
   const displayPlan: Plan = demoMode ? DEMO_PLAN : plan!;
-  const displayIns = demoMode ? DEMO_INSIGHTS : ins!;
+  const displayIns = demoMode ? legacyDemoInsights() : ins!;
   const health = HEALTH[displayIns.health];
   const segments = [
     { label: 'Bills', value: displayPlan.emiTotal, color: 'var(--c-fixed)' },
@@ -160,19 +280,27 @@ export function Dashboard() {
   ];
   const stale = salaryMonth && salaryMonth !== currentMonth();
   const hasBills = emis.length > 0;
+  const payMonthPill = !demoMode && salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined;
 
   return (
     <>
-      <PageTitle
+      <ClarityPageHeader
+        legacy={{
+          title: `Hey ${firstName} 👋`,
+          sub: demoMode
+            ? `This is ${DEMO_SAMPLE_NAME}'s month. Enter your salary below to see yours.`
+            : "Here's where your money is going this month.",
+          right: payMonthPill,
+        }}
         title={`Hey ${firstName} 👋`}
-        sub={demoMode
-          ? `This is ${DEMO_SAMPLE_NAME}'s month. Enter your salary below to see yours.`
-          : "Here's where your money is going this month."}
-        right={!demoMode && salaryMonth ? <span className={`pill ${stale ? 'warn' : 'info'}`}>Pay for {monthLabel(salaryMonth)}</span> : undefined}
+        decision={PAGE_DECISIONS.home}
+        action={rankedAction}
+        fallbackAction={demoMode ? FALLBACK_ACTIONS.homeSetPay : !hasBills ? FALLBACK_ACTIONS.homeAddBills : FALLBACK_ACTIONS.homeLogSpending}
+        right={demoMode ? <span className="pill info">Sample month</span> : payMonthPill}
       />
 
       {demoMode ? (
-        <Card tilt className="demo-banner" style={{ borderColor: 'var(--accent)', boxShadow: '0 0 0 2px rgba(124,108,255,0.2)' }}>
+        <Card tilt id="home-pay-form" tabIndex={-1} className="demo-banner" style={{ borderColor: 'var(--accent)', boxShadow: '0 0 0 2px rgba(124,108,255,0.2)' }}>
           <div className="row between wrap" style={{ gap: '0.6rem', alignItems: 'center' }}>
             <div>
               <h2 style={{ margin: 0 }}>👇 Make it yours in one number</h2>

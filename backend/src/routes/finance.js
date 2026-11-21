@@ -2,9 +2,242 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
+import { createDataUseNoticeGate } from '../middleware/dataUse.js';
+import clarityService from '../services/clarityService.js';
+import {
+  CATEGORY_TREATMENT_ACCEPTED_CONSTRAINTS,
+  EXPENSE_ACCEPTED_CONSTRAINTS,
+  EXPENSE_CATEGORIES,
+  categoryTreatmentRecordFromRow,
+  createExpenseMutationService,
+  expenseRecordFromRow,
+  normalizeCategoryTreatmentDeleteCommand,
+  normalizeCategoryTreatmentSetCommand,
+  normalizeExpenseCreateCommand,
+  normalizeExpenseDeleteCommand,
+  normalizeExpenseUpdateCommand,
+} from '../services/expenseMutations.js';
+import { FinancialMutationError } from '../services/financialMutation.js';
+import { logBackgroundFailure } from '../observability/operationalLog.js';
+import {
+  GOAL_ACCEPTED_CONSTRAINTS,
+  GOAL_CONTRIBUTION_ACCEPTED_CONSTRAINTS,
+  createGoalLegacy,
+  createGoalMutationService,
+  goalRecordFromRow,
+  legacyGoalFromRow,
+  loadGoalRow,
+  normalizeGoalContributionCommand,
+  normalizeGoalCreateCommand,
+  normalizeGoalDeleteCommand,
+  normalizeGoalUpdateCommand,
+  patchGoalLegacy,
+} from '../services/goalMutations.js';
+import {
+  BILL_ACCEPTED_CONSTRAINTS,
+  SALARY_ACCEPTED_CONSTRAINTS,
+  SALARY_APPLY_ACCEPTED_CONSTRAINTS,
+  billRecordFromRow,
+  createSalaryBillMutationService,
+  normalizeBillCreateCommand,
+  normalizeBillDeleteCommand,
+  normalizeBillUpdateCommand,
+  normalizeSalaryApplyCommand,
+  normalizeSalaryCommand,
+  salaryRecordFromRow,
+} from '../services/salaryBillMutations.js';
+import { readServerFeatureFlags } from '../rollout/featureFlags.js';
+import {
+  negotiateClarityContract,
+  requestsClarityContract,
+} from '../rollout/contractNegotiation.js';
+import {
+  logShadowMismatchCodes,
+  planMismatchCodes,
+} from '../rollout/shadowComparison.js';
 
 const router = Router();
 router.use(authRequired);
+
+const salaryBillMutationService = createSalaryBillMutationService();
+const expenseMutationService = createExpenseMutationService();
+const goalMutationService = createGoalMutationService();
+
+function mutationErrorBody(error) {
+  const responseError = { code: error.code, message: error.message };
+  for (const field of ['field', 'constraint', 'currentRecordVersion', 'errors']) {
+    if (Object.hasOwn(error, field)) responseError[field] = error[field];
+  }
+  return { error: responseError };
+}
+
+function sendMutationError(res, error) {
+  if (!(error instanceof FinancialMutationError)) return false;
+  res.status(error.httpStatus).json(mutationErrorBody(error));
+  return true;
+}
+
+async function snapshotBeforeMutation(userId, month) {
+  try {
+    return await clarityService.getSnapshot({
+      userId,
+      month,
+      now: new Date(),
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    return null;
+  }
+}
+
+function availableMonthlyValues(snapshot) {
+  const outcome = snapshot?.outcomes?.monthlyPlan;
+  return outcome?.status === 'available' ? outcome.value : null;
+}
+
+function buildPlanDeltas({ precedingSnapshot, resultingSnapshot, month, salaryMutation }) {
+  const resulting = availableMonthlyValues(resultingSnapshot);
+  let preceding = availableMonthlyValues(precedingSnapshot);
+  if (!preceding && salaryMutation) {
+    preceding = {
+      disposableIncome: { amountMinor: 0 },
+      dailySpendingGuide: { amountMinor: 0 },
+    };
+  }
+  if (!preceding || !resulting) {
+    return {
+      status: 'unavailable',
+      month,
+      reason: 'A valid confirmed salary is required before plan deltas are available.',
+    };
+  }
+  return {
+    status: 'available',
+    month,
+    disposableIncomeMinor:
+      resulting.disposableIncome.amountMinor - preceding.disposableIncome.amountMinor,
+    dailySpendingGuideMinor:
+      resulting.dailySpendingGuide.amountMinor - preceding.dailySpendingGuide.amountMinor,
+  };
+}
+
+function mutationContract({
+  envelope,
+  precedingSnapshot,
+  month,
+  acceptedConstraints,
+  salaryMutation = false,
+  record,
+}) {
+  return {
+    schemaVersion: envelope.schemaVersion,
+    mutation: {
+      ...envelope.mutation,
+      planDeltas: buildPlanDeltas({
+        precedingSnapshot,
+        resultingSnapshot: envelope.clarity,
+        month,
+        salaryMutation,
+      }),
+      acceptedConstraints,
+      ...(record === undefined ? {} : { record }),
+    },
+    clarity: envelope.clarity,
+  };
+}
+
+async function loadSalaryRow(userId, month) {
+  return db.prepare(
+    `SELECT id, month, amount
+       FROM salary_entries
+      WHERE user_id = ? AND month = ?`
+  ).get(userId, month);
+}
+
+async function loadBillRow(userId, id) {
+  return db.prepare(
+    `SELECT id, label, amount, category, active,
+            effective_from_month, effective_to_month
+       FROM emis
+      WHERE user_id = ? AND id = ?`
+  ).get(userId, id);
+}
+
+async function loadExpenseRow(userId, id) {
+  return db.prepare(
+    `SELECT id, month, category, amount, note, spent_on
+       FROM expense_log
+      WHERE user_id = ? AND id = ?`
+  ).get(userId, id);
+}
+
+async function loadCategoryTreatmentRow(userId, category) {
+  return db.prepare(
+    `SELECT id, category, treatment
+       FROM expense_category_treatments
+      WHERE user_id = ? AND category = ?`
+  ).get(userId, category);
+}
+
+function legacyExpenseRecord(record) {
+  if (!record) return null;
+  return {
+    id: record.id,
+    month: record.month,
+    category: record.category,
+    amount: record.amountMinor / 100,
+    note: record.note,
+    spent_on: record.spentOn,
+  };
+}
+
+function expenseMutationContract({ envelope, record, fallbackTransition = null }) {
+  const transition = envelope.mutation.result ?? fallbackTransition;
+  return {
+    schemaVersion: envelope.schemaVersion,
+    mutation: {
+      ...envelope.mutation,
+      acceptedConstraints: EXPENSE_ACCEPTED_CONSTRAINTS,
+      record,
+      ...(transition ? {
+        expenseTransition: transition,
+        originalPeriod: transition.originalPeriod,
+        resultingPeriod: transition.resultingPeriod,
+        originalCategory: transition.originalCategory,
+        resultingCategory: transition.resultingCategory,
+        affectedPeriods: transition.affectedPeriods,
+        affectedCategories: transition.affectedCategories,
+      } : {}),
+    },
+    clarity: envelope.clarity,
+  };
+}
+
+function categoryTreatmentMutationContract({ envelope, record }) {
+  const transition = envelope.mutation.result;
+  return {
+    schemaVersion: envelope.schemaVersion,
+    mutation: {
+      ...envelope.mutation,
+      acceptedConstraints: CATEGORY_TREATMENT_ACCEPTED_CONSTRAINTS,
+      record,
+      ...(transition ? { categoryTreatmentTransition: transition } : {}),
+    },
+    clarity: envelope.clarity,
+  };
+}
+
+const clarityFinancialInputDataUseGate = createDataUseNoticeGate({
+  appliesTo: requestsClarityContract,
+});
+const currentFinancialDataUseGate = createDataUseNoticeGate();
+const newClaritySalaryDataUseGate = createDataUseNoticeGate({
+  appliesTo: async (req) => {
+    if (!requestsClarityContract(req)) return false;
+    const month = typeof req.body?.month === 'string' ? req.body.month : monthKey();
+    return !(await loadSalaryRow(req.user.id, month));
+  },
+});
 
 // All of these use the Date getters (not toISOString), so they respect the
 // server's configured TZ (set to Asia/Kolkata in render.yaml). This keeps the
@@ -63,7 +296,10 @@ async function materializeRecurring(userId) {
         )
         .run(userId, month, r.category, Number(r.amount), `${r.label} (recurring)`, spentOn);
     } catch (e) {
-      console.error('[recurring-materialize] skipped id', r.id, e?.message);
+      logBackgroundFailure('recurring_materialize', e, {
+        recordType: 'recurring',
+        recordId: Number.isSafeInteger(r.id) && r.id > 0 ? r.id : undefined,
+      });
     }
   }
 }
@@ -73,8 +309,41 @@ router.post(
   [
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('month').optional().matches(/^\d{4}-\d{2}$/),
+    newClaritySalaryDataUseGate,
   ],
   async (req, res) => {
+    if (requestsClarityContract(req)) {
+      try {
+        const { command, expectedRecordVersion } = normalizeSalaryCommand(req.body);
+        const precedingSnapshot = await snapshotBeforeMutation(req.user.id, command.month);
+        const envelope = await salaryBillMutationService.execute({
+          userId: req.user.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          operation: 'salary.upsert',
+          command,
+          expectedRecordVersion,
+        });
+        const row = await loadSalaryRow(req.user.id, command.month);
+        const record = salaryRecordFromRow(row);
+        const legacyResponse = {
+          ok: true,
+          month: command.month,
+          amount: record.amountMinor / 100,
+        };
+        return res.json(negotiateClarityContract(req, legacyResponse, mutationContract({
+          envelope,
+          precedingSnapshot,
+          month: command.month,
+          acceptedConstraints: SALARY_ACCEPTED_CONSTRAINTS,
+          salaryMutation: true,
+          record,
+        })));
+      } catch (error) {
+        if (sendMutationError(res, error)) return;
+        throw error;
+      }
+    }
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const month = req.body.month || monthKey();
@@ -85,9 +354,43 @@ router.post(
          ON CONFLICT(user_id, month) DO UPDATE SET amount=excluded.amount`
       )
       .run(req.user.id, month, amount);
-    res.json({ ok: true, month, amount });
+    return res.json({ ok: true, month, amount });
   }
 );
+
+router.post('/salary/apply', currentFinancialDataUseGate, async (req, res) => {
+  try {
+    const { command, expectedRecordVersion } = normalizeSalaryApplyCommand(req.body);
+    const precedingSnapshot = await snapshotBeforeMutation(req.user.id, command.targetMonth);
+    const envelope = await salaryBillMutationService.execute({
+      userId: req.user.id,
+      idempotencyKey: req.get('Idempotency-Key'),
+      operation: 'salary.apply',
+      command,
+      expectedRecordVersion,
+    });
+    const row = await loadSalaryRow(req.user.id, command.targetMonth);
+    const record = salaryRecordFromRow(row);
+    return res.json({
+      ok: true,
+      sourceMonth: command.sourceMonth,
+      targetMonth: command.targetMonth,
+      month: command.targetMonth,
+      amount: record.amountMinor / 100,
+      ...mutationContract({
+        envelope,
+        precedingSnapshot,
+        month: command.targetMonth,
+        acceptedConstraints: SALARY_APPLY_ACCEPTED_CONSTRAINTS,
+        salaryMutation: true,
+        record,
+      }),
+    });
+  } catch (error) {
+    if (sendMutationError(res, error)) return;
+    throw error;
+  }
+});
 
 router.get('/salary', async (req, res) => {
   const row = await db
@@ -102,15 +405,50 @@ router.post(
     body('label').isString().trim().isLength({ min: 1, max: 60 }),
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('category').isIn(['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other']),
+    clarityFinancialInputDataUseGate,
   ],
   async (req, res) => {
+    if (requestsClarityContract(req)) {
+      try {
+        const { command, expectedRecordVersion } = normalizeBillCreateCommand(req.body);
+        const precedingSnapshot = await snapshotBeforeMutation(
+          req.user.id,
+          command.snapshotMonth
+        );
+        const envelope = await salaryBillMutationService.execute({
+          userId: req.user.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          operation: 'bill.create',
+          command,
+          expectedRecordVersion,
+        });
+        const record = billRecordFromRow(await loadBillRow(
+          req.user.id,
+          envelope.mutation.recordId
+        ));
+        envelope.mutation.scopeKey = `bill:${envelope.mutation.recordId}`;
+        return res.json(negotiateClarityContract(req, {
+          id: envelope.mutation.recordId,
+        }, mutationContract({
+          envelope,
+          precedingSnapshot,
+          month: command.snapshotMonth,
+          acceptedConstraints: BILL_ACCEPTED_CONSTRAINTS,
+          record,
+        })));
+      } catch (error) {
+        if (sendMutationError(res, error)) return;
+        throw error;
+      }
+    }
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const { label, amount, category } = req.body;
     const info = await db
       .prepare('INSERT INTO emis (user_id, label, amount, category) VALUES (?, ?, ?, ?)')
       .run(req.user.id, label, Number(amount), category);
-    res.json({ id: info.lastInsertRowid });
+    return res.json({ id: info.lastInsertRowid });
   }
 );
 
@@ -132,6 +470,47 @@ router.patch(
     body('category').optional().isString().isIn(['EMI', 'Rent', 'Utility', 'Insurance', 'Subscription', 'Other']),
   ],
   async (req, res) => {
+    if (requestsClarityContract(req)) {
+      try {
+        const { command, expectedRecordVersion } = normalizeBillUpdateCommand(
+          req.body,
+          req.params.id
+        );
+        const precedingSnapshot = await snapshotBeforeMutation(
+          req.user.id,
+          command.snapshotMonth
+        );
+        const envelope = await salaryBillMutationService.execute({
+          userId: req.user.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          operation: 'bill.update',
+          command,
+          expectedRecordVersion,
+        });
+        const row = await loadBillRow(req.user.id, command.id);
+        const record = billRecordFromRow(row);
+        const legacyResponse = {
+          ok: true,
+          emi: {
+            id: Number(row.id),
+            label: row.label,
+            amount: Number(row.amount),
+            category: row.category,
+          },
+        };
+        return res.json(negotiateClarityContract(req, legacyResponse, mutationContract({
+          envelope,
+          precedingSnapshot,
+          month: command.snapshotMonth,
+          acceptedConstraints: BILL_ACCEPTED_CONSTRAINTS,
+          record,
+        })));
+      } catch (error) {
+        if (sendMutationError(res, error)) return;
+        throw error;
+      }
+    }
+
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
     const errors = validationResult(req);
@@ -149,15 +528,45 @@ router.patch(
     const row = await db
       .prepare('SELECT id, label, amount, category FROM emis WHERE id = ?')
       .get(id);
-    res.json({ ok: true, emi: row });
+    return res.json({ ok: true, emi: row });
   }
 );
 
 router.delete('/emis/:id', async (req, res) => {
+  if (requestsClarityContract(req)) {
+    try {
+      const { command, expectedRecordVersion } = normalizeBillDeleteCommand(
+        req.body,
+        req.params.id
+      );
+      const precedingSnapshot = await snapshotBeforeMutation(
+        req.user.id,
+        command.snapshotMonth
+      );
+      const envelope = await salaryBillMutationService.execute({
+        userId: req.user.id,
+        idempotencyKey: req.get('Idempotency-Key'),
+        operation: 'bill.delete',
+        command,
+        expectedRecordVersion,
+      });
+      return res.json(negotiateClarityContract(req, { ok: true }, mutationContract({
+        envelope,
+        precedingSnapshot,
+        month: command.snapshotMonth,
+        acceptedConstraints: BILL_ACCEPTED_CONSTRAINTS,
+        record: null,
+      })));
+    } catch (error) {
+      if (sendMutationError(res, error)) return;
+      throw error;
+    }
+  }
+
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
   await db.prepare('DELETE FROM emis WHERE id = ? AND user_id = ?').run(id, req.user.id);
-  res.json({ ok: true });
+  return res.json({ ok: true });
 });
 
 router.get('/plan', async (req, res) => {
@@ -198,7 +607,7 @@ router.get('/plan', async (req, res) => {
   if (spentThisMonth > afterFixed && afterFixed > 0)
     tips.push("You've already spent more than your disposable this month — pause discretionary spends and revisit the plan.");
   tips.push('Keep an emergency fund of 6 months of fixed expenses in a liquid account.');
-  res.json({
+  const legacyResponse = {
     income,
     emiTotal,
     afterFixed,
@@ -207,11 +616,43 @@ router.get('/plan', async (req, res) => {
     spentThisMonth,
     byCategory,
     tips,
-  });
+  };
+
+  const { clarityShadowCompare } = readServerFeatureFlags();
+  const contractRequested = requestsClarityContract(req);
+  if (!clarityShadowCompare && !contractRequested) {
+    return res.json(legacyResponse);
+  }
+
+  let clarity = null;
+  try {
+    clarity = await clarityService.getSnapshot({
+      userId: req.user.id,
+      month,
+      now: new Date(),
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    if (clarityShadowCompare) {
+      logShadowMismatchCodes(['PLAN_CANONICAL_UNAVAILABLE']);
+    }
+    // Shadow work must never alter the selected legacy read path. During a
+    // negotiated rollout, the unchanged top-level response also lets the old
+    // UI continue safely if the additive snapshot is temporarily unavailable.
+    return res.json(legacyResponse);
+  }
+
+  if (clarityShadowCompare) {
+    logShadowMismatchCodes(planMismatchCodes(clarity, legacyResponse));
+  }
+
+  return res.json(negotiateClarityContract(req, legacyResponse, {
+    schemaVersion: 1,
+    clarity,
+  }));
 });
 
 // ---------- Expense log ----------
-const EXPENSE_CATEGORIES = ['Food', 'Groceries', 'Transport', 'Shopping', 'Entertainment', 'Bills', 'Health', 'Travel', 'Education', 'Other'];
 
 async function allowedCategoriesFor(userId) {
   const rows = await db
@@ -239,8 +680,47 @@ router.post(
       // Keep the range sane: last ~10 years, up to next year.
       return year >= nowYear - 10 && year <= nowYear + 1;
     }).withMessage('Pick a valid date in the last decade.'),
+    clarityFinancialInputDataUseGate,
   ],
   async (req, res) => {
+    if (requestsClarityContract(req)) {
+      try {
+        const { command, expectedRecordVersion } = normalizeExpenseCreateCommand(req.body);
+        const envelope = await expenseMutationService.execute({
+          userId: req.user.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          operation: 'expense.create',
+          command,
+          expectedRecordVersion,
+        });
+        const row = await loadExpenseRow(req.user.id, envelope.mutation.recordId);
+        const record = expenseRecordFromRow(row);
+        const legacyResponse = { id: record.id, month: record.month };
+        return res.json(negotiateClarityContract(
+          req,
+          legacyResponse,
+          expenseMutationContract({
+            envelope,
+            record,
+            fallbackTransition: {
+              type: 'create',
+              status: 'confirmed',
+              originalPeriod: null,
+              resultingPeriod: record.month,
+              originalCategory: null,
+              resultingCategory: record.category,
+              affectedPeriods: [record.month],
+              affectedCategories: [record.category],
+              affectedPartitions: [],
+            },
+          })
+        ));
+      } catch (error) {
+        if (sendMutationError(res, error)) return;
+        throw error;
+      }
+    }
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     const allowed = await allowedCategoriesFor(req.user.id);
@@ -382,7 +862,145 @@ router.delete('/categories/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+router.patch('/expenses/:id', async (req, res) => {
+  try {
+    const { command, expectedRecordVersion } = normalizeExpenseUpdateCommand(
+      req.body,
+      req.params.id
+    );
+    const envelope = await expenseMutationService.execute({
+      userId: req.user.id,
+      idempotencyKey: req.get('Idempotency-Key'),
+      operation: 'expense.update',
+      command,
+      expectedRecordVersion,
+    });
+    const row = await loadExpenseRow(req.user.id, command.id);
+    const record = expenseRecordFromRow(row);
+    const legacyResponse = { ok: true, expense: legacyExpenseRecord(record) };
+    return res.json({
+      ...legacyResponse,
+      ...expenseMutationContract({
+        envelope,
+        record,
+        fallbackTransition: {
+          type: 'update',
+          status: 'confirmed',
+          originalPeriod: null,
+          resultingPeriod: record.month,
+          originalCategory: null,
+          resultingCategory: record.category,
+          affectedPeriods: [record.month],
+          affectedCategories: [record.category],
+          affectedPartitions: [],
+        },
+      }),
+    });
+  } catch (error) {
+    if (sendMutationError(res, error)) return;
+    throw error;
+  }
+});
+
+router.put('/category-treatments/:category', async (req, res) => {
+  try {
+    const { command, expectedRecordVersion } = normalizeCategoryTreatmentSetCommand(
+      req.body,
+      req.params.category
+    );
+    const envelope = await expenseMutationService.execute({
+      userId: req.user.id,
+      idempotencyKey: req.get('Idempotency-Key'),
+      operation: 'category_treatment.set',
+      command,
+      expectedRecordVersion,
+    });
+    const row = await loadCategoryTreatmentRow(req.user.id, command.category);
+    const record = categoryTreatmentRecordFromRow(row);
+    const legacyResponse = {
+      ok: true,
+      category: record.category,
+      treatment: record.treatment,
+    };
+    return res.json({
+      ...legacyResponse,
+      ...categoryTreatmentMutationContract({ envelope, record }),
+    });
+  } catch (error) {
+    if (sendMutationError(res, error)) return;
+    throw error;
+  }
+});
+
+router.delete('/category-treatments/:category', async (req, res) => {
+  try {
+    const { command, expectedRecordVersion } = normalizeCategoryTreatmentDeleteCommand(
+      req.body,
+      req.params.category
+    );
+    const envelope = await expenseMutationService.execute({
+      userId: req.user.id,
+      idempotencyKey: req.get('Idempotency-Key'),
+      operation: 'category_treatment.remove',
+      command,
+      expectedRecordVersion,
+    });
+    const transition = envelope.mutation.result;
+    const legacyResponse = {
+      ok: true,
+      category: command.category,
+      treatment: transition?.resultingTreatment ?? null,
+    };
+    return res.json({
+      ...legacyResponse,
+      ...categoryTreatmentMutationContract({ envelope, record: null }),
+    });
+  } catch (error) {
+    if (sendMutationError(res, error)) return;
+    throw error;
+  }
+});
+
 router.delete('/expenses/:id', async (req, res) => {
+  if (requestsClarityContract(req)) {
+    try {
+      const { command, expectedRecordVersion } = normalizeExpenseDeleteCommand(
+        req.body,
+        req.params.id
+      );
+      const original = expenseRecordFromRow(await loadExpenseRow(req.user.id, command.id));
+      const envelope = await expenseMutationService.execute({
+        userId: req.user.id,
+        idempotencyKey: req.get('Idempotency-Key'),
+        operation: 'expense.delete',
+        command,
+        expectedRecordVersion,
+      });
+      return res.json(negotiateClarityContract(
+        req,
+        { ok: true },
+        expenseMutationContract({
+          envelope,
+          record: null,
+          fallbackTransition: original ? {
+            type: 'delete',
+            status: 'confirmed',
+            originalPeriod: original.month,
+            resultingPeriod: null,
+            originalCategory: original.category,
+            resultingCategory: null,
+            affectedPeriods: [original.month],
+            affectedCategories: [original.category],
+            affectedPartitions: [],
+          } : null,
+        })
+      ));
+    } catch (error) {
+      if (sendMutationError(res, error)) return;
+      throw error;
+    }
+  }
+
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
   const info = await db
@@ -603,6 +1221,30 @@ router.delete('/budgets/:category', async (req, res) => {
 });
 
 // ---------- Savings goals ----------
+function goalMutationContract({
+  envelope,
+  record,
+  acceptedConstraints = GOAL_ACCEPTED_CONSTRAINTS,
+}) {
+  return {
+    schemaVersion: envelope.schemaVersion,
+    mutation: {
+      ...envelope.mutation,
+      acceptedConstraints,
+      record,
+      ...(envelope.mutation.result ? { goalTransition: envelope.mutation.result } : {}),
+    },
+    clarity: envelope.clarity,
+  };
+}
+
+// Legacy (non-contract) goal requests keep their `{ error: string }` shape.
+function sendLegacyGoalError(res, error) {
+  if (!(error instanceof FinancialMutationError)) return false;
+  res.status(error.httpStatus === 404 ? 404 : 400).json({ error: error.message });
+  return true;
+}
+
 router.get('/goals', async (req, res) => {
   const rows = await db
     .prepare(
@@ -622,23 +1264,40 @@ router.post(
     body('targetAmount').isFloat({ gt: 0, max: 1e12 }),
     body('targetDate').optional({ nullable: true }).matches(/^\d{4}-\d{2}-\d{2}$/),
     body('savedAmount').optional().isFloat({ min: 0 }),
+    clarityFinancialInputDataUseGate,
   ],
   async (req, res) => {
+    if (requestsClarityContract(req)) {
+      try {
+        const { command, expectedRecordVersion } = normalizeGoalCreateCommand(req.body);
+        const envelope = await goalMutationService.execute({
+          userId: req.user.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          operation: 'goal.create',
+          command,
+          expectedRecordVersion,
+        });
+        const row = await loadGoalRow(db, req.user.id, envelope.mutation.recordId);
+        return res.json(negotiateClarityContract(
+          req,
+          { id: envelope.mutation.recordId },
+          goalMutationContract({ envelope, record: goalRecordFromRow(row) })
+        ));
+      } catch (error) {
+        if (sendMutationError(res, error)) return;
+        throw error;
+      }
+    }
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-    const info = await db
-      .prepare(
-        `INSERT INTO savings_goals (user_id, name, target_amount, saved_amount, target_date)
-         VALUES (?, ?, ?, ?, ?)`
-      )
-      .run(
-        req.user.id,
-        String(req.body.name).trim(),
-        Number(req.body.targetAmount),
-        Number(req.body.savedAmount || 0),
-        req.body.targetDate || null
-      );
-    res.json({ id: info.lastInsertRowid });
+    try {
+      const created = await createGoalLegacy({ userId: req.user.id, body: req.body });
+      return res.json(created);
+    } catch (error) {
+      if (sendLegacyGoalError(res, error)) return;
+      throw error;
+    }
   }
 );
 
@@ -652,39 +1311,109 @@ router.patch(
     body('setSaved').optional().isFloat({ min: 0 }),
   ],
   async (req, res) => {
+    // Edits are corrections, so no data-use gate is declared here.
+    if (requestsClarityContract(req)) {
+      try {
+        const { command, expectedRecordVersion } = normalizeGoalUpdateCommand(
+          req.body,
+          req.params.id
+        );
+        const envelope = await goalMutationService.execute({
+          userId: req.user.id,
+          idempotencyKey: req.get('Idempotency-Key'),
+          operation: 'goal.update',
+          command,
+          expectedRecordVersion,
+        });
+        const row = await loadGoalRow(db, req.user.id, command.id);
+        return res.json(negotiateClarityContract(
+          req,
+          { ok: true },
+          goalMutationContract({ envelope, record: goalRecordFromRow(row) })
+        ));
+      } catch (error) {
+        if (sendMutationError(res, error)) return;
+        throw error;
+      }
+    }
+
     const id = Number(req.params.id);
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-    const existing = await db
-      .prepare('SELECT id, saved_amount FROM savings_goals WHERE id = ? AND user_id = ?')
-      .get(id, req.user.id);
-    if (!existing) return res.status(404).json({ error: 'Not found' });
-    const sets = [];
-    const args = [];
-    if (req.body.name !== undefined) { sets.push('name = ?'); args.push(String(req.body.name).trim()); }
-    if (req.body.targetAmount !== undefined) { sets.push('target_amount = ?'); args.push(Number(req.body.targetAmount)); }
-    if (req.body.targetDate !== undefined) { sets.push('target_date = ?'); args.push(req.body.targetDate || null); }
-    if (req.body.setSaved !== undefined) { sets.push('saved_amount = ?'); args.push(Number(req.body.setSaved)); }
-    if (req.body.addToSaved !== undefined) {
-      const next = Math.max(0, Number(existing.saved_amount) + Number(req.body.addToSaved));
-      sets.push('saved_amount = ?');
-      args.push(next);
+    try {
+      const updated = await patchGoalLegacy({ userId: req.user.id, id, body: req.body });
+      if (!updated) return res.status(404).json({ error: 'Not found' });
+      return res.json({ ok: true });
+    } catch (error) {
+      if (sendLegacyGoalError(res, error)) return;
+      throw error;
     }
-    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
-    sets.push('updated_at = CURRENT_TIMESTAMP');
-    args.push(id, req.user.id);
-    await db.prepare(`UPDATE savings_goals SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...args);
-    res.json({ ok: true });
   }
 );
 
 router.delete('/goals/:id', async (req, res) => {
+  if (requestsClarityContract(req)) {
+    try {
+      const { command, expectedRecordVersion } = normalizeGoalDeleteCommand(
+        req.body,
+        req.params.id
+      );
+      const envelope = await goalMutationService.execute({
+        userId: req.user.id,
+        idempotencyKey: req.get('Idempotency-Key'),
+        operation: 'goal.delete',
+        command,
+        expectedRecordVersion,
+      });
+      return res.json(negotiateClarityContract(
+        req,
+        { ok: true },
+        goalMutationContract({ envelope, record: null })
+      ));
+    } catch (error) {
+      if (sendMutationError(res, error)) return;
+      throw error;
+    }
+  }
+
   const id = Number(req.params.id);
   const info = await db
     .prepare('DELETE FROM savings_goals WHERE id = ? AND user_id = ?')
     .run(id, req.user.id);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
+});
+
+// Always a new-use clarity submission, so the notice gate is declared like
+// POST /salary/apply. Corrections of a wrong amount use PATCH, never a
+// negative contribution.
+router.post('/goals/:id/contributions', currentFinancialDataUseGate, async (req, res) => {
+  try {
+    const { command, expectedRecordVersion } = normalizeGoalContributionCommand(
+      req.body,
+      req.params.id
+    );
+    const envelope = await goalMutationService.execute({
+      userId: req.user.id,
+      idempotencyKey: req.get('Idempotency-Key'),
+      operation: 'goal.contribute',
+      command,
+      expectedRecordVersion,
+    });
+    const row = await loadGoalRow(db, req.user.id, command.id);
+    return res.json({
+      ok: true,
+      goal: legacyGoalFromRow(row),
+      ...goalMutationContract({
+        envelope,
+        record: goalRecordFromRow(row),
+        acceptedConstraints: GOAL_CONTRIBUTION_ACCEPTED_CONSTRAINTS,
+      }),
+    });
+  } catch (error) {
+    if (sendMutationError(res, error)) return;
+    throw error;
+  }
 });
 
 // ---------- Recurring expenses ----------
@@ -709,6 +1438,7 @@ router.post(
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('category').isIn(EXPENSE_CATEGORIES),
     body('dayOfMonth').isInt({ min: 1, max: 31 }),
+    clarityFinancialInputDataUseGate,
   ],
   async (req, res) => {
     const errors = validationResult(req);

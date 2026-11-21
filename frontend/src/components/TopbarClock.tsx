@@ -25,9 +25,9 @@ export function TopbarClock() {
   return (
     <time className="top-clock" aria-label={`${weekday} ${dayMon} ${time}`} dateTime={now.toISOString()}>
       <span className="tc-day">{weekday}</span>
-      <span className="tc-sep">·</span>
+      <span className="tc-sep" aria-hidden="true">·</span>
       <span className="tc-date">{dayMon}</span>
-      <span className="tc-sep">·</span>
+      <span className="tc-sep" aria-hidden="true">·</span>
       <span className="tc-time">{time}</span>
     </time>
   );

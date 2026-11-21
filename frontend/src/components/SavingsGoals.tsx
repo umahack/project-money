@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api';
 import { Card, Field } from './ui';
-import { inr, parseAmount } from '../money';
+import { currentMonth, inr, parseAmount } from '../money';
 import { errText, useToast } from '../state';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { ClaritySavingsGoals, type ClaritySavingsGoalsProps } from './goals/ClaritySavingsGoals';
 
 interface Goal {
   id: number;
@@ -15,7 +17,35 @@ interface Goal {
   updated_at: string;
 }
 
-export function SavingsGoals() {
+const NO_ARRIVAL = { action: null, key: '' } as const;
+const NOTHING = () => undefined;
+
+/**
+ * Savings goals. With the rollout flag off this is the original component,
+ * unchanged. With it on, the Goals page passes the confirmed snapshot and every
+ * create, correction, contribution, revision, and delete is its own scoped
+ * mutation against the server's canonical goal outcomes.
+ */
+export function SavingsGoals(props: Partial<ClaritySavingsGoalsProps> = {}) {
+  if (selectFinancialClarityRollout().enabled) {
+    return (
+      <ClaritySavingsGoals
+        month={props.month ?? currentMonth()}
+        snapshot={props.snapshot}
+        snapshotLoading={props.snapshotLoading ?? false}
+        snapshotError={props.snapshotError}
+        arrival={props.arrival ?? NO_ARRIVAL}
+        onRefresh={props.onRefresh ?? NOTHING}
+        onRecalculate={props.onRecalculate ?? NOTHING}
+        recalculating={props.recalculating ?? false}
+      />
+    );
+  }
+  return <LegacySavingsGoals />;
+}
+
+// ROLLBACK-ONLY: the flag-off goals list. Clarity code must not use it (src/clarity/rollbackBoundary.test.ts).
+function LegacySavingsGoals() {
   const { toast } = useToast();
   const [items, setItems] = useState<Goal[] | null>(null);
   const [name, setName] = useState('');
@@ -85,7 +115,7 @@ export function SavingsGoals() {
       <p className="muted small">Set a target amount and watch your progress each time you add to it.</p>
 
       {items && items.length > 0 && (
-        <ul className="list">
+        <ul id="goals-list" tabIndex={-1} className="list">
           <AnimatePresence>
             {items.map((g) => {
               const pct = g.target_amount > 0 ? Math.min(100, Math.round((g.saved_amount / g.target_amount) * 100)) : 0;
@@ -93,6 +123,8 @@ export function SavingsGoals() {
               return (
                 <motion.li
                   key={g.id}
+                  id={`goal-${g.id}`}
+                  tabIndex={-1}
                   className="list-item"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -140,7 +172,7 @@ export function SavingsGoals() {
         </ul>
       )}
 
-      <form onSubmit={create} className="stack-sm" style={{ marginTop: '0.6rem' }}>
+      <form id="goal-form" tabIndex={-1} onSubmit={create} className="stack-sm" style={{ marginTop: '0.6rem' }}>
         <Field label="Goal name"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="e.g. Laptop upgrade" /></Field>
         <div className="row-sm" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
           <Field label="Target amount"><input value={target} onChange={(e) => setTarget(e.target.value)} inputMode="decimal" placeholder="60000" maxLength={12} /></Field>

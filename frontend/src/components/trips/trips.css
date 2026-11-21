@@ -1,0 +1,30 @@
+/* Trips in the clarity branch. Reuses the app tokens and the shared clarity classes. */
+.trip-grid { list-style: none; padding: 0; margin: 0; }
+.trip-card-status { margin: 0.3rem 0 0.5rem; }
+.trip-subtitle { margin: 0.9rem 0 0.4rem; font-size: 1rem; }
+.trip-own-balance { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.trip-balance { display: inline-flex; gap: 0.35rem; align-items: center; font-weight: 600; }
+.trip-allocations { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; gap: 0.15rem; }
+.trip-allocations li { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; }
+.trip-allocation-pending { margin: 0.3rem 0 0; }
+.trip-expense { flex-wrap: wrap; align-items: flex-start; }
+.trip-personal { margin-top: 0.6rem; display: grid; gap: 0.35rem; padding-top: 0.5rem; border-top: 1px dashed var(--clarity-border, rgba(127, 127, 127, 0.35)); }
+.trip-personal p { margin: 0; }
+.trip-personal-panel {
+  display: grid; gap: 0.4rem; margin-top: 0.4rem; padding: 0.7rem 0.8rem;
+  border: 1px solid var(--clarity-border, rgba(127, 127, 127, 0.45)); border-radius: 14px;
+}
+.trip-personal-panel p { margin: 0; }
+.trip-personal-note { margin: 0 0 0.6rem; }
+.trip-settlement-plan .list-item { flex-wrap: wrap; }
+.trip-reason { flex: 1 1 100%; }
+.trip-retained, .trip-unavailable { margin-top: 0.8rem; }
+.trip-scope-status { margin-top: 0.6rem; }
+.trip-payments { margin-top: 1rem; }
+.trip-payments h3 { margin: 0 0 0.3rem; font-size: 1rem; }
+.trip-share-dialog h2 { margin: 0; font-size: 1.15rem; }
+.trip-share-dialog ul { margin: 0.2rem 0 0; padding-left: 1.2rem; display: grid; gap: 0.15rem; }
+.trip-share-group { margin-top: 0.5rem; }
+.trip-share-group-title { margin: 0; font-size: 0.95rem; }
+.trip-share-failure { display: grid; gap: 0.4rem; justify-items: start; }
+.trip-share-link-label { display: grid; gap: 0.2rem; }

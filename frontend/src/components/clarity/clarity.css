@@ -1,0 +1,271 @@
+/* Shared financial-clarity components. Reuses the app tokens from styles.css
+   (--text, --muted, --border, --accent, --radius). Status tones are defined
+   here per theme so text, borders, and glyphs keep at least 4.5:1 contrast. */
+
+:root {
+  --clarity-ok: #3ddc97;
+  --clarity-info: #18e0b5;
+  --clarity-warn: #ffb547;
+  --clarity-danger: #ff8aa0;
+  --clarity-focus: #18e0b5;
+}
+:root[data-theme='light'] {
+  --clarity-ok: #047857;
+  --clarity-info: #0f766e;
+  --clarity-warn: #b45309;
+  --clarity-danger: #be123c;
+  --clarity-focus: #0f766e;
+}
+
+.clarity-tone-ok { --tone: var(--clarity-ok); }
+.clarity-tone-info { --tone: var(--clarity-info); }
+.clarity-tone-warn { --tone: var(--clarity-warn); }
+.clarity-tone-danger { --tone: var(--clarity-danger); }
+
+/* Keyboard focus: visible and at least 3:1 in both themes (Requirement 12.14). */
+.clarity-outcome:focus-visible,
+.clarity-region:focus-visible,
+.clarity-mutation:focus-visible,
+.clarity-outcome :focus-visible,
+.clarity-region :focus-visible,
+.clarity-mutation :focus-visible,
+.clarity-action :focus-visible,
+.clarity-decision-header :focus-visible,
+.clarity-explanation :focus-visible {
+  outline: 3px solid var(--clarity-focus);
+  outline-offset: 2px;
+}
+
+.clarity-outcome, .clarity-explanation, .clarity-region, .clarity-decision-header, .clarity-mutation { overflow-wrap: anywhere; }
+/* Existing forms and regions that an action link scrolls to and focuses on arrival. */
+.container [tabindex="-1"]:focus-visible {
+  outline: 3px solid var(--clarity-focus);
+  outline-offset: 2px;
+  scroll-margin-top: 5rem;
+}
+.container [tabindex="-1"] { scroll-margin-top: 5rem; }
+
+/* ---- Badges: text carries meaning; color and glyph only reinforce it ---- */
+.clarity-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.78rem; font-weight: 600; line-height: 1.3;
+  padding: 0.15rem 0.6rem; border-radius: 99px;
+  color: var(--tone, var(--text)); border: 1px solid currentColor; background: transparent;
+}
+.clarity-class-entered_fact { border-style: dotted; }
+.clarity-class-calculated_result { border-style: solid; }
+.clarity-class-recommendation { border-style: dashed; }
+.clarity-glyph { color: var(--tone, inherit); font-weight: 700; margin-right: 0.35rem; }
+.clarity-badge .clarity-glyph { margin-right: 0; color: inherit; }
+
+/* ---- Notice blocks: left rule and tint use the tone; the text stays normal ---- */
+.clarity-state,
+.clarity-region-note,
+.clarity-region-error,
+.clarity-field-error,
+.clarity-mutation-failure:not(:empty),
+p.clarity-tone-warn,
+p.clarity-tone-info {
+  border-left: 4px solid var(--tone, var(--border));
+  background: color-mix(in srgb, var(--tone, transparent) 8%, transparent);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin: 0.6rem 0;
+  color: var(--text);
+}
+.clarity-region-error, .clarity-field-error, .clarity-mutation-failure { --tone: var(--clarity-danger); }
+.clarity-state p, .clarity-region-note p, .clarity-region-error p { margin: 0.15rem 0; }
+.clarity-region-error { display: grid; gap: 0.6rem; align-content: center; justify-items: start; }
+.clarity-field-error { display: block; font-size: 0.85rem; }
+
+/* ---- Outcome card ---- */
+.clarity-outcome-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem 0.8rem; flex-wrap: wrap; }
+.clarity-outcome-title { margin: 0; font-size: 1.05rem; }
+.clarity-outcome-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.clarity-period { margin: 0.25rem 0 0.6rem; }
+.clarity-refreshing { margin: 0.2rem 0 0.5rem; }
+.clarity-retry-row, .clarity-corrective, .clarity-explain, .clarity-mutation-actions { margin-top: 0.7rem; }
+.clarity-mutation-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem; }
+.clarity-disclaimer { margin: 0.6rem 0 0; }
+.clarity-actions { margin-top: 0.7rem; }
+.clarity-kept-facts { margin-top: 0.6rem; }
+.clarity-chevron { display: inline-block; width: 1em; margin-right: 0.3rem; }
+
+.clarity-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.6rem; margin: 0.35rem 0; }
+.clarity-value-label { color: var(--muted); font-size: 0.9rem; }
+.clarity-value-amount { font-size: 1.1rem; font-weight: 600; }
+.clarity-value-emphasis .clarity-value-amount { font-size: clamp(1.4rem, 5vw, 1.9rem); }
+.clarity-value-summary { font-size: 1.2rem; font-weight: 600; margin: 0.35rem 0; }
+
+.clarity-plain-list { list-style: none; margin: 0.3rem 0; padding: 0; display: grid; gap: 0.35rem; }
+
+/* ---- Explanation panel ---- */
+.clarity-explanation { margin-top: 0.6rem; padding: 0.8rem 0.9rem; border: 1px solid var(--border); border-radius: 14px; }
+.clarity-explanation-body p { margin: 0.25rem 0; }
+.clarity-subheading { margin: 0.9rem 0 0.3rem !important; font-weight: 600; }
+.clarity-operations { margin: 0.3rem 0; padding-left: 1.3rem; display: grid; gap: 0.7rem; }
+.clarity-operation-title { margin: 0; }
+.clarity-result-grid { display: grid; gap: 0.3rem; margin: 0.3rem 0; }
+.clarity-result-grid > div { display: flex; flex-wrap: wrap; gap: 0.1rem 0.6rem; }
+.clarity-result-grid dt { color: var(--muted); }
+.clarity-result-grid dd { margin: 0; }
+
+/* ---- Decision header ---- */
+.clarity-decision-header { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.8rem 1.2rem; margin-bottom: 1.1rem; }
+.clarity-decision-text { min-width: 0; flex: 1 1 18rem; }
+.clarity-decision { margin: 0.2rem 0 0; color: var(--muted); }
+.clarity-decision-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-right: 0.3rem; }
+.clarity-decision-side { display: grid; gap: 0.6rem; justify-items: start; min-width: 0; max-width: 100%; }
+.clarity-decision-action { display: grid; gap: 0.3rem; justify-items: start; }
+
+/* ---- Action link ---- */
+.clarity-action { display: grid; gap: 0.3rem; justify-items: start; min-width: 0; max-width: 100%; }
+.clarity-action-link { text-decoration: none; white-space: normal; text-align: left; }
+.clarity-action-details { display: block; }
+.clarity-action-unavailable { font-weight: 600; }
+
+/* ---- Mutation status ---- */
+.clarity-mutation { margin: 0; }
+.clarity-mutation-line { margin: 0; display: flex; flex-wrap: wrap; gap: 0.1rem 0.4rem; align-items: baseline; }
+.clarity-mutation-failure p { margin: 0; }
+
+/* ---- Region ---- */
+.clarity-region { min-width: 0; }
+.clarity-skeleton { display: grid; align-content: start; gap: 0.5rem; padding: 0.8rem 0; }
+.clarity-skeleton-text { margin: 0; }
+.clarity-skeleton-line { display: block; height: 14px; border-radius: 6px; margin: 0.55rem 0; max-width: 100%; }
+
+/* Reduced motion: no shimmer or movement, only immediate state changes (Requirement 12.7). */
+@media (prefers-reduced-motion: reduce) {
+  .clarity-outcome, .clarity-explanation, .clarity-action-link, .clarity-chevron,
+  .clarity-region, .clarity-mutation { transition: none !important; animation: none !important; }
+  .clarity-skeleton .skeleton { animation: none !important; }
+}
+
+/* ---- Responsive layout (task 17.3) ----
+   `main.clarity-on` is set by Shell only when the financial clarity flag is on, so none of
+   these rules change the legacy rendering. */
+/* A button label wraps instead of forcing its card wider than the screen. */
+main.clarity-on .btn { white-space: normal; text-align: center; overflow-wrap: anywhere; max-width: 100%; }
+/* Long names and amounts wrap inside their card instead of overflowing or being cut with an ellipsis. */
+main.clarity-on { overflow-wrap: anywhere; }
+main.clarity-on .grow > strong,
+main.clarity-on .grow > small { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+/* Rows and list items wrap their parts onto the next line when they do not fit side by side. */
+main.clarity-on .row,
+main.clarity-on .list-item { flex-wrap: wrap; }
+/* A goal row stacks its parts in a column, so it must not also wrap them into extra columns. */
+main.clarity-on .list-item.goal-item { flex-wrap: nowrap; }
+/* A pill sits on its own line box so its padding does not overlap the text below it. */
+main.clarity-on .pill { display: inline-block; vertical-align: middle; line-height: 1.3; }
+main.clarity-on .row > .grow,
+main.clarity-on .list-item > .grow { flex: 1 1 10rem; }
+/* A field never shrinks to a sliver beside its buttons. */
+main.clarity-on :is(input:not([type='checkbox'], [type='radio']), select) { min-width: min(8rem, 100%); }
+main.clarity-on .salary-form .input-prefix { flex: 1 1 12rem; }
+/* Two-column field groups become one column when the form is narrow. */
+main.clarity-on .grid.tight,
+main.clarity-on .commit-form { grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); }
+/* Trip sections wrap rather than scroll sideways. */
+main.clarity-on .trip-tabs { flex-wrap: wrap; overflow: visible; }
+/* Quick actions drop to fewer columns when text is enlarged instead of overlapping labels. */
+main.clarity-on .quick-actions { grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr)); }
+main.clarity-on .qa-label { overflow-wrap: anywhere; }
+/* Balance chips carry an amount and a name, so they wrap rather than run past the card. */
+main.clarity-on .balance-chip { white-space: normal; }
+/* Readable measure: prose keeps to about 75 characters per line however wide the content column is
+   (the column itself is capped by .app-shell). List rows (.list-item) are flex rows of separate
+   parts, not prose, so they keep the width of their card. */
+main.clarity-on :is(p, li:not(.list-item)) { max-width: 75ch; }
+/* A segmented control label breaks only between words. Inheriting `overflow-wrap: anywhere` lets the
+   control shrink until a one-word label such as "Custom" splits mid-word. */
+main.clarity-on .segmented :is(button, a) { overflow-wrap: normal; }
+/* Where the bottom navigation is used, page controls are full-size touch targets. */
+@media (max-width: 899px) {
+  main.clarity-on .btn,
+  main.clarity-on .icon-btn,
+  main.clarity-on .segmented button,
+  main.clarity-on .segmented a,
+  main.clarity-on .chip,
+  main.clarity-on .trip-tab,
+  main.clarity-on .pw-toggle { min-height: 44px; min-width: 44px; }
+  main.clarity-on .crumbs a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* On narrow screens, padding that scales with text size must not take the space the content needs.
+   These caps change nothing at the default text size on a phone wider than 320px. */
+@media (max-width: 520px) {
+  main.clarity-on.container.with-sidebar { padding-left: min(0.85rem, 3vw); padding-right: min(0.85rem, 3vw); }
+  main.clarity-on .card { padding: min(1rem, 4vw); }
+  main.clarity-on :is(input:not([type='checkbox'], [type='radio']), select) { padding-left: min(0.85rem, 3vw); padding-right: min(0.85rem, 3vw); }
+  main.clarity-on .input-prefix input { padding-left: min(2rem, 14vw); }
+}
+/* ---- Contrast and focus (task 17.4, Requirements 12.11 to 12.14) ----
+   Measured in a real browser by e2e/a11y-contrast.clarity.spec.ts in both themes. Everything here is
+   scoped to a page that renders `main.clarity-on`, so the flag-off (legacy) pages look as before.
+   The warm palette stays; only the tokens that failed are moved to a deeper shade of the same hue. */
+/* Light: text links and "accent" text were #10b981 on cream (2.4:1) and on white (2.5:1).
+   --accent is also the global focus ring colour, which needs 3:1. #0e7068 is a slightly deeper shade of the app's
+   own teal (--primary #0f766e) and is at least 4.8:1 on cream, white, and the grey chip fill. --muted #6b7280 was
+   4.2:1 on the inactive tab fill and 3.9:1 on balance chips. */
+:root[data-theme='light']:has(main.clarity-on) {
+  --accent: #0e7068;
+  --muted: #5b6270;
+  /* Chart and category colours are used as bars (3:1 against the track) and must never be text colours. */
+  --c-need: #b45309;
+  --c-want: #7c3aed;
+  --c-save: #047857;
+  --field-border: #8a8378;
+}
+:root:not([data-theme='light']):has(main.clarity-on) {
+  --muted: #a9a9d2;
+  --c-need: #9b86ff;
+  --field-border: #8b86c9;
+}
+/* Text fields: the edge of a field tells a person where to type, so it needs 3:1 (WCAG 1.4.11).
+   The old edge was a 14 to 18 percent tint, about 1.3:1. */
+:root main.clarity-on input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+:root main.clarity-on select,
+:root main.clarity-on textarea {
+  border-color: var(--field-border);
+}
+/* The clock's "·" separators are decorative (aria-hidden). Half opacity was 2.2:1 in light and 2.9:1 in dark. */
+:root:has(main.clarity-on) .top-clock .tc-sep { opacity: 0.8; }
+/* Placeholder text is text: a 70 percent mix of the muted colour was about 3:1. */
+main.clarity-on input::placeholder,
+main.clarity-on textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+/* Every text field shows the same 3:1 focus ring, not only fields inside a clarity region. */
+main.clarity-on :is(input, select, textarea):focus-visible {
+  outline: 3px solid var(--clarity-focus);
+  outline-offset: 2px;
+}
+/* Category and chart colours are drawn as bars and swatches. Text beside them uses the text colour,
+   because amber, violet, and emerald tints are 2 to 3:1 on white. These are inline styles from
+   shared markup, so the scoped override has to be !important. */
+main.clarity-on [style*='color: var(--c-'] { color: var(--text) !important; }
+/* Dark: white on the old violet gradient ended at 3.6:1 (#b05cff). */
+:root:not([data-theme='light']):has(main.clarity-on) .btn.primary,
+:root:not([data-theme='light']):has(main.clarity-on) .segmented button.on {
+  background: linear-gradient(135deg, #6a43f5, #8a3fe0);
+}
+/* Light: the selected segment faded from teal to emerald (white text 2.5:1 at the end), and the
+   dark-theme track made the unselected labels 1.8:1. */
+:root[data-theme='light']:has(main.clarity-on) .segmented button.on { background: var(--primary); }
+:root[data-theme='light']:has(main.clarity-on) .segmented { background: #efebe3; }
+/* Text and form errors in the light theme: #e11d48 was 4.4:1 on the cream page. #be123c is the --clarity-danger tone. */
+:root[data-theme='light']:has(main.clarity-on) { --danger: #be123c; }
+/* Resize text (WCAG 1.4.4) and text spacing (1.4.12): the sidebar and the logo mark were fixed in pixels, so
+   200 percent text made the sidebar scroll sideways and the logo glyph overflow its box. In rem they are the
+   same size at 100 percent and grow with the text. */
+@media (min-width: 900px) {
+  :root:has(main.clarity-on) .app-shell { grid-template-columns: 14.5rem minmax(0, 1fr); }
+}
+:root:has(main.clarity-on) .brand-mark { width: 2.25rem; height: 2.25rem; }
+:root:has(main.clarity-on) .brand-mark.big { width: 4rem; height: 4rem; }
+@media (max-width: 520px) {
+  :root:has(main.clarity-on) .brand-mark { width: 1.875rem; height: 1.875rem; }
+}
+/* Destructive solid button: white on #ff5c7c was 3:1. */
+main.clarity-on .btn.danger-solid { background: linear-gradient(135deg, #c8203f, #b81d3c); }

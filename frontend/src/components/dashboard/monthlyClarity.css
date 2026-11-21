@@ -1,0 +1,17 @@
+/* Home's Monthly Clarity Summary. Reuses the clarity tokens and card styles. */
+.monthly-clarity { display: grid; gap: 1rem; margin-bottom: 1rem; }
+.monthly-clarity-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  align-items: start;
+}
+.monthly-clarity-region { display: grid; gap: 0.6rem; min-width: 0; align-content: start; }
+.monthly-clarity-stack { display: grid; gap: 0.5rem; min-width: 0; }
+.monthly-clarity .card { margin: 0; }
+.monthly-clarity-note p { margin: 0.3rem 0; }
+.monthly-clarity-more { margin: 0; }
+.monthly-clarity-observation { margin: 0 0 0.2rem; font-weight: 600; }
+.monthly-clarity-action-list { gap: 0.9rem; }
+.monthly-clarity-action-list > li { display: grid; gap: 0.15rem; }
+.monthly-clarity-no-action { margin: 0.4rem 0 0; font-weight: 600; }

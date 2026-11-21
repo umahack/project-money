@@ -14,7 +14,17 @@
  */
 import 'dotenv/config';
 import { runMonthlyReview } from '../src/jobs/monthlyReview.js';
+import { operationalLogger, safeErrorCode, safeErrorName } from '../src/observability/operationalLog.js';
 
 runMonthlyReview({ dry: process.env.MONTHLY_REVIEW_DRY_RUN === '1' })
   .then((r) => { if (r.failed > 0 && !r.dry) process.exitCode = 1; })
-  .catch((e) => { console.error('[monthly-review] fatal:', e); process.exit(1); });
+  .catch((e) => {
+    // Log the error class only; the message and stack can echo query text.
+    operationalLogger.error({
+      event: 'JOB_FAILED',
+      operation: 'monthly_review',
+      errorName: safeErrorName(e),
+      code: safeErrorCode(e),
+    });
+    process.exit(1);
+  });

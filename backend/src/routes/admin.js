@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
+import {
+  buildIncompleteDeletionResponse,
+  deleteAccountRecords,
+} from '../db/accountDeletion.js';
 import { authRequired } from '../middleware/auth.js';
 import { adminRequired } from '../middleware/admin.js';
 import { audit } from '../audit.js';
@@ -145,35 +149,20 @@ router.delete('/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete the last remaining admin.' });
     }
   }
-  // Explicit cleanup across every user-owning table so this works regardless
-  // of whether PRAGMA foreign_keys is on under libSQL. Mirrors /auth/account.
-  const tx = [
-    // trip_expenses rows reference the payer by name string, not user_id,
-    // so there is nothing to delete directly here. They are rolled up when
-    // the parent trip is deleted below via ON DELETE CASCADE.
-    ['DELETE FROM trip_members WHERE user_id = ?', [id]],
-    ['DELETE FROM trip_invites WHERE inviter_id = ? OR invitee_id = ?', [id, id]],
-    ['DELETE FROM trips WHERE user_id = ?', [id]],
-    ['DELETE FROM salary_entries WHERE user_id = ?', [id]],
-    ['DELETE FROM emis WHERE user_id = ?', [id]],
-    ['DELETE FROM expense_log WHERE user_id = ?', [id]],
-    ['DELETE FROM category_budgets WHERE user_id = ?', [id]],
-    ['DELETE FROM recurring_expenses WHERE user_id = ?', [id]],
-    ['DELETE FROM savings_goals WHERE user_id = ?', [id]],
-    ['DELETE FROM user_categories WHERE user_id = ?', [id]],
-    ['DELETE FROM user_aliases WHERE user_id = ?', [id]],
-    ['DELETE FROM sessions WHERE user_id = ?', [id]],
-    ['DELETE FROM pending_email_changes WHERE user_id = ?', [id]],
-    ['DELETE FROM pending_registrations WHERE email = ?', [target.email]],
-    ['DELETE FROM pending_password_resets WHERE email = ?', [target.email]],
-    ['UPDATE feedback SET user_id = NULL WHERE user_id = ?', [id]],
-    ['UPDATE audit_log SET actor_id = NULL WHERE actor_id = ?', [id]],
-    ['UPDATE visits SET user_id = NULL WHERE user_id = ?', [id]],
-    ['DELETE FROM users WHERE id = ?', [id]],
-  ];
-  for (const [sql, args] of tx) await db.prepare(sql).run(...args);
+  // Use the same complete write transaction as self-service deletion. User-linked
+  // visits and Product Analytics events are deleted, not anonymized.
+  try {
+    await deleteAccountRecords({ database: db, userId: id, email: target.email });
+  } catch (error) {
+    if (error?.code === 'ACCOUNT_DELETION_INCOMPLETE') {
+      return res.status(500).json(
+        buildIncompleteDeletionResponse(error, `/api/admin/users/${id}`)
+      );
+    }
+    throw error;
+  }
   await audit(req, { action: 'admin.user_delete', target: `user:${id}`, details: `email=${target.email}` });
-  res.json({ ok: true });
+  return res.json({ ok: true });
 });
 
 router.delete('/emis/:id', async (req, res) => {

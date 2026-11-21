@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logBackgroundFailure } from './observability/operationalLog.js';
 
 const KEY = process.env.RESEND_API_KEY;
 const FROM = process.env.MAIL_FROM || 'Project Money <onboarding@resend.dev>';
@@ -9,9 +10,11 @@ const resend = KEY ? new Resend(KEY) : null;
  * to stdout so local dev and preview deploys still work. The return shape is
  * identical in both paths so the caller can show `mail.fallback` if needed.
  */
-export async function sendMail({ to, subject, html, text }) {
+export async function sendMail({ to, subject, html, text, logDetails = true }) {
   if (!resend) {
-    console.log(`[mail-fallback] to=${to} subject="${subject}"\n${text || html}`);
+    if (logDetails) {
+      console.log(`[mail-fallback] to=${to} subject="${subject}"\n${text || html}`);
+    }
     return { ok: true, fallback: true };
   }
   try {
@@ -19,7 +22,9 @@ export async function sendMail({ to, subject, html, text }) {
     if (res.error) throw new Error(res.error.message || 'send failed');
     return { ok: true, id: res.data?.id };
   } catch (err) {
-    console.error('[mail-error]', err.message);
+    // The provider message can echo the recipient address, so only a fixed
+    // event is logged.
+    if (logDetails) logBackgroundFailure('mail_send', err);
     return { ok: false, error: err.message };
   }
 }

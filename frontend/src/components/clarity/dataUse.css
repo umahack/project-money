@@ -1,0 +1,85 @@
+@import './clarity.css';
+
+/* Core promise strip, data-use gate, and Data Use Notice. Reuses the app tokens
+   from styles.css (--text, --muted, --border, --glass, --radius) so both themes
+   keep the warm palette. Meaning is carried by text; the rule color only reinforces it. */
+
+.clarity-promise,
+.clarity-gate {
+  background: var(--glass);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.clarity-promise { border-left: 4px solid var(--accent); }
+.clarity-gate { border-left: 4px solid var(--clarity-info, var(--accent)); }
+.clarity-gate[data-inputs-enabled='false'] { border-left-color: var(--clarity-warn, var(--warn)); }
+
+.clarity-promise-title,
+.clarity-gate-title { margin: 0 0 0.35rem; font-size: clamp(1.1rem, 3.4vw, 1.4rem); line-height: 1.25; }
+.clarity-promise-lead { margin: 0 0 0.5rem; }
+.clarity-promise-flow {
+  margin: 0; padding: 0; list-style: none;
+  display: grid; gap: 0.35rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.clarity-promise-flow li { margin: 0; font-size: 0.92rem; }
+
+.clarity-gate > p { margin: 0.3rem 0; }
+.clarity-gate-actions { margin-top: 0.8rem; }
+.clarity-gate-actions .btn { white-space: normal; text-align: center; }
+.clarity-gate-status:empty { display: none; }
+.clarity-gate-status { margin: 0.5rem 0 0; color: var(--muted); }
+.clarity-gate-details { margin-top: 0.5rem; }
+.clarity-gate-details .btn { white-space: normal; text-align: left; }
+
+.clarity-gate-paused,
+.clarity-gate-error {
+  border-left: 4px solid var(--clarity-warn, var(--warn));
+  background: color-mix(in srgb, var(--clarity-warn, var(--warn)) 8%, transparent);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin: 0.7rem 0;
+  color: var(--text);
+}
+.clarity-gate-paused p, .clarity-gate-error { margin: 0.2rem 0; }
+.clarity-gate-error { border-left-color: var(--clarity-danger, var(--danger)); background: color-mix(in srgb, var(--clarity-danger, var(--danger)) 8%, transparent); }
+
+.clarity-gate-analytics { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--border); }
+.clarity-gate-analytics-label { display: inline-flex; align-items: center; gap: 0.55rem; font-weight: 600; min-height: 36px; }
+.clarity-gate-analytics-label input { width: 1.2rem; height: 1.2rem; accent-color: var(--primary); }
+.clarity-gate-analytics p { margin: 0.2rem 0; }
+
+/* Keyboard focus: visible and at least 3:1 in both themes (Requirement 12.14). */
+.clarity-promise :focus-visible,
+.clarity-gate :focus-visible {
+  outline: 3px solid var(--clarity-focus, var(--accent));
+  outline-offset: 2px;
+}
+
+/* ---- Notice ---- */
+.clarity-notice { margin: 0.6rem 0; }
+.clarity-notice-title { margin: 0.4rem 0; font-size: 1.05rem; }
+.clarity-notice-heading { margin: 1rem 0 0.4rem; font-size: 0.95rem; }
+.clarity-notice-categories { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+.clarity-notice-category { border: 1px solid var(--border); border-radius: 14px; padding: 0.6rem 0.8rem; min-width: 0; }
+.clarity-notice-category-title { margin: 0 0 0.3rem; font-size: 0.95rem; }
+.clarity-notice-facts { margin: 0; display: grid; gap: 0.35rem; }
+.clarity-notice-facts > div { display: grid; gap: 0.05rem; }
+.clarity-notice-facts dt { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.clarity-notice-facts dd { margin: 0; }
+.clarity-notice-inline, .clarity-notice-list { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.15rem; }
+.clarity-notice-inline { list-style: disc; }
+.clarity-notice-list { list-style: disc; gap: 0.3rem; }
+
+@media (min-width: 720px) {
+  .clarity-notice-facts > div { grid-template-columns: 11rem 1fr; gap: 0.6rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clarity-promise, .clarity-gate, .clarity-gate * { transition: none !important; animation: none !important; }
+}

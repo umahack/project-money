@@ -108,11 +108,11 @@ export function Empty({ emoji, title, text }: { emoji: string; title: string; te
   );
 }
 
-export function ProgressBar({ value, max }: { value: number; max: number }) {
+export function ProgressBar({ value, max, label }: { value: number; max: number; label?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   const over = max > 0 && value > max;
   return (
-    <div className="progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+    <div className="progress" role="progressbar" aria-label={label} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
       <motion.div className={`progress-fill ${over ? 'over' : ''}`} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.9, ease: 'easeOut' }} />
     </div>
   );
@@ -178,7 +178,8 @@ export function burst(x: number, y: number): void {
   }
 }
 
-/** Accessible modal: Esc and backdrop close it (unless `locked`), focus moves into it, scroll is frozen. */
+const MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+/** Accessible modal: Esc and backdrop close it (unless `locked`), focus moves into it and stays in it, scroll is frozen. */
 export function Modal({ open, onClose, children, title, locked = false }: { open: boolean; onClose: () => void; children: ReactNode; title: string; locked?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -187,6 +188,26 @@ export function Modal({ open, onClose, children, title, locked = false }: { open
     box.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !locked) onClose();
+      // aria-modal promises that the page behind is out of reach, so Tab and Shift+Tab wrap inside the dialog.
+      if (e.key !== 'Tab' || !box.current) return;
+      const dialog = box.current;
+      const stops = Array.from(dialog.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE));
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (!first || !last) {
+        e.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const active = document.activeElement;
+      const outside = !active || !dialog.contains(active);
+      if (e.shiftKey && (outside || active === dialog || active === first)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (outside || active === last)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;

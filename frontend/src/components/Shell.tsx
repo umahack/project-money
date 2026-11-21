@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../state';
 import { FeedbackModal } from './FeedbackModal';
 import { usePendingInvitesCount } from './InvitesInbox';
@@ -9,6 +9,11 @@ import { AnnouncementBanner } from './AnnouncementBanner';
 import { TopbarClock } from './TopbarClock';
 import { WhatWeStoreLink } from './WhatWeStore';
 import { markUserViewPreferred, clearUserViewPreference } from '../userViewPref';
+import { DataUseGateProvider } from '../clarity/DataUseGateProvider';
+import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { CorePromiseStrip } from './clarity/CorePromiseStrip';
+import { DataUseGate } from './clarity/DataUseGate';
+import { RenderErrorBoundary } from './clarity/RenderErrorBoundary';
 
 export function Background() {
   return (
@@ -45,6 +50,7 @@ export function Shell() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
+  const reduceMotion = useReducedMotion();
   const [feedback, setFeedback] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const stored = localStorage.getItem('theme');
@@ -56,6 +62,28 @@ export function Shell() {
     const stored = localStorage.getItem('theme');
     return stored === 'light' || stored === 'dark';
   });
+
+  // The bottom navigation wraps to more rows when text is enlarged. Publish its height so the
+  // page and the toasts keep clear of it. Below 900px it is shown; at 900px and above it is
+  // hidden, which reports a height of 0 and leaves the sidebar layout alone.
+  const bottomNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = bottomNavRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+    const root = document.documentElement;
+    const publish = () => {
+      const height = Math.ceil(element.getBoundingClientRect().height);
+      if (height > 0) root.style.setProperty('--bottom-nav-h', `${height}px`);
+      else root.style.removeProperty('--bottom-nav-h');
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--bottom-nav-h');
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -97,12 +125,15 @@ export function Shell() {
   };
 
   return (
-    <>
+    <DataUseGateProvider>
       <Background />
       <header className="topbar">
-        <NavLink to="/" className="brand" aria-label="Project Money home">
-          <span className="brand-mark">₹</span>
+        {/* The name starts with what the link shows (the wordmark and the BETA badge's own label), so speech-input users can say what they see. */}
+        <NavLink to="/" className="brand" aria-label="Project Money Beta — under development, home">
+          <span className="brand-mark" aria-hidden="true">₹</span>
           <span>Project&nbsp;Money</span>
+          {/* The space keeps the link's visible text "Project Money BETA" (it is not rendered between flex items), so it reads as the words the name starts with. */}
+          {' '}
           <span
             className="beta-badge"
             title="This app is in active development — features may change and bugs are expected."
@@ -184,10 +215,29 @@ export function Shell() {
           </nav>
         </aside>
 
-        <main className="container with-sidebar">
+        <main className={`container with-sidebar${selectFinancialClarityRollout().enabled ? ' clarity-on' : ''}`}>
+          {/* The promise and data-use gate come before routed financial controls.
+              They render only in the user view and only when the clarity rollout flag is on. */}
+          {!inAdmin && (
+            <RenderErrorBoundary scope="region" label="The promise and data-use notice" resetKeys={[loc.pathname]}>
+              <CorePromiseStrip />
+              <DataUseGate />
+            </RenderErrorBoundary>
+          )}
           <AnimatePresence mode="wait">
-            <motion.div key={loc.pathname} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
-              <Outlet />
+            {/* With reduced motion the page fades only: no slide in, and no jump of 8px as the old page leaves (Requirement 12.7). */}
+            <motion.div key={loc.pathname} initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: 0.25 }}>
+              {/* A render error in a page stays inside the main area. The sidebar,
+                  bottom navigation, and every provider above stay mounted, so
+                  confirmed data survives and the user can navigate or retry. */}
+              <RenderErrorBoundary
+                scope="page"
+                label="This page"
+                resetKeys={[loc.pathname]}
+                focusAfterRetry={() => document.querySelector<HTMLElement>('main')}
+              >
+                <Outlet />
+              </RenderErrorBoundary>
             </motion.div>
           </AnimatePresence>
           <footer className="foot muted tiny center">
@@ -198,7 +248,7 @@ export function Shell() {
         </main>
       </div>
 
-      <nav className="bottom-tabs mobile-only" aria-label="Primary mobile">
+      <nav ref={bottomNavRef} className="bottom-tabs mobile-only" aria-label="Primary mobile">
         {mobileTabs.map((t) => (
           <NavLink
             key={t.to}
@@ -233,6 +283,6 @@ export function Shell() {
       </nav>
 
       <FeedbackModal open={feedback} onCancel={() => setFeedback(false)} onDone={finishLogout} />
-    </>
+    </DataUseGateProvider>
   );
 }

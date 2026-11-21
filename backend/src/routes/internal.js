@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import crypto from 'node:crypto';
 import { runMonthlyReview } from '../jobs/monthlyReview.js';
+import { runClarityReports } from '../jobs/clarityReports.js';
 
 const router = Router();
 
@@ -47,6 +48,16 @@ router.post('/cron/monthly-review', async (req, res) => {
   const dry = req.query?.dry === '1' || req.body?.dry === true;
   const result = await runMonthlyReview({ dry });
   res.json({ ok: true, ...result });
+});
+
+// Materializes newly completed weekly and 28-day success reports, finishes
+// deferred action metrics, and applies the 13-month event retention. Safe to
+// call repeatedly; the response contains counts and instants only.
+router.post('/cron/clarity-reports', async (req, res) => {
+  const dry = req.query?.dry === '1' || req.body?.dry === true;
+  const result = await runClarityReports({ dry });
+  const ok = result.failures.length === 0;
+  res.status(ok ? 200 : 500).json({ ok, ...result });
 });
 
 export default router;

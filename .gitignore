@@ -20,6 +20,9 @@ data.sqlite-journal
 data.sqlite-wal
 data.sqlite-shm
 dist
+coverage
+frontend/playwright-report
+frontend/test-results
 .DS_Store
 
 # Local-only drafts (Instagram story mockups etc.)

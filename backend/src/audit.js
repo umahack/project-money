@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import db from './db/index.js';
+import { logBackgroundFailure } from './observability/operationalLog.js';
 
 function dailyIpHash(ip) {
   const salt = (process.env.JWT_SECRET || 'pm-fallback-salt').slice(0, 24);
@@ -27,6 +28,6 @@ export async function audit(req, { action, target = null, details = null }) {
         dailyIpHash(ip)
       );
   } catch (err) {
-    console.error('[audit]', err?.message);
+    logBackgroundFailure('audit_write', err);
   }
 }

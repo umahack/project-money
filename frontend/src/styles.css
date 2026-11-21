@@ -214,6 +214,13 @@ a { color: var(--accent); }
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   border-bottom: 1px solid var(--border);
 }
+/* Let the bar wrap when enlarged text no longer fits, instead of overflowing. */
+.topbar { flex-wrap: wrap; row-gap: 0.25rem; }
+/* From 1712px the app shell is its 1680px maximum and centered. Align the bar with it so the
+   brand and the actions do not sit thousands of pixels apart on very wide screens. */
+@media (min-width: 1712px) {
+  .topbar { padding-left: calc((100% - 1680px) / 2 + 1rem); padding-right: calc((100% - 1680px) / 2 + 1rem); }
+}
 .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; text-decoration: none; color: var(--text); }
 .brand-mark {
   display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 12px;
@@ -260,14 +267,17 @@ a { color: var(--accent); }
 .container { width: min(1120px, 100%); margin: 0 auto; padding: 1.2rem clamp(0.8rem, 3vw, 2rem) calc(96px + env(safe-area-inset-bottom)); }
 .bottom-tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; justify-content: space-around;
+  /* When enlarged text no longer fits one row, the tabs wrap to a second row instead of overlapping. */
+  flex-wrap: wrap;
   padding: 0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
 }
-.btab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 0.35rem 1.2rem; border-radius: 16px; color: var(--muted); text-decoration: none; transition: all 0.2s; min-width: 76px; }
+.btab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 0.35rem 1.2rem; border-radius: 16px; color: var(--muted); text-decoration: none; transition: all 0.2s; min-width: 76px; min-height: 44px; }
+.btab small { max-width: 100%; text-align: center; overflow-wrap: anywhere; }
 .btab-icon { font-size: 1.4rem; transition: transform 0.25s; }
 .btab.active { color: var(--text); background: rgba(124, 92, 255, 0.22); }
-.btab.active .btab-icon { transform: translateY(-3px) scale(1.15); }
+.btab.active .btab-icon { transform: translateY(-3px) scale(1.15); transform-origin: 50% 100%; }
 .btab .badge { position: absolute; top: 2px; right: 10px; }
 
 .grid { display: grid; gap: 1rem; margin-bottom: 1rem; grid-template-columns: 1fr; }
@@ -285,11 +295,16 @@ a { color: var(--accent); }
 .crumbs a:hover { color: var(--accent); }
 
 @media (min-width: 820px) {
+  .grid.two { grid-template-columns: 1fr 1fr; align-items: start; }
+  .grid.three { grid-template-columns: repeat(3, 1fr); }
+}
+/* The sidebar (see "Sidebar layout" below) replaces the bottom navigation at the same
+   width, 900px. These two used to switch at 820px while the sidebar appeared at 900px,
+   so from 820px to 899px neither navigation was shown. */
+@media (min-width: 900px) {
   .desktop-only { display: inline-flex; }
   .tabs.desktop-only { display: flex; }
   .mobile-only { display: none; }
-  .grid.two { grid-template-columns: 1fr 1fr; align-items: start; }
-  .grid.three { grid-template-columns: repeat(3, 1fr); }
   .container { padding-bottom: 3rem; }
 }
 @media (min-width: 560px) and (max-width: 819px) { .grid.three { grid-template-columns: 1fr 1fr; } }
@@ -468,8 +483,8 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
 .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 99px; }
 
 /* ============ Toasts, confetti ============ */
-.toasts { position: fixed; z-index: 100; right: 1rem; bottom: calc(90px + env(safe-area-inset-bottom)); display: grid; gap: 0.5rem; max-width: min(380px, calc(100vw - 2rem)); }
-@media (min-width: 820px) { .toasts { bottom: 1.5rem; } }
+.toasts { position: fixed; z-index: 100; right: 1rem; bottom: calc(var(--bottom-nav-h, 90px) + 0.5rem + env(safe-area-inset-bottom)); display: grid; gap: 0.5rem; max-width: min(380px, calc(100vw - 2rem)); }
+@media (min-width: 900px) { .toasts { bottom: 1.5rem; } }
 .toast { padding: 0.75rem 1rem; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--border); backdrop-filter: blur(14px); box-shadow: var(--shadow); font-weight: 500; }
 .toast.ok { border-color: var(--ok); } .toast.err { border-color: var(--danger); }
 .burst-coin { position: fixed; z-index: 200; pointer-events: none; font-size: 1.3rem; animation: burst 0.95s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
@@ -510,11 +525,11 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
   .brand-mark { width: 30px; height: 30px; border-radius: 10px; font-size: 0.95rem; flex-shrink: 0; }
   .beta-badge { display: none; }
   .list-item { gap: 0.5rem; padding: 0.5rem; }
-  .container.with-sidebar { padding: 0.9rem 0.85rem calc(96px + env(safe-area-inset-bottom)); }
+  .container.with-sidebar { padding: 0.9rem 0.85rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); }
   .page-title { margin-bottom: 0.8rem; gap: 0.5rem; }
   .page-title h1 { font-size: 1.4rem; line-height: 1.2; }
   .page-title p { font-size: 0.85rem; }
-  .btab { padding: 0.35rem 0.55rem; min-width: 0; flex: 1 1 0; }
+  .btab { padding: 0.35rem 0.2rem; min-width: 0; flex: 1 1 3.1rem; }
   .btab small { font-size: 0.68rem; }
   .btab-icon { font-size: 1.2rem; }
   .bottom-tabs { gap: 0; padding: 0.3rem 0.3rem calc(0.3rem + env(safe-area-inset-bottom)); }
@@ -524,6 +539,13 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
   .brand span:nth-child(2) { display: none; }
   .topbar .btn.sm { font-size: 0.78rem; padding: 0.28rem 0.45rem; }
   .topbar .hello { display: none; }
+}
+
+/* Wherever the bottom navigation is used, the top bar controls are full-size touch targets. */
+@media (max-width: 899px) {
+  .topbar .btn.sm, .topbar .icon-btn { min-height: 44px; }
+  .topbar .icon-btn { width: 44px; height: 44px; }
+  .topbar .brand { min-height: 44px; min-width: 44px; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -620,7 +642,7 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 .fb-msg { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 0.3rem; }
 
 @media (max-width: 520px) {
-  .btab { min-width: 0; padding: 0.35rem 0.55rem; }
+  .btab { min-width: 0; }
   .bottom-tabs { gap: 0; }
   .modal { padding: 1.1rem; }
 }
@@ -732,7 +754,8 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 /* ---- Sidebar layout (desktop) ---- */
 .app-shell { display: block; }
 .sidebar { display: none; }
-.container.with-sidebar { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+/* The bottom padding keeps the last content clear of the fixed bottom navigation; Shell measures its height. */
+.container.with-sidebar { padding: 1rem 1rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); max-width: 1200px; margin: 0 auto; }
 
 @media (min-width: 900px) {
   .app-shell {

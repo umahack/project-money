@@ -1,37 +1,37 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useLocation } from 'react-router-dom';
+import { measurement } from '../clarity/measurement';
+import { visitRouteForPath, type VisitRoute } from '../clarity/visitRoutes';
 
 /**
- * Fire a page-view beacon on every route change. Best-effort — failures
- * are swallowed so analytics never breaks the UX.
+ * Sends a page-view beacon on every route change. Best effort: failures are
+ * dropped so analytics never breaks the UI.
  *
- * To keep token/share pages private the exact query / token path is
- * stripped: /share/trip/abc123 is reported as /share/trip/*.
+ * The beacon carries a fixed route key such as `plan` or `trip_detail`, never a
+ * path, so record ids, share tokens, and query strings are not reported.
+ *
+ * - Signed-out visitors report public routes only.
+ * - Signed-in visits are sent only while the confirmed Product Analytics
+ *   setting is on, and never when the clarity rollout flag is off.
+ * - A route that could not be sent yet (the setting is still loading) is sent
+ *   once, when the setting is confirmed on. Turning analytics off clears the
+ *   record, so turning it on again reports the current page.
  */
 export function useVisitTracker() {
   const location = useLocation();
-  const last = useRef<string | null>(null);
+  const analyticsEnabled = useSyncExternalStore(
+    measurement.subscribe,
+    measurement.getAnalyticsConsent,
+    () => false,
+  );
+  const lastSent = useRef<VisitRoute | null>(null);
+  const wasEnabled = useRef(false);
 
   useEffect(() => {
-    const path = normalizePath(location.pathname);
-    if (last.current === path) return;
-    last.current = path;
-    const base = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '');
-    const token = sessionStorage.getItem('pm_token') ?? '';
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    // keepalive lets it fly on tab close too
-    fetch(`${base}/api/track`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ path }),
-      keepalive: true,
-    }).catch(() => { /* ignore */ });
-  }, [location.pathname]);
-}
-
-function normalizePath(p: string): string {
-  if (p.startsWith('/share/trip/')) return '/share/trip/*';
-  if (/^\/trips\/\d+$/.test(p)) return '/trips/:id';
-  return p || '/';
+    if (wasEnabled.current && !analyticsEnabled) lastSent.current = null;
+    wasEnabled.current = analyticsEnabled;
+    const route = visitRouteForPath(location.pathname);
+    if (lastSent.current === route) return;
+    if (measurement.trackVisit(route)) lastSent.current = route;
+  }, [location.pathname, analyticsEnabled]);
 }

@@ -109,3 +109,7 @@ export interface FeedbackRow {
   message: string | null;
   created_at: string;
 }
+
+// Versioned clarity contracts are re-exported here for compatibility while new
+// clarity code imports them directly from ./clarity/contracts.
+export type * from './clarity/contracts';

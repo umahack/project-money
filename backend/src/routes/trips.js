@@ -3,12 +3,50 @@ import crypto from 'node:crypto';
 import { body, validationResult } from 'express-validator';
 import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
+import { createDataUseNoticeGate } from '../middleware/dataUse.js';
+import { requestsClarityContract } from '../rollout/contractNegotiation.js';
+import { legacyTripSettlement } from '../rollout/legacyTripSettlement.js';
+import { PUBLIC_TRIP_DISCLOSURE } from '../serializers/publicTrip.js';
+import tripService, { TripServiceError } from '../services/tripService.js';
 
 const router = Router();
 router.use(authRequired);
 
+const clarityFinancialInputDataUseGate = createDataUseNoticeGate({
+  appliesTo: requestsClarityContract,
+});
+const currentFinancialDataUseGate = createDataUseNoticeGate();
+
+function idempotencyKey(req, { required = false } = {}) {
+  const supplied = req.get('Idempotency-Key');
+  if (supplied) return supplied;
+  return required ? undefined : crypto.randomUUID();
+}
+
+function sendTripServiceError(error, res) {
+  if (!(error instanceof TripServiceError)) throw error;
+  if (error.httpStatus === 404) return res.status(404).json({ error: 'Not found' });
+  return res.status(error.httpStatus).json({
+    error: error.message,
+    code: error.code,
+    ...(error.field === undefined ? {} : { field: error.field }),
+    ...(error.constraint === undefined ? {} : { constraint: error.constraint }),
+    ...(error.currentTripVersion === undefined
+      ? {}
+      : { currentTripVersion: error.currentTripVersion }),
+    ...(error.tripOutcome === undefined ? {} : { tripOutcome: error.tripOutcome }),
+  });
+}
+
 async function ownTrip(userId, tripId) {
   return db.prepare('SELECT * FROM trips WHERE id = ? AND user_id = ?').get(tripId, userId);
+}
+
+// The share link belongs to the owner. A member reads the trip, but never the
+// token that grants anonymous access to it, so it is left out of their reads.
+function withoutShareFields(row) {
+  const { public_token: _token, public_enabled: _enabled, ...rest } = row;
+  return rest;
 }
 
 // Access includes trips the user owns OR is an accepted member of.
@@ -30,6 +68,7 @@ router.post(
     body('budget').isFloat({ min: 0, max: 1e12 }),
     body('startDate').optional().isISO8601(),
     body('endDate').optional().isISO8601(),
+    clarityFinancialInputDataUseGate,
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -65,7 +104,7 @@ router.get('/', async (req, res) => {
        ORDER BY t.id DESC`
     )
     .all(req.user.id, req.user.id, req.user.id);
-  res.json({ trips: rows });
+  res.json({ trips: rows.map((row) => (row.role === 'owner' ? row : withoutShareFields(row))) });
 });
 
 router.get('/:id', async (req, res) => {
@@ -92,30 +131,37 @@ router.get('/:id', async (req, res) => {
     return { ...e, split, split_json: undefined };
   });
   res.json({
-    trip: access.trip,
+    trip: access.role === 'owner' ? access.trip : withoutShareFields(access.trip),
     role: access.role,
     members,
     expenses,
-    settlement: settle(members, expenses),
+    settlement: legacyTripSettlement(members, expenses),
   });
 });
 
 router.post(
   '/:id/members',
-  [body('name').isString().trim().isLength({ min: 1, max: 40 }), body('email').optional().isEmail()],
+  [
+    body('name').isString().trim().isLength({ min: 1, max: 40 }),
+    body('email').optional().isEmail(),
+    clarityFinancialInputDataUseGate,
+  ],
   async (req, res) => {
     const id = Number(req.params.id);
-    // Owner-only — non-owner members cannot add new members to the trip.
-    if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
     try {
-      const info = await db
-        .prepare('INSERT INTO trip_members (trip_id, name, email) VALUES (?,?,?)')
-        .run(id, req.body.name, req.body.email || null);
-      res.json({ id: info.lastInsertRowid });
-    } catch {
-      res.status(409).json({ error: 'Member with that name exists' });
+      const response = await tripService.addMember({
+        userId: req.user.id,
+        tripId: id,
+        name: req.body.name,
+        email: req.body.email,
+        idempotencyKey: idempotencyKey(req),
+        expectedTripVersion: req.body.expectedTripVersion,
+      });
+      return res.json(response);
+    } catch (error) {
+      return sendTripServiceError(error, res);
     }
   }
 );
@@ -127,91 +173,75 @@ router.post(
     body('description').isString().trim().isLength({ min: 1, max: 100 }),
     body('amount').isFloat({ min: 0, max: 1e12 }),
     body('split').isArray({ min: 1 }),
+    clarityFinancialInputDataUseGate,
   ],
   async (req, res) => {
     const id = Number(req.params.id);
-    if (!(await accessTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-    const { payer, description, amount, split } = req.body;
-    // Enforce that the payer is one of this trip's current members, and that
-    // settlement-marked expenses (which cancel debts) can only be posted by
-    // the person paying. Prevents a non-owner member from forging settlements
-    // on someone else's behalf.
-    const isSettlement = String(description || '').startsWith('↔ Settlement: ');
-    const myMember = await db
-      .prepare('SELECT name FROM trip_members WHERE trip_id = ? AND user_id = ?')
-      .get(id, req.user.id);
-    const payerIsMember = await db
-      .prepare('SELECT 1 AS ok FROM trip_members WHERE trip_id = ? AND name = ?')
-      .get(id, payer);
-    if (!payerIsMember) return res.status(400).json({ error: 'Payer must be a trip member.' });
-    const isOwner = await ownTrip(req.user.id, id);
-    if (isSettlement && (!myMember || myMember.name !== payer) && !isOwner) {
-      return res.status(403).json({ error: 'Only the payer or the trip owner can mark a settlement.' });
+    try {
+      const response = await tripService.addExpense({
+        userId: req.user.id,
+        tripId: id,
+        payer: req.body.payer,
+        description: req.body.description,
+        amount: req.body.amount,
+        split: req.body.split,
+        idempotencyKey: idempotencyKey(req),
+        expectedTripVersion: req.body.expectedTripVersion,
+      });
+      return res.json(response);
+    } catch (error) {
+      return sendTripServiceError(error, res);
     }
-    const clean = split
-      .filter((s) => s && typeof s.name === 'string')
-      .map((s) => ({ name: String(s.name).slice(0, 40), share: Math.max(0, Number(s.share) || 0) }));
-    if (!clean.length) return res.status(400).json({ error: 'Split required' });
-    const info = await db
-      .prepare(
-        'INSERT INTO trip_expenses (trip_id, payer, description, amount, split_json) VALUES (?,?,?,?,?)'
-      )
-      .run(id, payer, description, Number(amount), JSON.stringify(clean));
-    res.json({ id: info.lastInsertRowid });
   }
 );
 
-function settle(members, expenses) {
-  const bal = {};
-  const memberNames = new Set();
-  for (const m of members) {
-    bal[m.name] = 0;
-    memberNames.add(m.name);
-  }
-  for (const e of expenses) {
-    // Skip expenses with no split, no amount, or where every share is 0 —
-    // adding `amount` only to the payer would phantom-credit them.
-    const totalShare = e.split.reduce((a, b) => a + Math.max(0, Number(b.share) || 0), 0);
-    if (!(e.amount > 0) || totalShare <= 0) continue;
-    // If the payer isn't a current member (renamed/removed), credit the trip
-    // owner implicitly by skipping — never create a new phantom balance key.
-    if (!memberNames.has(e.payer)) continue;
-    bal[e.payer] += e.amount;
-    for (const s of e.split) {
-      // Likewise skip split rows for members who no longer exist.
-      if (!memberNames.has(s.name)) continue;
-      const share = Math.max(0, Number(s.share) || 0);
-      if (share <= 0) continue;
-      bal[s.name] -= (e.amount * share) / totalShare;
+router.put(
+  '/:id/expenses/:expenseId/personal-link',
+  [
+    body('category').isString().trim().isLength({ min: 1, max: 24 }),
+    body('spentOn').isString().matches(/^\d{4}-\d{2}-\d{2}$/),
+    currentFinancialDataUseGate,
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+    try {
+      const response = await tripService.includePersonalExpense({
+        userId: req.user.id,
+        tripId: Number(req.params.id),
+        tripExpenseId: Number(req.params.expenseId),
+        category: req.body.category,
+        spentOn: req.body.spentOn,
+        idempotencyKey: idempotencyKey(req, { required: true }),
+      });
+      return res.json(response);
+    } catch (error) {
+      return sendTripServiceError(error, res);
     }
   }
-  const creditors = [];
-  const debtors = [];
-  for (const [name, v] of Object.entries(bal)) {
-    const rounded = Math.round(v * 100) / 100;
-    if (rounded > 0.01) creditors.push({ name, amount: rounded });
-    else if (rounded < -0.01) debtors.push({ name, amount: -rounded });
+);
+
+router.delete('/:id/expenses/:expenseId/personal-link', async (req, res) => {
+  try {
+    const response = await tripService.removePersonalExpense({
+      userId: req.user.id,
+      tripId: Number(req.params.id),
+      tripExpenseId: Number(req.params.expenseId),
+      idempotencyKey: idempotencyKey(req, { required: true }),
+    });
+    return res.json(response);
+  } catch (error) {
+    return sendTripServiceError(error, res);
   }
-  creditors.sort((a, b) => b.amount - a.amount);
-  debtors.sort((a, b) => b.amount - a.amount);
-  const txns = [];
-  let i = 0,
-    j = 0;
-  while (i < debtors.length && j < creditors.length) {
-    const pay = Math.min(debtors[i].amount, creditors[j].amount);
-    txns.push({ from: debtors[i].name, to: creditors[j].name, amount: Math.round(pay * 100) / 100 });
-    debtors[i].amount -= pay;
-    creditors[j].amount -= pay;
-    if (debtors[i].amount < 0.01) i++;
-    if (creditors[j].amount < 0.01) j++;
-  }
-  return { balances: bal, transactions: txns };
-}
+});
 
 // ---------- Owner-only: enable / rotate / disable a public share link ----------
-router.post('/:id/share', async (req, res) => {
+// Creating or rotating a link is a new use of trip data (it publishes it), so a
+// clarity-contract request needs the current data-use notice. Legacy requests,
+// revoking, and reading the status stay ungated.
+router.post('/:id/share', clarityFinancialInputDataUseGate, async (req, res) => {
   const id = Number(req.params.id);
   if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
   const token = crypto.randomBytes(16).toString('hex'); // 32 chars
@@ -230,6 +260,14 @@ router.delete('/:id/share', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Owner-only description of every field the public link serves, read from the
+// serializer module that produces the public response. Not a public route.
+router.get('/:id/share/disclosure', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });
+  res.set('Cache-Control', 'no-store');
+  res.json(PUBLIC_TRIP_DISCLOSURE);
+});
 router.get('/:id/share', async (req, res) => {
   const id = Number(req.params.id);
   if (!(await ownTrip(req.user.id, id))) return res.status(404).json({ error: 'Not found' });

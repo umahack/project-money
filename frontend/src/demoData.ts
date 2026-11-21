@@ -44,6 +44,4 @@ export const DEMO_PLAN: Plan = {
   },
 };
 
-export const DEMO_EMIS_LIST: Emi[] = DEMO_EMIS;
-
 export const DEMO_SAMPLE_NAME = 'Rohan';

@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
 import type { Emi, Plan } from '../types';
 import { currentMonth } from '../money';
 
+// ROLLBACK-ONLY (task 17.2): this financial snapshot cache is read and written only by
+// the flag-off legacy Home and Plan pages. Clarity pages keep server state in the
+// in-memory query cache and never import it. `clearCachedPlan` stays wired into
+// sign-out so a legacy session never leaves income or bills behind in the tab.
+//
 // Dashboard-hydration cache for instant first paint on a tab reload.
 // Deliberately **sessionStorage**, not localStorage: the plan contains the
 // user's income and bills (PII), and sessionStorage is tab-scoped so it
@@ -107,22 +111,4 @@ export function clearCachedPlan(): void {
   } catch {
     /* ignore */
   }
-}
-
-/** Convenience hook: syncs state to sessionStorage on every change. */
-export function usePersisted<T>(key: string, initial: T): [T, (v: T) => void] {
-  const [val, setVal] = useState<T>(() => {
-    try {
-      const raw = sessionStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : initial;
-    } catch {
-      return initial;
-    }
-  });
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) { first.current = false; return; }
-    try { sessionStorage.setItem(key, JSON.stringify(val)); } catch { /* ignore */ }
-  }, [key, val]);
-  return [val, setVal];
 }
