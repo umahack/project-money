@@ -143,11 +143,94 @@ describe('Home Monthly Clarity Summary: personalized outcomes first', () => {
     expect(within(plan).getAllByText('Calculated result').length).toBeGreaterThanOrEqual(2);
     expect(within(goal).getByText('Entered fact')).toBeInTheDocument();
 
-    // Order: header, then plan, spending, goal, trip, actions, and only then generic shortcuts.
+    // Order: header (greeting and next action), the quick actions, then plan, spending, goal, trip, then the next actions.
     const header = container.querySelector('.clarity-decision-header')!;
     expect(within(header as HTMLElement).getByText(PAGE_DECISIONS.home)).toBeInTheDocument();
-    const order = [header, region('monthly-plan'), region('spending'), region('goal'), region('trip'), region('actions'), screen.getByRole('navigation', { name: 'Quick actions' })];
+    const order = [header, screen.getByRole('navigation', { name: 'Quick actions' }), region('monthly-plan'), region('spending'), region('goal'), region('trip'), region('actions')];
     for (let i = 0; i < order.length - 1; i += 1) expect(comesBefore(order[i]!, order[i + 1]!)).toBe(true);
+  });
+
+  it('orders the whole page: decision and next action, quick actions, key numbers, next actions, guided journey, then the streak', async () => {
+    mockApi(() => snapshotResponse(homeSnapshot(MONTH, { actions: [GOAL_ACTION, TRIP_ACTION] })), { '/finance/streak': { current: 4, longest: 9, days_logged: 20 } });
+    const { container } = renderHome();
+
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+    const streak = await screen.findByRole('heading', { name: /Logging streak/ });
+    const sections = [
+      container.querySelector('.clarity-decision-header')!,
+      screen.getByRole('navigation', { name: 'Quick actions' }),
+      region('monthly-plan'),
+      region('spending'),
+      region('goal'),
+      region('trip'),
+      region('actions'),
+      screen.getByRole('heading', { name: 'Guided journey' }),
+      streak,
+    ];
+    for (let i = 0; i < sections.length - 1; i += 1) {
+      expect(comesBefore(sections[i]!, sections[i + 1]!), `section ${i} comes before section ${i + 1}`).toBe(true);
+    }
+    // The four quick actions sit directly after the greeting and next action, before the key numbers.
+    expect(within(screen.getByRole('navigation', { name: 'Quick actions' })).getAllByRole('link').map((link) => link.textContent))
+      .toEqual(['💸Add expense', '🧾Plan month', '🎯Savings goal', '✈️Trip split']);
+  });
+
+  it('lays the key numbers out as one row of cards with a column count that never leaves a short last row', async () => {
+    serve(homeSnapshot(MONTH));
+    renderHome();
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+
+    const grid = document.querySelector('.monthly-clarity-grid') as HTMLElement;
+    // Remaining to spend, projected savings, urgent goal, nearest trip settlement: one cell each, none empty.
+    expect(grid.dataset.count).toBe('4');
+    expect(Array.from(grid.children).map((cell) => (cell as HTMLElement).dataset.region)).toEqual(['monthly-plan', 'spending', 'goal', 'trip']);
+    for (const cell of Array.from(grid.children)) expect(cell.querySelector('article')).not.toBeNull();
+  });
+
+  it('keeps the goal and trip actions inside their cards, so cards in a row can share one height', async () => {
+    serve(homeSnapshot(MONTH));
+    renderHome();
+
+    const goal = await screen.findByRole('article', { name: /Urgent goal: Emergency fund/ });
+    const trip = screen.getByRole('article', { name: /Nearest trip settlement: Goa weekend/ });
+    const goalFooter = goal.querySelector('.clarity-outcome-footer') as HTMLElement;
+    const tripFooter = trip.querySelector('.clarity-outcome-footer') as HTMLElement;
+    expect(goalFooter).not.toBeNull();
+    expect(tripFooter).not.toBeNull();
+    expect(within(goalFooter).getByRole('link')).toBeInTheDocument();
+    expect(within(tripFooter).getByRole('link')).toBeInTheDocument();
+    // Each region still holds only its own card (no link left hanging below it).
+    expect(region('goal').children).toHaveLength(1);
+    expect(region('trip').children).toHaveLength(1);
+  });
+
+  it('keeps the quick actions in view while the summary loads or fails', async () => {
+    mockApi(() => createApiResponse({ status: 403, body: { error: { code: 'FORBIDDEN', message: 'Not allowed right now.' } } }));
+    renderHome();
+
+    await screen.findByRole('alert');
+    expect(screen.getAllByRole('navigation', { name: 'Quick actions' })).toHaveLength(1);
+    expect(screen.queryByRole('article', { name: /Remaining to spend/ })).toBeNull();
+  });
+
+  it('states each card\'s classification and status once, and keeps them as text', async () => {
+    serve(homeSnapshot(MONTH));
+    renderHome();
+
+    const plan = await screen.findByRole('article', { name: /Remaining to spend/ });
+    // One visible label under the title, not one badge per value.
+    expect(within(plan).getAllByText('Calculated result', { selector: '.clarity-badge' })).toHaveLength(1);
+    expect(within(plan).getAllByText('Confirmed', { selector: '.clarity-status' })).toHaveLength(1);
+    const meta = plan.querySelector('.clarity-outcome-badges') as HTMLElement;
+    expect(meta).toHaveTextContent(/Calculated result.*Confirmed/);
+    // Each value is still identified for a screen reader.
+    const remaining = within(plan).getByText('Remaining spendable').closest('.clarity-value') as HTMLElement;
+    expect(remaining).toHaveTextContent('Remaining spendable');
+    expect(remaining).toHaveTextContent('Calculated result');
+    expect(within(remaining).getByText('Calculated result')).toHaveClass('sr-only');
+    // A value of another kind in the same card keeps its own visible label.
+    const goal = screen.getByRole('article', { name: /Urgent goal: Emergency fund/ });
+    expect(within(goal).getByText('Entered fact')).toHaveClass('clarity-badge');
   });
 
   it('has no pay form, no sample plan, and makes no legacy calculation requests', async () => {

@@ -16,3 +16,14 @@
 .plan-change-lines { display: grid; gap: 0.3rem; margin: 0.4rem 0; }
 .plan-shortfall { display: grid; gap: 0.4rem; margin: 0.8rem 0 0; padding: 0.7rem 0.8rem; border: 1px solid var(--clarity-warn); border-radius: 14px; }
 .plan-shortfall p { margin: 0; }
+
+/* Pay and bills side by side: each card keeps its own height. The pay card (explanations, then the form) is much
+   shorter than the bills card (list, then the add form); stretching it to the bills card's height left about
+   500px of blank space between its explanations and its form, so the row aligns to the top instead. This is
+   deliberately unlike Home and Trips, whose cards hold similar amounts and stay equal height. From 900px the
+   row is two columns (the base .grid.two rule makes it two from 820px). The cards' top margin (the sibling
+   spacing rule) is dropped so both cards start on the same line. */
+main.clarity-on .plan-inputs-row > .card { margin-top: 0; }
+@media (min-width: 900px) {
+  main.clarity-on .plan-inputs-row { align-items: start; }
+}

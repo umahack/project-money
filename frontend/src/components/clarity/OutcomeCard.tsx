@@ -15,6 +15,7 @@ import {
   humanizeKey,
   joinList,
 } from './format';
+import { OutcomeLabelContext } from './labelContext';
 import { ClassificationBadge, StatusBadge } from './labels';
 import { ScopedMutationStatus } from './ScopedMutationStatus';
 import './clarity.css';
@@ -52,6 +53,11 @@ export interface OutcomeCardProps<T> {
   ownerData?: boolean;
   defaultExplanationOpen?: boolean;
   className?: string;
+  /**
+   * An action that belongs to this card, such as "Contribute to goal". It is the last item in the card, after the
+   * explanation, and a grid of cards pins it to the bottom edge so cards in one row line up.
+   */
+  footer?: ReactNode;
 }
 
 const RETRYABLE: ReadonlySet<OutcomeStatus> = new Set(['stale', 'refresh_failed', 'calculation_failed']);
@@ -156,6 +162,7 @@ export function OutcomeCard<T>({
   ownerData = true,
   defaultExplanationOpen = false,
   className = '',
+  footer,
 }: OutcomeCardProps<T>) {
   const baseId = useId();
   const titleId = `${baseId}-title`;
@@ -219,16 +226,23 @@ export function OutcomeCard<T>({
     >
       <header className="clarity-outcome-header">
         {createElement(headingLevel === 2 ? 'h2' : headingLevel === 3 ? 'h3' : 'h4', { id: titleId, className: 'clarity-outcome-title' }, title)}
-        <div className="clarity-outcome-badges">
-          <ClassificationBadge classification={outcome.classification} />
-          <StatusBadge status={status} />
-        </div>
       </header>
-      <p className="clarity-period small muted">Period: {period}</p>
+      {/* One compact line states what the card's values are and how sure they are, for example
+          "Calculated result · ✓ Confirmed". Both stay as text, so neither depends on colour. */}
+      <div className="clarity-outcome-meta">
+        <p className="clarity-outcome-badges">
+          <ClassificationBadge classification={outcome.classification} />{' '}
+          <span aria-hidden="true" className="clarity-meta-sep">·</span>{' '}
+          <StatusBadge status={status} />
+        </p>
+        <p className="clarity-period small muted">Period: {period}</p>
+      </div>
       {refreshing && <p className="clarity-refreshing small clarity-tone-info">Refreshing…</p>}
 
-      <StateExplanation outcome={outcome} />
-      {valueNode}
+      <OutcomeLabelContext.Provider value={outcome.classification}>
+        <StateExplanation outcome={outcome} />
+        {valueNode}
+      </OutcomeLabelContext.Provider>
 
       {status === 'calculation_failed' && outcome.sourceRefs.length > 0 && (
         <div className="clarity-kept-facts">
@@ -305,6 +319,8 @@ export function OutcomeCard<T>({
           </div>
         </div>
       )}
+
+      {footer && <div className="clarity-outcome-footer">{footer}</div>}
 
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
     </article>

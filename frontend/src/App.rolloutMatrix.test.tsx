@@ -136,7 +136,7 @@ describe('flag OFF (rollback to legacy), signed in', () => {
   it('/start has no journey route: the signed-in catch-all keeps the shell and shows no journey page', async () => {
     const fetches = install();
     renderApp('/start', true);
-    expect(await screen.findByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Guided journey' })).toBeNull();
     expect(screen.queryByRole('list', { name: 'Desired outcomes' })).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -169,7 +169,7 @@ describe('flag ON, signed in', () => {
     install();
     renderApp('/start', true);
     expect(await screen.findByRole('heading', { level: 1, name: 'Guided journey' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(await screen.findByRole('list', { name: 'Desired outcomes' })).toBeInTheDocument();
   });
 });

@@ -456,7 +456,7 @@ describe('rollout flag off', () => {
       </FinancialClarityProvider>,
       { route: `/start?start=${outcome}`, user: createTestUser({ id: 77 }) },
     );
-    expect(await screen.findByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Guided journey' })).toBeNull();
     expect(screen.queryByRole('list', { name: 'Desired outcomes' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Start or continue a guided journey' })).toBeNull();

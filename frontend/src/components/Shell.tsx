@@ -65,7 +65,7 @@ export function Shell() {
 
   // The bottom navigation wraps to more rows when text is enlarged. Publish its height so the
   // page and the toasts keep clear of it. Below 900px it is shown; at 900px and above it is
-  // hidden, which reports a height of 0 and leaves the sidebar layout alone.
+  // hidden (the primary navigation is in the header then), which reports a height of 0.
   const bottomNavRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const element = bottomNavRef.current;
@@ -111,10 +111,9 @@ export function Shell() {
         { to: '/admin/account', label: 'My account', icon: '🪪', end: false },
       ]
     : [];
-  // Mobile bottom bar: in admin mode show the admin tabs so admins have
-  // quick access to admin sections; on the user side keep only the primary
-  // user tabs. The topbar carries the single "🔄 Admin / 🔄 User" switch for
-  // moving between the two.
+  // One list feeds both the header navigation (900px and wider) and the mobile bottom bar:
+  // in admin mode the admin tabs, on the user side only the primary user tabs. The topbar
+  // carries the single "🔄 Admin / 🔄 User" switch for moving between the two.
   const mobileTabs = inAdmin && adminTabs.length > 0 ? adminTabs : tabs;
   const inviteCount = usePendingInvitesCount();
 
@@ -142,6 +141,22 @@ export function Shell() {
             BETA
           </span>
         </NavLink>
+        {/* Primary navigation for 900px and wider; the bottom bar below replaces it. It sits in the sticky
+            header so it stays in view while the page scrolls. The active page is marked with aria-current
+            and a bold, underlined label, never colour alone. */}
+        <nav className="primary-nav desktop-only" aria-label="Primary">
+          {mobileTabs.map((t) => (
+            <NavLink key={t.to} to={t.to} end={t.end} className="primary-link">
+              <span className="primary-icon" aria-hidden="true">{t.icon}</span>
+              <span className="primary-label">{t.label}</span>
+              {t.to === '/trips' && inviteCount > 0 && (
+                <span className="pill info primary-badge" aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
+                  {inviteCount}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
         <div className="top-actions">
           <TopbarClock />
           {user?.is_admin && (
@@ -169,65 +184,22 @@ export function Shell() {
       <AnnouncementBanner />
       <SessionWarning />
       <div className="app-shell">
-        <aside className={`sidebar desktop-only ${inAdmin ? 'admin-mode' : ''}`} aria-label="Primary">
-          <nav className="side-nav">
-            {inAdmin && adminTabs.length > 0 ? (
-              <>
-                <div className="side-group">🛡️ Admin console</div>
-                {adminTabs.map((t) => (
-                  <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
-                    <span className="side-icon">{t.icon}</span>
-                    <span className="side-label">{t.label}</span>
-                  </NavLink>
-                ))}
-                <div className="side-group">Switch</div>
-                <NavLink to="/" className="side-link" onClick={() => markUserViewPreferred()}>
-                  <span className="side-icon">👤</span>
-                  <span className="side-label">Exit to user view</span>
-                </NavLink>
-              </>
-            ) : (
-              <>
-                {tabs.map((t) => (
-                  <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
-                    <span className="side-icon">{t.icon}</span>
-                    <span className="side-label">{t.label}</span>
-                    {t.to === '/trips' && inviteCount > 0 && (
-                      <span className="pill info" style={{ marginLeft: 'auto' }} aria-label={`${inviteCount} pending invite${inviteCount === 1 ? '' : 's'}`}>
-                        {inviteCount}
-                      </span>
-                    )}
-                  </NavLink>
-                ))}
-                {adminTabs.length > 0 && (
-                  <>
-                    <div className="side-group">Admin</div>
-                    {adminTabs.map((t) => (
-                      <NavLink key={t.to} to={t.to} end={t.end} className="side-link">
-                        <span className="side-icon">{t.icon}</span>
-                        <span className="side-label">{t.label}</span>
-                      </NavLink>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </nav>
-        </aside>
-
-        <main className={`container with-sidebar${selectFinancialClarityRollout().enabled ? ' clarity-on' : ''}`}>
+        <main className={`container app-main${selectFinancialClarityRollout().enabled ? ' clarity-on' : ''}`}>
           {/* The promise and data-use gate come before routed financial controls.
               They render only in the user view and only when the clarity rollout flag is on. */}
           {!inAdmin && (
             <RenderErrorBoundary scope="region" label="The promise and data-use notice" resetKeys={[loc.pathname]}>
-              <CorePromiseStrip />
-              <DataUseGate />
+              {/* One row: the promise as a single line, and the compact "Your data" control after the notice is acknowledged. */}
+              <div className="clarity-intro">
+                <CorePromiseStrip />
+                <DataUseGate />
+              </div>
             </RenderErrorBoundary>
           )}
           <AnimatePresence mode="wait">
             {/* With reduced motion the page fades only: no slide in, and no jump of 8px as the old page leaves (Requirement 12.7). */}
             <motion.div key={loc.pathname} initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: 0.25 }}>
-              {/* A render error in a page stays inside the main area. The sidebar,
+              {/* A render error in a page stays inside the main area. The header,
                   bottom navigation, and every provider above stay mounted, so
                   confirmed data survives and the user can navigate or retry. */}
               <RenderErrorBoundary

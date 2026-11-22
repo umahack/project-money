@@ -178,7 +178,7 @@ describe('RenderErrorBoundary in the app shell', () => {
     expect(alert).toHaveAttribute('data-render-failure', 'page');
     expectFixedFailureText(container);
 
-    const sidebar = screen.getByRole('complementary', { name: 'Primary' });
+    const sidebar = screen.getByRole('navigation', { name: 'Primary' });
     for (const label of ['Home', 'Spending', 'Plan', 'Goals', 'Trips', 'Settings']) {
       expect(within(sidebar).getByRole('link', { name: new RegExp(label) })).toBeInTheDocument();
     }
@@ -187,7 +187,7 @@ describe('RenderErrorBoundary in the app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Spending page' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
     // The shell is the same document; nothing reloaded.
-    expect(within(screen.getByRole('complementary', { name: 'Primary' })).getByRole('link', { name: /Home/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: /Home/ })).toBeInTheDocument();
   });
 
   it('retries in place and moves focus to the main area instead of the page body', async () => {

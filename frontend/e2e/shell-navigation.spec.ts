@@ -1,13 +1,15 @@
 // Responsive acceptance for the signed-in Shell navigation (task 17.3, Requirements 12.8 and 12.9).
 //
 // At every configured width, in both themes and for the user and admin variants, exactly one
-// primary navigation is shown (the sidebar from 900 CSS pixels, the bottom navigation below),
-// every destination is visible, fully readable, not covered by another element, and reachable
-// by keyboard focus, and the top bar and page do not overflow, clip, or overlap. The width
-// 820 to 899 transition is checked explicitly: it used to have no navigation at all.
+// primary navigation is shown (the header navigation from 900 CSS pixels, the bottom navigation
+// below), every destination is visible, fully readable, not covered by another element, and
+// reachable by keyboard focus, and the top bar and page do not overflow, clip, or overlap. The
+// width 820 to 899 transition is checked explicitly: it used to have no navigation at all. The
+// widths from 900 to 1320, where the header wraps its links onto a second row, are checked too.
 //
 // This file runs on the `chromium-*` projects (legacy flag off) because the Shell is shared;
-// the clarity pages add their own navigation checks in responsive.clarity.spec.ts.
+// the clarity pages add their own navigation checks in responsive.clarity.spec.ts and
+// top-navigation.clarity.spec.ts.
 import { auditLayout, contentHiddenByBottomNavigation, scaleText } from './helpers/layout';
 import { TEST_USER, expect, installAuthenticatedSession, test, type DeterministicApiFixtures } from './fixtures/test';
 import type { Page, TestInfo } from '@playwright/test';
@@ -15,8 +17,8 @@ import type { Page, TestInfo } from '@playwright/test';
 const ADMIN_USER = { ...TEST_USER, id: 9002, is_admin: true, name: 'Browser Fixture Admin' };
 const USER_LABELS = ['Home', 'Spending', 'Plan', 'Goals', 'Trips', 'Settings'];
 const ADMIN_LABELS = ['Overview', 'Users', 'Feedback', 'Traffic', 'Broadcast', 'My account'];
-/** The sidebar replaces the bottom navigation at this width (styles.css, "Sidebar layout"). */
-const SIDEBAR_FROM = 900;
+/** The header navigation replaces the bottom navigation at this width (styles.css, "App shell and primary navigation"). */
+const TOP_NAV_FROM = 900;
 
 function widthOf(testInfo: TestInfo): number {
   const viewport = testInfo.project.use.viewport;
@@ -35,11 +37,11 @@ async function setTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
 
 /** The visible primary navigation and the labels it shows. */
 async function visibleNavigation(page: Page) {
-  const sidebar = page.locator('aside.sidebar');
+  const top = page.locator('header.topbar nav.primary-nav');
   const bottom = page.locator('nav.bottom-tabs');
-  const sidebarShown = await sidebar.isVisible();
+  const topShown = await top.isVisible();
   const bottomShown = await bottom.isVisible();
-  return { sidebarShown, bottomShown, root: sidebarShown ? sidebar : bottom, linkSelector: sidebarShown ? '.side-link' : '.btab' };
+  return { topShown, bottomShown, root: topShown ? top : bottom, linkSelector: topShown ? '.primary-link' : '.btab' };
 }
 
 /** Each link is readable in full, inside the viewport, and the topmost element at its center. */
@@ -53,7 +55,7 @@ async function expectLinksUsable(page: Page, labels: string[]): Promise<void> {
     const state = await link.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const probe = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      const text = element.querySelector<HTMLElement>('.side-label, small') ?? element;
+      const text = element.querySelector<HTMLElement>('.primary-label, small') ?? element;
       return {
         focused: document.activeElement === element,
         inViewport: rect.left >= -1 && rect.right <= document.documentElement.clientWidth + 1 && rect.top >= -1 && rect.bottom <= window.innerHeight + 1,
@@ -81,11 +83,11 @@ for (const variant of [
         await setTheme(page, theme);
 
         const nav = await visibleNavigation(page);
-        expect(nav.sidebarShown, 'sidebar shown from 900 px').toBe(width >= SIDEBAR_FROM);
-        expect(nav.bottomShown, 'bottom navigation shown below 900 px').toBe(width < SIDEBAR_FROM);
+        expect(nav.topShown, 'header navigation shown from 900 px').toBe(width >= TOP_NAV_FROM);
+        expect(nav.bottomShown, 'bottom navigation shown below 900 px').toBe(width < TOP_NAV_FROM);
         await expectLinksUsable(page, variant.labels);
-        expect(await auditLayout(page, { touchTargets: width < SIDEBAR_FROM, measure: width >= 1440 })).toEqual([]);
-        if (width < SIDEBAR_FROM) expect(await contentHiddenByBottomNavigation(page)).toEqual([]);
+        expect(await auditLayout(page, { touchTargets: width < TOP_NAV_FROM, measure: width >= 1440 })).toEqual([]);
+        if (width < TOP_NAV_FROM) expect(await contentHiddenByBottomNavigation(page)).toEqual([]);
       });
     }
   });
@@ -104,7 +106,19 @@ test('an admin keeps the view switch and sign out reachable in the top bar', asy
     const box = await control.boundingBox();
     expect(box && box.x >= 0 && box.x + box.width <= width + 1, `${name} sits inside the viewport`).toBe(true);
   }
-  expect(await auditLayout(page, { touchTargets: width < SIDEBAR_FROM })).toEqual([]);
+  expect(await auditLayout(page, { touchTargets: width < TOP_NAV_FROM })).toEqual([]);
+});
+
+test('the admin view marks its current page in the header navigation and keeps the user links out of it', async ({ page, api }, testInfo) => {
+  test.skip(widthOf(testInfo) < TOP_NAV_FROM, 'The bottom navigation is checked by the other tests in this file.');
+  stubShell(api);
+  await installAuthenticatedSession(page, ADMIN_USER);
+  await page.goto('/admin/feedback');
+  const nav = page.locator('header.topbar nav.primary-nav');
+  await expect(nav.getByRole('link')).toHaveText(ADMIN_LABELS.map((label) => new RegExp(label)));
+  const current = nav.locator('a[aria-current="page"]');
+  await expect(current).toHaveCount(1);
+  await expect(current).toContainText('Feedback');
 });
 
 test('navigation survives text scaled to 200 percent', async ({ page, api }, testInfo) => {
@@ -126,11 +140,12 @@ test('exactly one navigation is shown on each side of every breakpoint edge', as
   await installAuthenticatedSession(page);
   await page.goto('/not-a-page');
   await expect(page.locator('main')).toBeVisible();
-  for (const width of [319, 320, 419, 420, 520, 521, 767, 768, 819, 820, 899, 900, 901, 999, 1000, 1231, 1232]) {
+  // 900 to 1319 is where the header wraps its links onto a second row; 1320 is where they share the first row.
+  for (const width of [319, 320, 419, 420, 520, 521, 767, 768, 819, 820, 899, 900, 901, 999, 1000, 1099, 1100, 1199, 1200, 1319, 1320, 1321, 1439]) {
     await page.setViewportSize({ width, height: 900 });
     const nav = await visibleNavigation(page);
-    expect(nav.sidebarShown, `sidebar at ${width}`).toBe(width >= SIDEBAR_FROM);
-    expect(nav.bottomShown, `bottom navigation at ${width}`).toBe(width < SIDEBAR_FROM);
+    expect(nav.topShown, `header navigation at ${width}`).toBe(width >= TOP_NAV_FROM);
+    expect(nav.bottomShown, `bottom navigation at ${width}`).toBe(width < TOP_NAV_FROM);
     await expectLinksUsable(page, USER_LABELS);
     expect(await auditLayout(page), `layout at ${width}`).toEqual([]);
   }

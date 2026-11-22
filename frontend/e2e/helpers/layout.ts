@@ -26,7 +26,9 @@ export interface LayoutAuditOptions {
   within?: string[];
 }
 
-export const MAX_MAIN_CONTENT_PX = 1480;
+/** The app content is capped at --app-max (1600px) including its side gutters (2rem = 32px each at wide widths),
+ *  so main is at most 1600 - 2 * 32 = 1536px. */
+export const MAX_MAIN_CONTENT_PX = 1536;
 export const MAX_PROSE_PX = 1000;
 export const MIN_TARGET_PX = 44;
 /** A text field narrower than this cannot show a short value such as an amount. */

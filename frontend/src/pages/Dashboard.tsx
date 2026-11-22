@@ -120,6 +120,11 @@ function ClarityDashboard() {
         right={<span className="pill info">{monthLabel(month)}</span>}
       />
 
+      {/* Order in the page and on the screen: the greeting and next action (above), the four quick actions,
+          the key numbers, Next actions (inside the summary), the guided journey, then the streak. The quick
+          actions do not depend on the summary, so they stay while it loads or fails. */}
+      <QuickActions />
+
       <RegionBoundary
         regionKey="summary"
         label="Monthly summary"
@@ -144,14 +149,15 @@ function ClarityDashboard() {
         </p>
       )}
 
-      <section className="card" aria-labelledby="home-guided-journey">
-        <h2 id="home-guided-journey">Guided journey</h2>
-        <p className="muted small">Pick one goal and reach a first result in a few steps. An open journey continues where you left it.</p>
-        <Link className="btn" to="/start">Start or continue a guided journey</Link>
-      </section>
-
-      <QuickActions />
-      <StreakCard />
+      {/* Then the guided journey and the logging streak, side by side when there is room. */}
+      <div className="home-secondary">
+        <section className="card" aria-labelledby="home-guided-journey">
+          <h2 id="home-guided-journey">Guided journey</h2>
+          <p className="muted small">Pick one goal and reach a first result in a few steps. An open journey continues where you left it.</p>
+          <Link className="btn" to="/start">Start or continue a guided journey</Link>
+        </section>
+        <StreakCard />
+      </div>
       <InvitesInbox />
     </>
   );

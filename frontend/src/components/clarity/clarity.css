@@ -81,8 +81,14 @@ p.clarity-tone-info {
 /* ---- Outcome card ---- */
 .clarity-outcome-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem 0.8rem; flex-wrap: wrap; }
 .clarity-outcome-title { margin: 0; font-size: 1.05rem; }
-.clarity-outcome-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.clarity-period { margin: 0.25rem 0 0.6rem; }
+/* One compact label line under the title: the classification and the status as plain text, then the period.
+   The badges keep their text, glyph and (for the classification) border style as cues, but lose the pill
+   borders and padding that made four of them in a row noisy. */
+.clarity-outcome-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.7rem; margin: 0.2rem 0 0.6rem; }
+.clarity-outcome-badges { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.35rem; margin: 0; }
+.clarity-outcome-badges .clarity-badge { border: 0; border-radius: 0; padding: 0; font-size: 0.8rem; }
+.clarity-meta-sep { color: var(--muted); }
+.clarity-period { margin: 0; }
 .clarity-refreshing { margin: 0.2rem 0 0.5rem; }
 .clarity-retry-row, .clarity-corrective, .clarity-explain, .clarity-mutation-actions { margin-top: 0.7rem; }
 .clarity-mutation-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem; }
@@ -98,6 +104,16 @@ p.clarity-tone-info {
 .clarity-value-summary { font-size: 1.2rem; font-weight: 600; margin: 0.35rem 0; }
 
 .clarity-plain-list { list-style: none; margin: 0.3rem 0; padding: 0; display: grid; gap: 0.35rem; }
+
+/* Desktop: slightly larger card headings and key numbers (the narrow-screen sizes above are unchanged). */
+@media (min-width: 900px) {
+  .clarity-outcome-title { font-size: 1.2rem; }
+  .clarity-value-amount { font-size: 1.2rem; }
+  .clarity-value-emphasis .clarity-value-amount { font-size: clamp(1.9rem, 2.2vw, 2.1rem); }
+  .clarity-value-summary { font-size: 1.3rem; }
+  /* The header is sticky, so a target scrolled into view by an action link keeps clear of it (html has the matching scroll-padding). */
+  .container [tabindex="-1"], .container [tabindex="-1"]:focus-visible { scroll-margin-top: 1rem; }
+}
 
 /* ---- Explanation panel ---- */
 .clarity-explanation { margin-top: 0.6rem; padding: 0.8rem 0.9rem; border: 1px solid var(--border); border-radius: 14px; }
@@ -168,13 +184,27 @@ main.clarity-on .grid.tight,
 main.clarity-on .commit-form { grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); }
 /* Trip sections wrap rather than scroll sideways. */
 main.clarity-on .trip-tabs { flex-wrap: wrap; overflow: visible; }
-/* Quick actions drop to fewer columns when text is enlarged instead of overlapping labels. */
-main.clarity-on .quick-actions { grid-template-columns: repeat(auto-fit, minmax(4rem, 1fr)); }
-main.clarity-on .qa-label { overflow-wrap: anywhere; }
+/* Quick actions. Phones: a 2x2 grid of 48px-high tiles (icon beside the label), directly after the greeting and
+   next action. With enlarged text the tiles drop to fewer columns (the minimum width follows the text size), so
+   labels wrap inside their tile instead of overlapping. From 600px: one compact row of four. */
+main.clarity-on .quick-actions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(8rem, 45%)), 1fr));
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+}
+@media (min-width: 600px) {
+  main.clarity-on .quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+main.clarity-on .qa-tile {
+  flex-direction: row; justify-content: center; gap: 0.55rem;
+  min-height: 48px; padding: 0.35rem 0.7rem; border-radius: 14px;
+}
+main.clarity-on .qa-icon { font-size: 1.3rem; flex: 0 0 auto; }
+main.clarity-on .qa-label { font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; text-align: left; }
 /* Balance chips carry an amount and a name, so they wrap rather than run past the card. */
 main.clarity-on .balance-chip { white-space: normal; }
 /* Readable measure: prose keeps to about 75 characters per line however wide the content column is
-   (the column itself is capped by .app-shell). List rows (.list-item) are flex rows of separate
+   (the content width itself is capped by .app-shell). List rows (.list-item) are flex rows of separate
    parts, not prose, so they keep the width of their card. */
 main.clarity-on :is(p, li:not(.list-item)) { max-width: 75ch; }
 /* A segmented control label breaks only between words. Inheriting `overflow-wrap: anywhere` lets the
@@ -194,7 +224,7 @@ main.clarity-on .segmented :is(button, a) { overflow-wrap: normal; }
 /* On narrow screens, padding that scales with text size must not take the space the content needs.
    These caps change nothing at the default text size on a phone wider than 320px. */
 @media (max-width: 520px) {
-  main.clarity-on.container.with-sidebar { padding-left: min(0.85rem, 3vw); padding-right: min(0.85rem, 3vw); }
+  main.clarity-on.container.app-main { padding-left: min(0.85rem, 3vw); padding-right: min(0.85rem, 3vw); }
   main.clarity-on .card { padding: min(1rem, 4vw); }
   main.clarity-on :is(input:not([type='checkbox'], [type='radio']), select) { padding-left: min(0.85rem, 3vw); padding-right: min(0.85rem, 3vw); }
   main.clarity-on .input-prefix input { padding-left: min(2rem, 14vw); }
@@ -256,16 +286,52 @@ main.clarity-on [style*='color: var(--c-'] { color: var(--text) !important; }
 :root[data-theme='light']:has(main.clarity-on) .segmented { background: #efebe3; }
 /* Text and form errors in the light theme: #e11d48 was 4.4:1 on the cream page. #be123c is the --clarity-danger tone. */
 :root[data-theme='light']:has(main.clarity-on) { --danger: #be123c; }
-/* Resize text (WCAG 1.4.4) and text spacing (1.4.12): the sidebar and the logo mark were fixed in pixels, so
-   200 percent text made the sidebar scroll sideways and the logo glyph overflow its box. In rem they are the
-   same size at 100 percent and grow with the text. */
-@media (min-width: 900px) {
-  :root:has(main.clarity-on) .app-shell { grid-template-columns: 14.5rem minmax(0, 1fr); }
-}
+/* Resize text (WCAG 1.4.4) and text spacing (1.4.12): the logo mark was fixed in pixels, so 200 percent text made
+   the logo glyph overflow its box. In rem it is the same size at 100 percent and grows with the text. */
 :root:has(main.clarity-on) .brand-mark { width: 2.25rem; height: 2.25rem; }
 :root:has(main.clarity-on) .brand-mark.big { width: 4rem; height: 4rem; }
 @media (max-width: 520px) {
   :root:has(main.clarity-on) .brand-mark { width: 1.875rem; height: 1.875rem; }
 }
+/* ---- Compact top of the page: less height above the first card ----
+   The greeting and the next action share one row from 900px (the action's label sits beside its button and the
+   month pill beside the action), and the promise strip and the page header use less padding and margin. */
+main.clarity-on .clarity-decision-header { margin-bottom: 0.7rem; gap: 0.4rem 1.5rem; align-items: center; }
+main.clarity-on .clarity-decision-header h1 { margin: 0 0 0.1rem; font-size: clamp(1.45rem, 2vw + 0.6rem, 2rem); }
+main.clarity-on .clarity-decision { margin: 0; }
+main.clarity-on .clarity-decision-side { gap: 0.4rem; }
+/* From 360px the label sits beside the button, which saves a row; it lines up with the centre of the 36px button. */
+@media (min-width: 360px) {
+  main.clarity-on .clarity-decision-action { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 0 0.6rem; }
+  main.clarity-on .clarity-decision-action > .clarity-decision-label { margin: 0; line-height: 36px; white-space: nowrap; }
+}
+@media (min-width: 900px) {
+  main.clarity-on .clarity-decision-text { flex: 1 1 22rem; }
+  /* The action (label, button, effect text) and the month pill share one row. */
+  main.clarity-on .clarity-decision-side {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; justify-items: end; gap: 0.3rem 0.8rem;
+    flex: 0 1 auto; max-width: min(100%, 48rem);
+  }
+  main.clarity-on .clarity-decision-side > .clarity-decision-action { justify-self: stretch; }
+}
 /* Destructive solid button: white on #ff5c7c was 3:1. */
 main.clarity-on .btn.danger-solid { background: linear-gradient(135deg, #c8203f, #b81d3c); }
+
+/* ---- Wide outcome cards: values in a responsive grid, not a left-hand stack ----
+   The Spending, Plan and Goals cards are as wide as the page. Their labelled values flow into as many columns as fit,
+   each at least 15rem (240px) and at most four across. Notes, the feasibility text and revisions span the full row,
+   so nothing is clipped; below 700px the values stay one column with the label beside the amount. DOM order is
+   reading order: row by row, left to right. */
+main.clarity-on :is(.spending-values, .plan-values, .goal-values) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(15rem, calc((100% - 4.6rem) / 4))), 1fr));
+  gap: 0.2rem 1.5rem;
+  align-items: start;
+}
+main.clarity-on :is(.spending-values, .plan-values, .goal-values) > :not(.clarity-value) { grid-column: 1 / -1; }
+main.clarity-on :is(.spending-values, .plan-values, .goal-values) > .clarity-value { min-width: 0; }
+@media (min-width: 700px) {
+  main.clarity-on :is(.spending-values, .plan-values, .goal-values) > .clarity-value {
+    flex-direction: column; flex-wrap: nowrap; align-items: flex-start; gap: 0.1rem; margin: 0.3rem 0;
+  }
+}

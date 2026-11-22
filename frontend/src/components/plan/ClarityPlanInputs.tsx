@@ -821,7 +821,7 @@ export function ClarityPlanInputs({ month, snapshot, onConfirmed, onRefresh, onl
   if (only === 'salary') return <div className="gap-top"><SalaryCard month={month} snapshot={snapshot} changes={changes} optional={optional} /></div>;
   if (only === 'bills') return <div className="gap-top"><BillsCard month={month} snapshot={snapshot} changes={changes} optional={optional} /></div>;
   return (
-    <div className="grid two gap-top">
+    <div className="grid two gap-top plan-inputs-row">
       <SalaryCard month={month} snapshot={snapshot} changes={changes} />
       <BillsCard month={month} snapshot={snapshot} changes={changes} />
     </div>

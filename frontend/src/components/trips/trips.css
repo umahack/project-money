@@ -28,3 +28,10 @@
 .trip-share-group-title { margin: 0; font-size: 0.95rem; }
 .trip-share-failure { display: grid; gap: 0.4rem; justify-items: start; }
 .trip-share-link-label { display: grid; gap: 0.2rem; }
+
+/* Trip cards in one row have one height: the card fills its list item, details stay at the top and "Open" sits at the bottom. */
+main.clarity-on .trip-grid { align-items: stretch; }
+main.clarity-on .trip-grid > li { display: flex; flex-direction: column; min-width: 0; }
+main.clarity-on .trip-grid > li > a.plain { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+main.clarity-on .trip-grid .trip-card { display: flex; flex-direction: column; flex: 1 1 auto; height: auto; }
+main.clarity-on .trip-grid .trip-card .open-link { margin-top: auto; padding-top: 0.4rem; align-self: flex-start; }

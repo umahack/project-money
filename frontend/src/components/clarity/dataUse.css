@@ -22,6 +22,34 @@
 .clarity-promise-title,
 .clarity-gate-title { margin: 0 0 0.35rem; font-size: clamp(1.1rem, 3.4vw, 1.4rem); line-height: 1.25; }
 .clarity-promise-lead { margin: 0 0 0.5rem; }
+
+/* ---- One row above the page: the promise as a single line, and the compact "Your data" control ---- */
+.clarity-intro { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; margin: 0 0 0.6rem; }
+.clarity-intro:empty { display: none; }
+.clarity-intro > .clarity-promise,
+.clarity-intro > .clarity-gate { margin: 0; }
+.clarity-intro > .clarity-promise { flex: 1 1 22rem; }
+/* The full notice and its reason use the whole row; only the collapsed control shares it with the promise. */
+.clarity-intro > .clarity-gate { flex: 1 1 100%; }
+.clarity-intro > .clarity-gate[data-collapsed='true'] { flex: 0 0 auto; }
+
+.clarity-promise { padding: 0.25rem 0.8rem; }
+/* On a phone the "Your data" control sits beside the promise instead of on a row of its own. */
+@media (max-width: 899px) {
+  .clarity-intro > .clarity-promise { flex-basis: 13rem; }
+}
+.clarity-promise-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.8rem; }
+.clarity-promise .clarity-promise-title { margin: 0; flex: 1 1 auto; font-size: 1rem; font-weight: 600; }
+.clarity-promise-toggle { flex: 0 0 auto; white-space: nowrap; }
+.clarity-promise-details { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+
+.clarity-gate-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.8rem; }
+.clarity-gate-head .clarity-gate-title { flex: 1 1 auto; }
+.clarity-gate-toggle { flex: 0 0 auto; white-space: nowrap; }
+/* Collapsed: just the control, with no card around it. */
+.clarity-gate-compact[data-collapsed='true'] { padding: 0; border: 0; background: transparent; box-shadow: none; border-radius: 0; }
+.clarity-gate-compact[data-collapsed='true'] .clarity-gate-head { margin: 0; }
+.clarity-gate-body { margin-top: 0.2rem; }
 .clarity-promise-flow {
   margin: 0; padding: 0; list-style: none;
   display: grid; gap: 0.35rem 1rem;
@@ -56,7 +84,8 @@
 
 /* Keyboard focus: visible and at least 3:1 in both themes (Requirement 12.14). */
 .clarity-promise :focus-visible,
-.clarity-gate :focus-visible {
+.clarity-gate :focus-visible,
+.clarity-gate:focus-visible {
   outline: 3px solid var(--clarity-focus, var(--accent));
   outline-offset: 2px;
 }

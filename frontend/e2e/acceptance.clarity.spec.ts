@@ -196,7 +196,7 @@ async function performChange(story: Story, change: Change) {
 /** Opens a page through the signed-in navigation, as a user would, without a document load. */
 async function goTo(story: Story, label: 'Home' | 'Spending' | 'Plan' | 'Goals' | 'Trips', ready: Locator) {
   const { page } = story;
-  const link = page.locator('aside.sidebar:visible, nav.bottom-tabs:visible').locator('a').filter({ hasText: label }).first();
+  const link = page.locator('nav.primary-nav:visible, nav.bottom-tabs:visible').locator('a').filter({ hasText: label }).first();
   await link.click();
   await expect(ready).toBeVisible();
   await expectStable(story, { layout: true });
@@ -273,7 +273,8 @@ async function playStory(page: Page, api: DeterministicApiFixtures, timed: boole
   await page.getByRole('button', { name: /Acknowledge version 1/ }).click();
   await expect(gate).toHaveAttribute('data-inputs-enabled', 'true');
   await expect(gate).toContainText('You acknowledged the data-use notice (version 1)');
-  await expect(heading(page, 'Your data, your control')).toBeFocused();
+  // The acknowledge button is replaced by the collapsed "Your data" control, which takes focus so it stays in this region.
+  await expect(gate.getByRole('button', { name: 'Your data' })).toBeFocused();
   expect(world.noticeAcknowledged).toBe(true);
   await expectStable(story, { layout: true });
 

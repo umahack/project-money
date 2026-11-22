@@ -244,7 +244,16 @@ test('data-use notice: the review disclosure opens with Enter and closes with Sp
   installClarityBackend(api, MONTH, { salaryMinor: 7_500_000 });
   api.stub('GET', '/api/finance/streak', { json: { current: 1, longest: 1, days_logged: 1 } });
   await signIn(page, '/');
+  // After acknowledgement the data-use card is a collapsed "Your data" control. The review
+  // disclosure lives inside it, so the keyboard first opens "Your data", then the review.
+  const yourData = page.getByRole('button', { name: 'Your data', exact: true });
   const review = page.getByRole('button', { name: /Review the data-use notice/ });
+  await expect(yourData).toBeVisible();
+  await expect(yourData).toHaveAttribute('aria-expanded', 'false');
+  await expect(review).toBeHidden();
+  await tabTo(page, yourData);
+  await page.keyboard.press('Enter');
+  await expect(yourData).toHaveAttribute('aria-expanded', 'true');
   await expect(review).toBeVisible();
   await tabTo(page, review);
   await page.keyboard.press('Enter');

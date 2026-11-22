@@ -139,7 +139,7 @@ test('flag off serves the legacy UI and read path from the same records, deletes
 
   // ---- The guided-journey route is unreachable: the signed-in catch-all keeps the shell and shows no journey ----
   await page.goto('/start');
-  await expect(page.locator('aside.sidebar, nav.bottom-tabs').first()).toBeAttached();
+  await expect(page.locator('nav.primary-nav, nav.bottom-tabs').first()).toBeAttached();
   await expect(page.getByRole('heading', { level: 1, name: 'Guided journey' })).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Desired outcomes' })).toHaveCount(0);
 

@@ -39,7 +39,7 @@ describe('Shell responsive navigation', () => {
   it('renders both navigations so CSS can show exactly one at each width', async () => {
     mockSettingsApi(buildSettings());
     renderShell();
-    expect(await screen.findByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     const bottom = screen.getByRole('navigation', { name: 'Primary mobile' });
     expect(bottom).toHaveClass('bottom-tabs', 'mobile-only');
     for (const label of ['Home', 'Spending', 'Plan', 'Goals', 'Trips', 'Settings']) {

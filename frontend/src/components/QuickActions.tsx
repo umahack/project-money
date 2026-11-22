@@ -1,10 +1,10 @@
 import { NavLink } from 'react-router-dom';
 
 /**
- * Top-of-dashboard shortcut row for the three primary user actions. Mobile
- * users shouldn't have to scroll past the plan donut + today strip + streak
- * card to find "add expense" — the shortcuts live here, above the fold.
- * On ≤520px they stack as a single row of equal-flex tiles.
+ * Top-of-dashboard shortcut row for the four primary user actions, placed
+ * directly after the greeting and next action so they are on the first screen.
+ * Legacy rendering: one row of four tiles. Clarity rendering (see clarity.css):
+ * a compact single row from 600px and a 2x2 grid of 48px tiles on phones.
  */
 export function QuickActions() {
   return (

@@ -126,14 +126,7 @@
   border-color: #10b981;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
 }
-:root[data-theme='light'] .sidebar {
-  background: #ffffff;
-  border-color: var(--border);
-  box-shadow: var(--shadow);
-  backdrop-filter: none;
-}
-:root[data-theme='light'] .side-link.active,
-:root[data-theme='light'] .side-link[aria-current='page'] {
+:root[data-theme='light'] .primary-link[aria-current='page'] {
   background: rgba(16, 185, 129, 0.1);
   color: #0f766e;
 }
@@ -151,6 +144,8 @@
 
 * { box-sizing: border-box; min-width: 0; }
 html { -webkit-text-size-adjust: 100%; overflow-x: hidden; max-width: 100vw; }
+/* Shared layout tokens: the widest the app content gets, and the space kept at its sides (900px and wider). */
+:root { --app-max: 1600px; --app-gutter: clamp(0.8rem, 3vw, 2rem); }
 body {
   margin: 0;
   min-height: 100vh;
@@ -216,10 +211,13 @@ a { color: var(--accent); }
 }
 /* Let the bar wrap when enlarged text no longer fits, instead of overflowing. */
 .topbar { flex-wrap: wrap; row-gap: 0.25rem; }
-/* From 1712px the app shell is its 1680px maximum and centered. Align the bar with it so the
-   brand and the actions do not sit thousands of pixels apart on very wide screens. */
-@media (min-width: 1712px) {
-  .topbar { padding-left: calc((100% - 1680px) / 2 + 1rem); padding-right: calc((100% - 1680px) / 2 + 1rem); }
+/* Wider than the app shell's maximum width the shell is centred. Align the bar with it so the brand,
+   the navigation and the actions do not sit thousands of pixels apart on very wide screens. */
+@media (min-width: 900px) {
+  .topbar {
+    padding-left: max(var(--app-gutter), calc((100% - var(--app-max)) / 2 + var(--app-gutter)));
+    padding-right: max(var(--app-gutter), calc((100% - var(--app-max)) / 2 + var(--app-gutter)));
+  }
 }
 .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; text-decoration: none; color: var(--text); }
 .brand-mark {
@@ -298,14 +296,17 @@ a { color: var(--accent); }
   .grid.two { grid-template-columns: 1fr 1fr; align-items: start; }
   .grid.three { grid-template-columns: repeat(3, 1fr); }
 }
-/* The sidebar (see "Sidebar layout" below) replaces the bottom navigation at the same
-   width, 900px. These two used to switch at 820px while the sidebar appeared at 900px,
-   so from 820px to 899px neither navigation was shown. */
+/* The header navigation (see "App shell and primary navigation" below) replaces the bottom
+   navigation at the same width, 900px, so exactly one of them is shown at every width. */
 @media (min-width: 900px) {
   .desktop-only { display: inline-flex; }
   .tabs.desktop-only { display: flex; }
   .mobile-only { display: none; }
   .container { padding-bottom: 3rem; }
+  /* `overflow-x: hidden` on body (above) makes body a scroll container that never scrolls, and a sticky
+     element inside a container that does not scroll never sticks. `clip` clips the same way without
+     creating a scroll container, so the header navigation stays in view while the page scrolls. */
+  body { overflow-x: clip; }
 }
 @media (min-width: 560px) and (max-width: 819px) { .grid.three { grid-template-columns: 1fr 1fr; } }
 
@@ -525,7 +526,7 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
   .brand-mark { width: 30px; height: 30px; border-radius: 10px; font-size: 0.95rem; flex-shrink: 0; }
   .beta-badge { display: none; }
   .list-item { gap: 0.5rem; padding: 0.5rem; }
-  .container.with-sidebar { padding: 0.9rem 0.85rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); }
+  .container.app-main { padding: 0.9rem 0.85rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); }
   .page-title { margin-bottom: 0.8rem; gap: 0.5rem; }
   .page-title h1 { font-size: 1.4rem; line-height: 1.2; }
   .page-title p { font-size: 0.85rem; }
@@ -751,79 +752,62 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   .landing-mock-stat .big { font-size: 1.2rem; }
 }
 
-/* ---- Sidebar layout (desktop) ---- */
+/* ---- App shell and primary navigation ----
+   From 900px the primary navigation is a row of links in the sticky header (.primary-nav) and the
+   page content spans the app width, centred up to --app-max. Below 900px the fixed bottom bar
+   (.bottom-tabs) is the navigation and the layout is unchanged. */
 .app-shell { display: block; }
-.sidebar { display: none; }
+.primary-nav { display: none; }
 /* The bottom padding keeps the last content clear of the fixed bottom navigation; Shell measures its height. */
-.container.with-sidebar { padding: 1rem 1rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); max-width: 1200px; margin: 0 auto; }
+.container.app-main { padding: 1rem 1rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); max-width: 1200px; margin: 0 auto; }
 
 @media (min-width: 900px) {
-  .app-shell {
-    display: grid;
-    grid-template-columns: 232px minmax(0, 1fr);
-    gap: 1.25rem;
-    /* Let content breathe on wide screens — cap only on ultra-wide so
-       lines don't become uncomfortably long. */
-    max-width: min(1680px, calc(100% - 2rem));
-    margin: 0 auto;
-    padding: 0 1rem;
+  /* No sidebar column: the content uses the whole app width. Only on ultra-wide screens is it capped
+     and centred so lines do not become uncomfortably long (prose keeps its own 75ch cap). */
+  .app-shell { max-width: var(--app-max); margin: 0 auto; padding: 0 var(--app-gutter); }
+  .container.app-main { width: 100%; padding: 1.25rem 0 3rem; margin: 0; max-width: none; }
+
+  /* The header is brand, navigation, actions, in that order in the markup AND on screen. No `order` is
+     used, so Tab (WCAG 2.4.3) and the reading order (1.3.2) agree at every width. The row wraps: while
+     the three do not fit in one line the actions drop to a second row, still after the navigation, and the
+     navigation wraps inside its own box, so no link is ever clipped between 900px and the width where
+     everything fits. */
+  .primary-nav {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.3rem;
+    flex: 1 1 auto; min-width: 0;
   }
-  .sidebar {
-    display: block;
-    position: sticky;
-    top: 72px;
-    align-self: start;
-    height: calc(100vh - 90px);
-    padding: 0.6rem;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
-    backdrop-filter: blur(10px);
-    overflow-y: auto;
-  }
-  .sidebar::-webkit-scrollbar { width: 6px; }
-  .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 3px; }
-  .side-nav { display: flex; flex-direction: column; gap: 2px; }
-  .container.with-sidebar { padding: 0; margin: 0; max-width: none; }
+  .topbar .top-actions { margin-left: auto; }
+  /* A keyboard user tabbing down the page must not land under the sticky header. The value covers the
+     two-row header (about 6.7rem); a long first name can make it two rows at any width, so it is not
+     reduced for wide screens. */
+  html { scroll-padding-top: 8.5rem; }
+}
+@media (min-width: 1320px) {
+  .primary-nav { justify-content: center; }
 }
 
-[data-theme='light'] .sidebar { background: rgba(0,0,0,0.025); border-color: rgba(0,0,0,0.08); }
-.sidebar.admin-mode {
-  background: linear-gradient(165deg, rgba(251,113,133,0.08), rgba(124,108,255,0.08));
-  border-color: rgba(251,191,36,0.25);
-  box-shadow: inset 0 0 0 1px rgba(251,191,36,0.08);
-}
-
-.side-link {
-  display: flex; align-items: center; gap: 0.7rem;
-  padding: 0.6rem 0.85rem; border-radius: 10px;
+.primary-link {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  min-height: 40px; padding: 0.3rem 0.8rem 0.2rem; border-radius: 10px;
+  border-bottom: 3px solid transparent;
   color: var(--muted); text-decoration: none;
-  font-weight: 500; font-size: 0.95rem;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  font-weight: 600; font-size: 0.95rem; white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
+.primary-icon { font-size: 1.05rem; line-height: 1; }
+.primary-badge { margin-left: 0.15rem; }
 @media (hover: hover) and (pointer: fine) {
-  .side-link:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .primary-link:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+  [data-theme='light'] .primary-link:hover { background: rgba(0,0,0,0.05); }
 }
-.side-link.active {
-  background: linear-gradient(90deg, rgba(124,108,255,0.22), rgba(74,222,128,0.14));
+/* The current page: a heavier colour, a tinted fill, and an underline bar, so it never relies on colour alone. */
+.primary-link[aria-current='page'] {
   color: var(--text);
-  box-shadow: inset 2px 0 0 var(--primary, #7c6cff);
+  background: linear-gradient(90deg, rgba(124,108,255,0.22), rgba(74,222,128,0.14));
+  border-bottom-color: var(--accent);
 }
-[data-theme='light'] .side-link:hover { background: rgba(0,0,0,0.04); }
-.side-icon { font-size: 1.1rem; width: 1.4em; text-align: center; }
-.side-label { flex: 1; }
-
-/* ---- Sidebar admin group ---- */
-.side-group {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  padding: 0.9rem 0.6rem 0.3rem;
-  margin-top: 0.4rem;
-  border-top: 1px dashed rgba(255,255,255,0.08);
-}
-[data-theme='light'] .side-group { border-top-color: rgba(0,0,0,0.08); }
+.primary-link:focus-visible { outline: 3px solid var(--clarity-focus, var(--accent)); outline-offset: 2px; }
 
 /* ---- Admin overview cards ---- */
 .admin-cards { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.8rem; }
@@ -890,8 +874,14 @@ input[aria-invalid='true'] { border-color: var(--warn); }
   color: var(--text);
   font-weight: 500;
 }
-@media (min-width: 1232px) { /* 1200 + 2*16 side margin */
-  .announce-banner, .session-banner { margin-left: auto; margin-right: auto; }
+@media (min-width: 900px) {
+  /* Same width and side margins as the page content, so the banner lines up with it and the page below
+     is not pushed into a narrower column. */
+  .announce-banner, .session-banner {
+    width: calc(100% - 2 * var(--app-gutter));
+    max-width: calc(var(--app-max) - 2 * var(--app-gutter));
+    margin: 0.6rem auto 0;
+  }
 }
 .announce-banner.warn { background: rgba(251,191,36,0.14); border-color: rgba(251,191,36,0.35); }
 .announce-banner.ok { background: rgba(74,222,128,0.14); border-color: rgba(74,222,128,0.35); }

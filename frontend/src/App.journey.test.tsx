@@ -54,7 +54,7 @@ describe('rollout flag off', () => {
     renderApp('/start', { signedIn: true });
 
     // The signed-in catch-all keeps the Shell and shows no journey page.
-    expect(await screen.findByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Guided journey' })).toBeNull();
     expect(fetches.calls.filter((call) => call.path.startsWith('/clarity'))).toHaveLength(0);
   });
@@ -64,7 +64,7 @@ describe('rollout flag off', () => {
     const fetches = installJourneyFetch(server, routes());
     renderApp('/register?start=plan_month', { signedIn: true });
 
-    expect(await screen.findByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Guided journey' })).toBeNull();
     expect(fetches.to('POST', '/clarity/journeys')).toHaveLength(0);
   });
@@ -99,7 +99,7 @@ describe('rollout flag on', () => {
     renderApp('/start', { signedIn: true });
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Guided journey' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(await screen.findByRole('list', { name: 'Desired outcomes' })).toBeInTheDocument();
   });
 
@@ -162,7 +162,7 @@ describe('rollout flag on', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Secret#1234' } });
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    expect(await screen.findByRole('complementary', { name: 'Primary' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Guided journey' })).toBeNull();
     expect(fetches.to('POST', '/clarity/journeys')).toHaveLength(0);
   });

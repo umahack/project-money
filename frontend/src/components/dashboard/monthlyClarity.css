@@ -1,17 +1,82 @@
 /* Home's Monthly Clarity Summary. Reuses the clarity tokens and card styles. */
 .monthly-clarity { display: grid; gap: 1rem; margin-bottom: 1rem; }
+
+/* The key-number row: as many columns as fit, each at least 17.5rem (280px, the outcome-card minimum), sharing the
+   row's width equally. `auto-fit` collapses empty columns, so a single card or a pair also fills the row. */
+.monthly-clarity-fit { container-type: inline-size; }
 .monthly-clarity-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5rem), 1fr));
+  /* Cards in a row share one height (the tallest), so no card ends above a blank gap. */
+  align-items: stretch;
 }
-.monthly-clarity-region { display: grid; gap: 0.6rem; min-width: 0; align-content: start; }
-.monthly-clarity-stack { display: grid; gap: 0.5rem; min-width: 0; }
+/* Where auto-fit would leave a short last row, pick a column count that divides the cards evenly, so no
+   card sits alone with an empty space beside it. The widths are in rem and follow the text size. */
+@container (min-width: 36rem) and (max-width: 72.99rem) {
+  /* Four cards fit 2 or 4 across, never 3 + 1. */
+  .monthly-clarity-grid[data-count='4'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 36rem) and (max-width: 54.49rem) {
+  /* Three cards fit 3 across from 54.5rem; with two columns the last one takes the whole row. */
+  .monthly-clarity-grid[data-count='3'] > :last-child { grid-column: 1 / -1; }
+}
+
+/* A region fills its grid cell, and its card fills the region: content stays at the top of the card and the
+   card's own actions are pinned to its bottom edge (see .clarity-outcome below). */
+.monthly-clarity-region { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.monthly-clarity-region > .card { flex: 1 1 auto; }
+.monthly-clarity-region > .card.clarity-outcome,
+.monthly-clarity-region > .monthly-clarity-note { display: flex; flex-direction: column; }
+/* Inside a key-number card the first of the trailing controls (retry, corrective link, "How this was
+   calculated", the card's action) takes all free space above it, so the controls sit at the bottom. */
+.monthly-clarity-region > .card.clarity-outcome > :is(.clarity-corrective, .clarity-retry-row, .clarity-explain, .clarity-outcome-footer):not(:is(.clarity-corrective, .clarity-retry-row, .clarity-explain, .clarity-outcome-footer) ~ *) {
+  margin-top: auto;
+  padding-top: 0.6rem;
+}
 .monthly-clarity .card { margin: 0; }
+/* Key-number cards are tighter than the page's other cards: the same facts, less empty space. */
+.monthly-clarity-grid .card { padding: 0.9rem 1.1rem; }
+.monthly-clarity-grid .clarity-outcome-meta { margin-bottom: 0.3rem; }
+.monthly-clarity-grid .clarity-value { margin: 0.2rem 0; }
+.monthly-clarity-grid .clarity-explain,
+.monthly-clarity-grid .clarity-retry-row,
+.monthly-clarity-grid .clarity-corrective { margin-top: 0.5rem; }
+.monthly-clarity-grid .clarity-outcome-footer { margin-top: 0.5rem; }
+.monthly-clarity-grid .clarity-outcome-footer .clarity-disclaimer { margin: 0; }
 .monthly-clarity-note p { margin: 0.3rem 0; }
 .monthly-clarity-more { margin: 0; }
 .monthly-clarity-observation { margin: 0 0 0.2rem; font-weight: 600; }
 .monthly-clarity-action-list { gap: 0.9rem; }
 .monthly-clarity-action-list > li { display: grid; gap: 0.15rem; }
 .monthly-clarity-no-action { margin: 0.4rem 0 0; font-weight: 600; }
+
+/* Next actions: from 1100px the items sit side by side, 2 or 3 columns of at least 20rem (320px), not in one
+   narrow stack with the card's right half empty. Each item is a tile of equal height with its link at the bottom.
+   Below 1100px they stay one column. DOM order is reading order: row by row, left to right. */
+.monthly-clarity-actions { padding: 0.9rem 1.1rem; }
+@media (min-width: 1100px) {
+  .monthly-clarity-action-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(20rem, calc((100% - 2.1rem) / 3))), 1fr));
+    gap: 0.9rem 1rem;
+    align-items: stretch;
+  }
+  .monthly-clarity-action-list > li {
+    display: flex; flex-direction: column; gap: 0.15rem; min-width: 0;
+    padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: 14px;
+  }
+  .monthly-clarity-action-list > li > .clarity-action { margin-top: auto; padding-top: 0.5rem; }
+}
+
+/* Guided journey and the logging streak share a row, and a lone card fills it. Both cards take the row's
+   height; the content stays at the top and the journey's button sits at the bottom. */
+.home-secondary {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: stretch;
+}
+.home-secondary > .card.card { margin: 0; display: flex; flex-direction: column; }
+.home-secondary > .card > .btn { margin-top: auto; align-self: flex-start; }
+.home-secondary > .card > .row { align-items: flex-start; }

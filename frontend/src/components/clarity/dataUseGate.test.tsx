@@ -33,6 +33,13 @@ function Harness({ enabled = true }: { enabled?: boolean }) {
 const inputsState = () => screen.getByTestId('inputs-state');
 const gateStatus = () => document.querySelector('.clarity-gate-status');
 const reviewButton = () => screen.getByRole('button', { name: /Review the data-use notice/ });
+/** After acknowledgement the card is collapsed to this control, which opens the notice and the analytics control. */
+const yourDataButton = () => screen.getByRole('button', { name: 'Your data' });
+async function openYourData(user: ReturnType<typeof userEvent.setup>) {
+  const button = await screen.findByRole('button', { name: 'Your data' });
+  if (button.getAttribute('aria-expanded') !== 'true') await user.click(button);
+  expect(button).toHaveAttribute('aria-expanded', 'true');
+}
 
 describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged', () => {
   it('shows the connected promise and the full notice, and pauses new entries with a reason', async () => {
@@ -43,6 +50,8 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
     for (const word of ['Plan', 'Spending', 'Saving', 'Trips']) {
       expect(within(promise).getByText(`${word}:`)).toBeInTheDocument();
     }
+    // Before acknowledgement there is no collapsed control: the whole notice is on screen.
+    expect(screen.queryByRole('button', { name: 'Your data' })).toBeNull();
 
     const gate = await screen.findByRole('region', { name: 'Your data, your control' });
     expect(within(gate).getByRole('heading', { name: /How Project Money uses your data/ })).toBeInTheDocument();
@@ -94,10 +103,13 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
     expect(api.patches()).toHaveLength(1);
     expect(api.patches()[0]?.body).toEqual({ acknowledgedNoticeVersion: 1 });
     expect(gateStatus()).toHaveTextContent('Data-use notice acknowledged');
-    expect(screen.getByRole('heading', { name: 'Your data, your control' })).toHaveFocus();
+    // The card collapses to the "Your data" control, and focus moves to it so it is not lost.
+    await waitFor(() => expect(yourDataButton()).toHaveFocus());
+    expect(yourDataButton()).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByRole('button', { name: 'Add expense' })).toBeEnabled();
     expect(document.getElementById(DATA_USE_REASON_ID)).toBeNull();
     // Acknowledging never turns Product Analytics on.
+    await openYourData(user);
     expect(screen.getByRole('checkbox', { name: /Product Analytics/ })).not.toBeChecked();
   });
 
@@ -147,6 +159,50 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
   });
 });
 
+describe('CorePromiseStrip', () => {
+  it('is one short line with a "How it works" disclosure for the four parts, rendered before the controls', async () => {
+    const user = userEvent.setup();
+    mockSettingsApi(buildSettings({ acknowledgedVersion: 1 }));
+    const { container } = renderAuthenticated(<Harness />);
+
+    const promise = await screen.findByRole('region', { name: /safe to spend/i });
+    expect(within(promise).getByRole('heading', { name: 'See what is safe to spend, what to save, and what to do next.' })).toBeInTheDocument();
+    const toggle = within(promise).getByRole('button', { name: 'How it works' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The four connected parts and the lead sentence are in the page but not on screen until asked for.
+    const lead = within(promise).getByText(/connects four parts of your money/);
+    const plan = within(promise).getByText('Plan:');
+    expect(lead).not.toBeVisible();
+    expect(plan).not.toBeVisible();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(lead).toBeVisible();
+    for (const word of ['Plan', 'Spending', 'Saving', 'Trips']) expect(within(promise).getByText(`${word}:`)).toBeVisible();
+    await user.click(toggle);
+    expect(plan).not.toBeVisible();
+
+    // It still comes before the financial controls (Requirement 1.1).
+    const addExpense = screen.getByRole('button', { name: 'Add expense' });
+    expect(promise.compareDocumentPosition(addExpense) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelectorAll('.clarity-promise')).toHaveLength(1);
+  });
+
+  it('is operated by keyboard', async () => {
+    const user = userEvent.setup();
+    mockSettingsApi(buildSettings({ acknowledgedVersion: 1 }));
+    renderAuthenticated(<Harness />);
+    const toggle = await screen.findByRole('button', { name: 'How it works' });
+
+    await user.tab();
+    expect(toggle).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard(' ');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
 describe('DataUseGate when the notice is acknowledged', () => {
   it('enables entries, keeps the notice reviewable, and stores only a promise flag', async () => {
     const user = userEvent.setup();
@@ -155,10 +211,24 @@ describe('DataUseGate when the notice is acknowledged', () => {
     renderAuthenticated(<Harness />, { user: authenticated });
 
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
-    expect(screen.getByText(/You acknowledged the data-use notice \(version 1\) on 10 Jan 2026/)).toBeInTheDocument();
     expect(document.getElementById(DATA_USE_REASON_ID)).toBeNull();
     expect(screen.queryByRole('button', { name: /Acknowledge version/ })).toBeNull();
-    // Correction, export, and deletion stay discoverable from the collapsed notice.
+
+    // Collapsed: only a small "Your data" control is on screen. The full card is not.
+    const gate = screen.getByRole('region', { name: 'Your data, your control' });
+    expect(gate).toHaveAttribute('data-collapsed', 'true');
+    expect(yourDataButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText(/You acknowledged the data-use notice \(version 1\) on 10 Jan 2026/)).not.toBeVisible();
+    expect(screen.queryByRole('checkbox', { name: /Product Analytics/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Review the data-use notice/ })).toBeNull();
+
+    // It opens the acknowledgement summary, the notice, and the Product Analytics control.
+    await user.click(yourDataButton());
+    expect(yourDataButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(gate).toHaveAttribute('data-collapsed', 'false');
+    expect(screen.getByText(/You acknowledged the data-use notice \(version 1\) on 10 Jan 2026/)).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: /Product Analytics/ })).toBeVisible();
+    // Correction, export, and deletion stay discoverable from the notice.
     expect(reviewButton()).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('link', { name: 'Export your data' })).toBeNull();
     await user.click(reviewButton());
@@ -178,8 +248,9 @@ describe('Product Analytics independence', () => {
     const user = userEvent.setup();
     const api = mockSettingsApi(buildSettings({ acknowledgedVersion: 1 }));
     renderAuthenticated(<Harness />);
-    const toggle = await screen.findByRole('checkbox', { name: /Product Analytics/ });
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
+    await openYourData(user);
+    const toggle = screen.getByRole('checkbox', { name: /Product Analytics/ });
 
     await user.click(toggle);
     await waitFor(() => expect(toggle).toBeChecked());
@@ -217,7 +288,8 @@ describe('Product Analytics independence', () => {
     const user = userEvent.setup();
     mockSettingsApi(buildSettings({ acknowledgedVersion: 1 }));
     renderAuthenticated(<Harness />);
-    const toggle = await screen.findByRole('checkbox', { name: /Product Analytics/ });
+    await openYourData(user);
+    const toggle = screen.getByRole('checkbox', { name: /Product Analytics/ });
     await waitFor(() => expect(toggle).toBeEnabled());
 
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
@@ -275,7 +347,9 @@ describe('keyboard operation', () => {
     renderAuthenticated(<Harness />);
     await screen.findByRole('button', { name: /Acknowledge version 1/ });
 
-    // Reading order: notice controls, acknowledge, still-available links.
+    // Reading order: the promise's "How it works" control, notice controls, acknowledge, still-available links.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'How it works' })).toHaveFocus();
     await user.tab();
     expect(screen.getByRole('link', { name: 'Export your data' })).toHaveFocus();
     await user.tab();
@@ -286,9 +360,15 @@ describe('keyboard operation', () => {
 
     await user.keyboard('{Enter}');
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
-    expect(screen.getByRole('heading', { name: 'Your data, your control' })).toHaveFocus();
+    // The acknowledge button is gone; focus moves to the "Your data" control that replaced the card.
+    await waitFor(() => expect(yourDataButton()).toHaveFocus());
+    expect(yourDataButton()).toHaveAttribute('aria-expanded', 'false');
 
-    // Next stop is the notice disclosure, then the Product Analytics checkbox. Nothing traps focus.
+    // Enter opens it and focus stays on it. The next stops are the notice disclosure, then the
+    // Product Analytics checkbox. Nothing traps focus.
+    await user.keyboard('{Enter}');
+    expect(yourDataButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(yourDataButton()).toHaveFocus();
     await user.tab();
     expect(reviewButton()).toHaveFocus();
     await user.keyboard('{Enter}');
@@ -320,6 +400,9 @@ describe('accessibility', () => {
 
       await user.click(screen.getByRole('button', { name: /Acknowledge version 1/ }));
       await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
+      // Collapsed to the "Your data" control.
+      expect(await axe(view.container)).toHaveNoViolations();
+      await openYourData(user);
       await user.click(reviewButton());
       expect(await axe(view.container)).toHaveNoViolations();
     } finally {

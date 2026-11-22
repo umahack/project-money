@@ -7,7 +7,7 @@
 // - no horizontal overflow of the page, of a region, or of a clipping ancestor, and no
 //   ellipsis-truncated text,
 // - no overlap between text blocks or controls,
-// - at phone and tablet widths (below the 900 px sidebar breakpoint), controls of at least
+// - at phone and tablet widths (below the 900 px header-navigation breakpoint), controls of at least
 //   44 by 44 CSS pixels and content that can scroll clear of the bottom navigation,
 // - at 1440 px and above, a readable measure: a capped main column, a top bar aligned with it,
 //   and prose no wider than 1000 px,
@@ -30,8 +30,8 @@ import type { Page, TestInfo } from '@playwright/test';
 // Layout checks need the screenshot of a failure, not a recording of every step.
 test.use({ video: 'off', trace: 'off' });
 
-/** The sidebar replaces the bottom navigation at this width (styles.css, "Sidebar layout"). */
-const SIDEBAR_FROM = 900;
+/** The header navigation replaces the bottom navigation at this width (styles.css, "App shell and primary navigation"). */
+const TOP_NAV_FROM = 900;
 const ZOOM_UP_TO = 390;
 
 // ---- Audit -------------------------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ async function setTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
 
 /** Audits the open page in both themes and, on phone widths, with text enlarged to 200 percent. */
 async function auditPage(page: Page, width: number): Promise<Record<string, string[]>> {
-  const narrow = width < SIDEBAR_FROM;
+  const narrow = width < TOP_NAV_FROM;
   const report: Record<string, string[]> = {};
   await settleAnimations(page);
   for (const theme of ['light', 'dark'] as const) {
@@ -91,13 +91,13 @@ test('the layout holds on both sides of every breakpoint edge', async ({ page, a
   for (const width of [319, 320, 419, 420, 520, 521, 559, 560, 639, 640, 767, 768, 819, 820, 899, 900, 901, 999, 1000, 1099, 1100, 1231, 1232]) {
     await page.setViewportSize({ width, height: 900 });
     await settleAnimations(page);
-    const issues = await auditLayout(page, { touchTargets: width < SIDEBAR_FROM });
-    if (width < SIDEBAR_FROM) issues.push(...(await contentHiddenByBottomNavigation(page)).map((item) => `covered by bottom navigation: ${item}`));
+    const issues = await auditLayout(page, { touchTargets: width < TOP_NAV_FROM });
+    if (width < TOP_NAV_FROM) issues.push(...(await contentHiddenByBottomNavigation(page)).map((item) => `covered by bottom navigation: ${item}`));
     expect(issues, `layout at ${width}`).toEqual([]);
     const navigation = await page.evaluate(() => ({
-      sidebar: getComputedStyle(document.querySelector('aside.sidebar') as Element).display !== 'none',
+      top: getComputedStyle(document.querySelector('header.topbar nav.primary-nav') as Element).display !== 'none',
       bottom: getComputedStyle(document.querySelector('nav.bottom-tabs') as Element).display !== 'none',
     }));
-    expect(navigation, `navigation at ${width}`).toEqual({ sidebar: width >= SIDEBAR_FROM, bottom: width < SIDEBAR_FROM });
+    expect(navigation, `navigation at ${width}`).toEqual({ top: width >= TOP_NAV_FROM, bottom: width < TOP_NAV_FROM });
   }
 });

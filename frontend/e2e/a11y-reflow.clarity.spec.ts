@@ -18,7 +18,7 @@ import type { Page, TestInfo } from '@playwright/test';
 
 test.use({ video: 'off', trace: 'off' });
 
-const SIDEBAR_FROM = 900;
+const TOP_NAV_FROM = 900;
 
 /** One full state and one degraded or in-progress state of every clarity page. */
 const REPRESENTATIVE = [
@@ -54,7 +54,7 @@ async function audit(page: Page, width: number): Promise<string[]> {
   // wider than a 320 px column. The value stays reachable, so that one finding is not content that is lost.
   const issues = (await auditLayout(page)).filter((issue) => !/^field: .* cuts its value/.test(issue));
   issues.push(...(await auditVerticalClipping(page)));
-  if (width < SIDEBAR_FROM) issues.push(...(await contentHiddenByBottomNavigation(page)).map((item) => `covered by bottom navigation: ${item}`));
+  if (width < TOP_NAV_FROM) issues.push(...(await contentHiddenByBottomNavigation(page)).map((item) => `covered by bottom navigation: ${item}`));
   return issues;
 }
 

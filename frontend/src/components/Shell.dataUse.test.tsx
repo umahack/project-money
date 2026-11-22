@@ -35,7 +35,7 @@ describe('Shell core promise and data-use gate', () => {
     expect(isBefore(gate, screen.getByRole('heading', { name: 'Home page' }))).toBe(true);
     expect(isBefore(gate, addExpense)).toBe(true);
     // Existing navigation is unchanged.
-    const sidebar = screen.getByRole('complementary', { name: 'Primary' });
+    const sidebar = screen.getByRole('navigation', { name: 'Primary' });
     for (const label of ['Home', 'Spending', 'Plan', 'Goals', 'Trips', 'Settings']) {
       expect(within(sidebar).getByRole('link', { name: new RegExp(label) })).toBeInTheDocument();
     }
@@ -68,7 +68,7 @@ describe('Shell core promise and data-use gate', () => {
     expect(screen.queryByRole('region', { name: /safe to spend/i })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Your data, your control' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Switch to user view' })).toBeInTheDocument();
-    const sidebar = screen.getByRole('complementary', { name: 'Primary' });
+    const sidebar = screen.getByRole('navigation', { name: 'Primary' });
     expect(within(sidebar).getByRole('link', { name: /Users/ })).toBeInTheDocument();
   });
 });

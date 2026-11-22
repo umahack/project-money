@@ -142,43 +142,42 @@ export function MonthlyClaritySummary({
     ),
   });
 
-  // Urgent goal region.
+  // Urgent goal region. Its action link sits inside the card, pinned to the bottom, so the cards in a row
+  // keep one height instead of the link hanging below one of them.
   let goalRegion: ReactNode;
   if (urgentGoal) {
     const { highlight, outcome } = urgentGoal;
     const action = goalActionFor(highlight);
     goalRegion = (
-      <div className="monthly-clarity-stack" key="urgent-goal">
-        <OutcomeCard<GoalOutcomeValue>
-          key={outcome.id}
-          outcome={outcome}
-          title={`Urgent goal: ${highlight.name}`}
-          retrying={retryingOutcomeId === outcome.id}
-          onRetry={retryFor?.(outcome.id)}
-          valueSummary={`Funding gap ${formatMoney(highlight.fundingGap)}`}
-          renderValue={(value) => (
-            <>
-              <ClassifiedValue
-                label="Funding gap"
-                classification="calculated_result"
-                value={formatMoney(highlight.fundingGap)}
-                emphasis
-              />
-              <ClassifiedValue
-                label="Required contribution per month"
-                classification="calculated_result"
-                value={value.requiredContribution ? formatMoney(value.requiredContribution) : 'Not available'}
-              />
-              <ClassifiedValue label="Target date" classification="entered_fact" value={formatIsoDate(highlight.targetDate)} />
-              <p className="small">{FEASIBILITY_TEXT[value.feasibility]}.</p>
-              {highlight.status === 'overdue' && (
-                <p className="small"><strong>Overdue.</strong> The target date has passed.</p>
-              )}
-            </>
-          )}
-        />
-        {action && <ActionLink to={action.to} label={action.label} showDisclaimer />}
-      </div>
+      <OutcomeCard<GoalOutcomeValue>
+        key={outcome.id}
+        outcome={outcome}
+        title={`Urgent goal: ${highlight.name}`}
+        retrying={retryingOutcomeId === outcome.id}
+        onRetry={retryFor?.(outcome.id)}
+        footer={action ? <ActionLink to={action.to} label={action.label} showDisclaimer /> : undefined}
+        valueSummary={`Funding gap ${formatMoney(highlight.fundingGap)}`}
+        renderValue={(value) => (
+          <>
+            <ClassifiedValue
+              label="Funding gap"
+              classification="calculated_result"
+              value={formatMoney(highlight.fundingGap)}
+              emphasis
+            />
+            <ClassifiedValue
+              label="Required contribution per month"
+              classification="calculated_result"
+              value={value.requiredContribution ? formatMoney(value.requiredContribution) : 'Not available'}
+            />
+            <ClassifiedValue label="Target date" classification="entered_fact" value={formatIsoDate(highlight.targetDate)} />
+            <p className="small">{FEASIBILITY_TEXT[value.feasibility]}.</p>
+            {highlight.status === 'overdue' && (
+              <p className="small"><strong>Overdue.</strong> The target date has passed.</p>
+            )}
+          </>
+        )}
+      />
     );
   } else if (model.hasAvailableGoal) {
     goalRegion = (
@@ -210,25 +209,23 @@ export function MonthlyClaritySummary({
     const received = highlight.label === 'receivable';
     const amount = formatMoney({ currency: 'INR', amountMinor: Math.abs(highlight.userBalance.amountMinor) });
     tripRegion = (
-      <div className="monthly-clarity-stack" key="nearest-trip">
-        <OutcomeCard<TripOutcomeValue>
-          key={outcome.id}
-          outcome={outcome}
-          title={`Nearest trip settlement: ${highlight.name}`}
-          retrying={retryingOutcomeId === outcome.id}
-          onRetry={retryFor?.(outcome.id)}
-          valueSummary={`${received ? 'You are owed' : 'You owe'} ${amount}`}
-          renderValue={() => (
-            <ClassifiedValue
-              label={received ? 'You are owed' : 'You owe'}
-              classification="calculated_result"
-              value={amount}
-              emphasis
-            />
-          )}
-        />
-        {action && <ActionLink to={action.to} label={action.label} showDisclaimer />}
-      </div>
+      <OutcomeCard<TripOutcomeValue>
+        key={outcome.id}
+        outcome={outcome}
+        title={`Nearest trip settlement: ${highlight.name}`}
+        retrying={retryingOutcomeId === outcome.id}
+        onRetry={retryFor?.(outcome.id)}
+        footer={action ? <ActionLink to={action.to} label={action.label} showDisclaimer /> : undefined}
+        valueSummary={`${received ? 'You are owed' : 'You owe'} ${amount}`}
+        renderValue={() => (
+          <ClassifiedValue
+            label={received ? 'You are owed' : 'You owe'}
+            classification="calculated_result"
+            value={amount}
+            emphasis
+          />
+        )}
+      />
     );
   } else if (model.tripCount === 0) {
     tripRegion = (
@@ -250,20 +247,29 @@ export function MonthlyClaritySummary({
 
   const actionsOffered = model.actions.length > 0;
 
+  // A region with nothing to show is left out, so the key-number row never has an empty cell. The row
+  // lays out as many columns as fit and the count tells the stylesheet which widths would leave a
+  // short last row (see monthlyClarity.css).
+  const regionCount = 2 + (goalRegion || firstGoalProblem ? 1 : 0) + 1;
+
   return (
     <div className="monthly-clarity" data-testid="monthly-clarity-summary">
-      <div className="monthly-clarity-grid">
-        <div className="monthly-clarity-region" data-region="monthly-plan">{planCard}</div>
-        <div className="monthly-clarity-region" data-region="spending">{savingsCard}</div>
-        <div className="monthly-clarity-region" data-region="goal">
-          {goalRegion}
-          {firstGoalProblem && card<GoalOutcomeValue>(firstGoalProblem, 'Goal needs attention')}
-          <MoreProblems count={model.goalProblems.length - 1} to="/goals" label="Open goals" />
-        </div>
-        <div className="monthly-clarity-region" data-region="trip">
-          {tripRegion}
-          {firstTripProblem && card<TripOutcomeValue>(firstTripProblem, 'Trip needs attention')}
-          <MoreProblems count={model.tripProblems.length - 1} to="/trips" label="Open trips" />
+      <div className="monthly-clarity-fit">
+        <div className="monthly-clarity-grid" data-count={regionCount}>
+          <div className="monthly-clarity-region" data-region="monthly-plan">{planCard}</div>
+          <div className="monthly-clarity-region" data-region="spending">{savingsCard}</div>
+          {(goalRegion || firstGoalProblem) && (
+            <div className="monthly-clarity-region" data-region="goal">
+              {goalRegion}
+              {firstGoalProblem && card<GoalOutcomeValue>(firstGoalProblem, 'Goal needs attention')}
+              <MoreProblems count={model.goalProblems.length - 1} to="/goals" label="Open goals" />
+            </div>
+          )}
+          <div className="monthly-clarity-region" data-region="trip">
+            {tripRegion}
+            {firstTripProblem && card<TripOutcomeValue>(firstTripProblem, 'Trip needs attention')}
+            <MoreProblems count={model.tripProblems.length - 1} to="/trips" label="Open trips" />
+          </div>
         </div>
       </div>
 
