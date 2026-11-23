@@ -81,6 +81,10 @@ export function GoogleSignInButton({
         if (cancelled) return;
         const api = window.google?.accounts?.id;
         if (!api || !host.current) return;
+        // Clear any previously-rendered button. StrictMode double-invokes this
+        // effect in dev; without the clear, two buttons stack and produce a
+        // "Sign up with GoogleSign up with Google" double label.
+        host.current.innerHTML = '';
         api.initialize({
           client_id: CLIENT_ID,
           callback: (r) => {
@@ -119,6 +123,12 @@ export function GoogleSignInButton({
           opacity: disabled ? 0.5 : 1,
           pointerEvents: disabled ? 'none' : 'auto',
           minHeight: ready ? 44 : 0,
+          // Hard-cap the button container. When GSI falls back (e.g. the
+          // Google Console origin doesn't match the current URL), its SVG
+          // can otherwise balloon to the full card width.
+          width: 280,
+          maxWidth: '100%',
+          overflow: 'hidden',
         }}
       />
       {err && <small className="muted">{err}</small>}
