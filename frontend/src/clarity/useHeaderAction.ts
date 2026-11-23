@@ -18,10 +18,8 @@ export function useHeaderAction(page: ActionPage, options: { tripId?: number } =
   const store = useOptionalClarityStore() ?? EMPTY_STORE;
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { tripId } = options;
-  // Read at render time so a month rollover, which re-renders the page, selects the new month's snapshot.
-  const month = currentMonth();
   return useMemo(() => {
-    const snapshot = selectVisibleSnapshot(state, month);
+    const snapshot = selectVisibleSnapshot(state, currentMonth());
     return pickPageAction(snapshot?.actions, page, { tripId });
-  }, [state, month, page, tripId]);
+  }, [state, page, tripId]);
 }

@@ -1,6 +1,3 @@
-import { readClientFeatureFlags } from './clarity/rollout';
-import { kolkataMonth } from './clarity/quickAdd/kolkata';
-
 const fmt0 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 const fmt2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -33,15 +30,7 @@ export function amountToInput(n: number | null | undefined): string {
 
 export const toPaise = (n: number): number => Math.round(n * 100);
 
-/**
- * The current month as `YYYY-MM`. While the Rollout_Flag is on this is the Asia/Kolkata month,
- * corrected by the server time of the latest response, so every clarity page names the server's
- * month. While it is off this is the device-clock month, exactly as before. Call it during render,
- * with `useKolkataMonth()` in the component so a rollover re-renders, and never keep it in a
- * module constant.
- */
 export function currentMonth(): string {
-  if (readClientFeatureFlags().financialClarityEnabled) return kolkataMonth();
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }

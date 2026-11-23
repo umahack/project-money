@@ -77,7 +77,6 @@ async function seedAccountGraph(base, { isAdmin = 0 } = {}) {
     feedbackId: base + 13,
     auditId: base + 14,
     visitId: base + 15,
-    countedExpenseId: base + 16,
     email: `account-${base + 1}@example.test`,
     peerEmail: `account-${base + 2}@example.test`,
     publicToken: (base + 6).toString(16).padStart(32, '0'),
@@ -96,22 +95,6 @@ async function seedAccountGraph(base, { isAdmin = 0 } = {}) {
     ['INSERT INTO recurring_expenses (user_id, label, amount, category, day_of_month) VALUES (?, ?, ?, ?, ?)', [graph.userId, 'Subscription', 500, 'Bills', 1]],
     ['INSERT INTO savings_goals (user_id, name, target_amount, saved_amount, target_date) VALUES (?, ?, ?, ?, ?)', [graph.userId, 'Emergency fund', 200_000, 50_000, '2026-12-31']],
     ['INSERT INTO user_categories (user_id, name) VALUES (?, ?)', [graph.userId, 'Family']],
-    ['INSERT INTO user_categories (user_id, name) VALUES (?, ?)', [graph.peerId, 'Family']],
-    // The expense the account marked as not counted in the daily allowance, and one that is counted.
-    ['UPDATE expense_log SET exclude_from_daily_allowance = 1 WHERE id = ?', [graph.expenseId]],
-    ['INSERT INTO expense_log (id, user_id, month, category, amount, note, spent_on) VALUES (?, ?, ?, ?, ?, ?, ?)', [graph.countedExpenseId, graph.userId, '2026-01', 'Food', 12.5, 'Counted lunch', '2026-01-16']],
-    // Remembered category choices: two for the account (one with a different letter case than the custom category),
-    // two for the peer that must never reach the account's export or be touched by its deletion.
-    [`INSERT INTO category_memory (user_id, note_key, category, revision, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?)`, [graph.userId, 'family dinner', 'Family', '2026-01-15T06:30:00.000Z', '2026-01-15T06:30:00.000Z']],
-    [`INSERT INTO category_memory (user_id, note_key, category, revision, created_at, updated_at)
-      VALUES (?, ?, ?, 2, ?, ?)`, [graph.userId, 'family trip', 'FAMILY', '2026-01-15T06:31:00.000Z', '2026-01-15T06:32:00.000Z']],
-    [`INSERT INTO category_memory (user_id, note_key, category, revision, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?)`, [graph.userId, 'taxi to airport', 'Travel', '2026-01-15T06:33:00.000Z', '2026-01-15T06:33:00.000Z']],
-    [`INSERT INTO category_memory (user_id, note_key, category, revision, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?)`, [graph.peerId, 'family dinner', 'Family', '2026-01-15T06:34:00.000Z', '2026-01-15T06:34:00.000Z']],
-    [`INSERT INTO category_memory (user_id, note_key, category, revision, created_at, updated_at)
-      VALUES (?, ?, ?, 1, ?, ?)`, [graph.peerId, 'peer private note', 'Travel', '2026-01-15T06:35:00.000Z', '2026-01-15T06:35:00.000Z']],
     ['INSERT INTO user_aliases (user_id, email) VALUES (?, ?)', [graph.userId, `alias-${graph.email}`]],
     ['INSERT INTO trips (id, user_id, name, budget, public_token, public_enabled) VALUES (?, ?, ?, ?, ?, 1)', [graph.tripId, graph.userId, 'Owned trip', 50_000, graph.publicToken]],
     ['INSERT INTO trip_members (trip_id, user_id, name, email) VALUES (?, ?, ?, ?)', [graph.tripId, graph.userId, 'Account owner', graph.email]],
@@ -182,7 +165,6 @@ async function assertEveryInScopeTableSeeded(graph) {
     ['recurring_expenses', 'SELECT COUNT(*) AS count FROM recurring_expenses WHERE user_id = ?', [graph.userId]],
     ['savings_goals', 'SELECT COUNT(*) AS count FROM savings_goals WHERE user_id = ?', [graph.userId]],
     ['user_categories', 'SELECT COUNT(*) AS count FROM user_categories WHERE user_id = ?', [graph.userId]],
-    ['category_memory', 'SELECT COUNT(*) AS count FROM category_memory WHERE user_id = ?', [graph.userId]],
     ['user_aliases', 'SELECT COUNT(*) AS count FROM user_aliases WHERE user_id = ?', [graph.userId]],
     ['trips', 'SELECT COUNT(*) AS count FROM trips WHERE user_id = ?', [graph.userId]],
     ['trip_members', 'SELECT COUNT(*) AS count FROM trip_members WHERE user_id = ?', [graph.userId]],
@@ -237,8 +219,6 @@ async function deletionSnapshot(graph) {
     publicLink,
     peerExpense,
     peerTrip,
-    categoryMemory,
-    peerMemory,
   ] = await Promise.all([
     count('SELECT COUNT(*) AS count FROM users WHERE id = ?', graph.userId),
     count('SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?', graph.userId),
@@ -262,8 +242,6 @@ async function deletionSnapshot(graph) {
     count('SELECT COUNT(*) AS count FROM trips WHERE public_token = ? AND public_enabled = 1', graph.publicToken),
     count('SELECT COUNT(*) AS count FROM expense_log WHERE id = ? AND user_id = ?', graph.peerExpenseId, graph.peerId),
     count('SELECT COUNT(*) AS count FROM trips WHERE id = ? AND user_id = ?', graph.sharedTripId, graph.peerId),
-    count('SELECT COUNT(*) AS count FROM category_memory WHERE user_id = ?', graph.userId),
-    count('SELECT COUNT(*) AS count FROM category_memory WHERE user_id = ?', graph.peerId),
   ]);
 
   return {
@@ -289,8 +267,6 @@ async function deletionSnapshot(graph) {
     publicLink,
     peerExpense,
     peerTrip,
-    categoryMemory,
-    peerMemory,
   };
 }
 
@@ -298,8 +274,6 @@ function assertDeletedSnapshot(snapshot) {
   for (const [category, value] of Object.entries(snapshot)) {
     if (category === 'peerExpense' || category === 'peerTrip') {
       assert.equal(value, 1, `${category} must be preserved`);
-    } else if (category === 'peerMemory') {
-      assert.equal(value, 2, `${category} must be preserved`);
     } else {
       assert.equal(value, 0, `${category} must be removed or unlinked`);
     }
@@ -351,7 +325,6 @@ test('authenticated export covers every Financial Clarity record and omits the H
     'public_sharing_settings',
     'product_measurement_events',
     'visits',
-    'category_memory',
   ];
 
   for (const collection of requiredCollections) {
@@ -371,99 +344,6 @@ test('authenticated export covers every Financial Clarity record and omits the H
     false
   );
   assert.equal(JSON.stringify(response.body).includes(INTERNAL_HMAC), false);
-});
-
-test('export describes and carries category memory and the exclusion without another account\'s rows', async () => {
-  const graph = await seedAccountGraph(30_500);
-  const response = await request(app)
-    .get('/api/auth/export')
-    .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-
-  assert.equal(response.status, 200);
-  assert.equal(
-    response.body.schema.tables.category_memory,
-    'Remembered category choices used to suggest a category for notes you type in Quick Add.'
-  );
-  assert.match(response.body.schema.tables.expenses, /counted in the daily allowance/);
-
-  const memory = response.body.data.category_memory;
-  assert.deepEqual(
-    memory.map((entry) => [entry.note_key, entry.category, entry.revision]).sort(),
-    [['family dinner', 'Family', 1], ['family trip', 'FAMILY', 2], ['taxi to airport', 'Travel', 1]]
-  );
-  for (const entry of memory) {
-    assert.deepEqual(
-      Object.keys(entry).sort(),
-      ['category', 'created_at', 'id', 'note_key', 'revision', 'updated_at']
-    );
-  }
-  assert.equal(JSON.stringify(response.body).includes('peer private note'), false);
-
-  const marks = Object.fromEntries(
-    response.body.data.expenses.map((expense) => [expense.id, expense.exclude_from_daily_allowance])
-  );
-  assert.equal(marks[graph.expenseId], 1);
-  assert.equal(marks[graph.countedExpenseId], null);
-});
-
-test('an empty category memory exports as an empty described collection', async () => {
-  const graph = await seedAccountGraph(30_700);
-  await db.prepare('DELETE FROM category_memory WHERE user_id = ?').run(graph.userId);
-  const response = await request(app)
-    .get('/api/auth/export')
-    .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-
-  assert.equal(response.status, 200);
-  assert.deepEqual(response.body.data.category_memory, []);
-  assert.equal(typeof response.body.schema.tables.category_memory, 'string');
-});
-
-test('CSV export ends with counted_in_daily_allowance and keeps the first five columns and the formula guard', async () => {
-  const graph = await seedAccountGraph(30_800);
-  await db.batch([
-    ['UPDATE expense_log SET note = ? WHERE id = ?', ['=marked, "quoted"', graph.expenseId]],
-    [`INSERT INTO expense_log (user_id, month, category, amount, note, spent_on, exclude_from_daily_allowance)
-      VALUES (?, ?, ?, ?, ?, ?, 0)`, [graph.userId, '2026-01', 'Other', 7, 'stored zero', '2026-01-17']],
-  ]);
-
-  const response = await request(app)
-    .get('/api/finance/export.csv')
-    .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-
-  assert.equal(response.status, 200);
-  const lines = response.text.split('\n');
-  assert.equal(lines[0], 'date,month,category,amount,note,counted_in_daily_allowance');
-  assert.equal(lines.at(-1), '');
-  assert.deepEqual(lines.slice(1, -1), [
-    '2026-01-15,2026-01,Travel,25,"\'=marked, ""quoted""",no',
-    '2026-01-16,2026-01,Food,12.5,Counted lunch,yes',
-    '2026-01-17,2026-01,Other,7,stored zero,yes',
-  ]);
-  assert.equal(response.text.includes('Peer personal share'), false);
-});
-
-test('export failure reports category memory when only that table is unreadable', async () => {
-  const graph = await seedAccountGraph(30_900);
-  const before = await deletionSnapshot(graph);
-
-  await db.prepare('ALTER TABLE category_memory RENAME TO unavailable_category_memory').run();
-  let response;
-  try {
-    response = await request(app)
-      .get('/api/auth/export')
-      .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-  } finally {
-    await db.prepare('ALTER TABLE unavailable_category_memory RENAME TO category_memory').run();
-  }
-
-  assert.equal(response.status, 500);
-  assert.equal(response.body.code, 'EXPORT_FAILED');
-  assert.deepEqual(response.body.failed_record_categories, [{
-    key: 'category_memory',
-    description: 'Remembered category choices used to suggest a category for notes you type in Quick Add.',
-  }]);
-  assert.equal(response.body.retry.path, '/api/auth/export');
-  assert.deepEqual(await deletionSnapshot(graph), before);
 });
 
 test('export failure is structured, retryable, and leaves account records unchanged', async () => {
@@ -576,13 +456,6 @@ const DELETION_FAILURE_GROUPS = Object.freeze([
       BEGIN SELECT RAISE(ABORT, 'injected salary deletion failure'); END`,
   },
   {
-    name: 'category memory',
-    trigger: `CREATE TRIGGER reject_account_dependency_group
-      BEFORE DELETE ON category_memory
-      BEGIN SELECT RAISE(ABORT, 'injected category-memory deletion failure'); END`,
-    reportedCategory: 'category_memory',
-  },
-  {
     name: 'device sessions',
     trigger: `CREATE TRIGGER reject_account_dependency_group
       BEFORE DELETE ON sessions
@@ -657,18 +530,6 @@ test('self-service and admin deletion failures stay aligned at every dependency 
         assert.equal(typeof category.key, 'string');
         assert.ok(category.description.length > 10, category.key);
       }
-      if (failureGroup.reportedCategory) {
-        for (const body of [selfResponse.body, adminResponse.body]) {
-          const reported = body.undeleted_record_categories.find(
-            (category) => category.key === failureGroup.reportedCategory
-          );
-          assert.ok(reported, `${failureGroup.reportedCategory} must be reported as undeleted`);
-          assert.equal(
-            reported.description,
-            'Remembered category choices used to suggest categories in Quick Add.'
-          );
-        }
-      }
 
       assert.deepEqual(await deletionSnapshot(selfGraph), selfBefore);
       assert.deepEqual(await deletionSnapshot(adminGraph), adminBefore);
@@ -679,88 +540,4 @@ test('self-service and admin deletion failures stay aligned at every dependency 
       }
     });
   }
-});
-
-async function memoryRows(userId) {
-  const rows = await db.prepare(
-    'SELECT note_key, category FROM category_memory WHERE user_id = ? ORDER BY note_key'
-  ).all(userId);
-  return rows.map((row) => [row.note_key, row.category]);
-}
-
-async function customCategoryId(userId, name) {
-  const row = await db.prepare('SELECT id FROM user_categories WHERE user_id = ? AND name = ?').get(userId, name);
-  return Number(row.id);
-}
-
-test('deleting a custom category removes only that category\'s memory for that account', async () => {
-  const graph = await seedAccountGraph(60_000);
-  const familyId = await customCategoryId(graph.userId, 'Family');
-  const peerFamilyId = await customCategoryId(graph.peerId, 'Family');
-  const expensesBefore = await count('SELECT COUNT(*) AS count FROM expense_log WHERE user_id = ?', graph.userId);
-
-  const response = await request(app)
-    .delete(`/api/finance/categories/${familyId}`)
-    .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-
-  assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { ok: true });
-  assert.equal(await count('SELECT COUNT(*) AS count FROM user_categories WHERE id = ?', familyId), 0);
-  // Both letter cases of the removed category are gone. The built-in Travel choice stays.
-  assert.deepEqual(await memoryRows(graph.userId), [['taxi to airport', 'Travel']]);
-  // The peer's category with the same name, and the peer's memory, are untouched.
-  assert.equal(await count('SELECT COUNT(*) AS count FROM user_categories WHERE id = ?', peerFamilyId), 1);
-  assert.deepEqual(await memoryRows(graph.peerId), [
-    ['family dinner', 'Family'],
-    ['peer private note', 'Travel'],
-  ]);
-  assert.equal(
-    await count('SELECT COUNT(*) AS count FROM expense_log WHERE user_id = ?', graph.userId),
-    expensesBefore
-  );
-});
-
-test('deleting a category the account does not own answers 404 and removes no memory', async () => {
-  const graph = await seedAccountGraph(61_000);
-  const peerFamilyId = await customCategoryId(graph.peerId, 'Family');
-  const memoryBefore = await memoryRows(graph.peerId);
-
-  const foreign = await request(app)
-    .delete(`/api/finance/categories/${peerFamilyId}`)
-    .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-  const missing = await request(app)
-    .delete('/api/finance/categories/999999')
-    .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-
-  assert.equal(foreign.status, 404);
-  assert.deepEqual(foreign.body, { error: 'Not found' });
-  assert.equal(missing.status, 404);
-  assert.deepEqual(missing.body, { error: 'Not found' });
-  assert.deepEqual(await memoryRows(graph.peerId), memoryBefore);
-  assert.equal(await count('SELECT COUNT(*) AS count FROM user_categories WHERE id = ?', peerFamilyId), 1);
-  assert.equal((await memoryRows(graph.userId)).length, 3);
-});
-
-test('a failed memory delete keeps the custom category and its memory together', async () => {
-  const graph = await seedAccountGraph(62_000);
-  const familyId = await customCategoryId(graph.userId, 'Family');
-  const memoryBefore = await memoryRows(graph.userId);
-
-  await db.prepare(
-    `CREATE TRIGGER reject_category_memory_delete
-       BEFORE DELETE ON category_memory
-       BEGIN SELECT RAISE(ABORT, 'injected category-memory deletion failure'); END`
-  ).run();
-  let response;
-  try {
-    response = await request(app)
-      .delete(`/api/finance/categories/${familyId}`)
-      .set('Authorization', authorizationFor(graph.userId, graph.sessionId));
-  } finally {
-    await db.prepare('DROP TRIGGER reject_category_memory_delete').run();
-  }
-
-  assert.equal(response.status, 500);
-  assert.equal(await count('SELECT COUNT(*) AS count FROM user_categories WHERE id = ?', familyId), 1);
-  assert.deepEqual(await memoryRows(graph.userId), memoryBefore);
 });

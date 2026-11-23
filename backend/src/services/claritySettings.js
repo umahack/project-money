@@ -1,10 +1,8 @@
 import { FINANCIAL_CLARITY_TIME_ZONE } from '../domain/monthlyPlan.js';
 import measurementRepository from '../repositories/measurementRepository.js';
-import { readServerFeatureFlags } from '../rollout/featureFlags.js';
 
 export const CLARITY_SETTINGS_SCHEMA_VERSION = 1;
 export const CURRENT_DATA_USE_NOTICE_VERSION = 1;
-export const CATEGORY_MEMORY_DATA_USE_NOTICE_VERSION = 2;
 export const CURRENT_ANALYTICS_CONSENT_VERSION = 1;
 
 const SETTINGS_PATCH_FIELDS = Object.freeze([
@@ -151,58 +149,6 @@ export const DATA_USE_NOTICE = Object.freeze({
   }),
 });
 
-const CATEGORY_MEMORY_NOTICE_CATEGORY = Object.freeze({
-  key: 'category_memory',
-  purposes: Object.freeze(['suggest a category for notes you have typed before']),
-  outcomes: Object.freeze(['category_suggestion']),
-  accessRoles: ACCOUNT_AND_SERVICE_ACCESS,
-  sharing: 'private',
-  retention: 'until_account_deletion',
-  controls: Object.freeze([
-    'view',
-    'delete_one',
-    'delete_all',
-    'export',
-    'account_deletion',
-  ]),
-});
-
-const CATEGORY_MEMORY_DATA_USE_NOTICE = Object.freeze({
-  ...DATA_USE_NOTICE,
-  version: CATEGORY_MEMORY_DATA_USE_NOTICE_VERSION,
-  categories: Object.freeze([
-    ...DATA_USE_NOTICE.categories.map((category) => category.key === 'expenses'
-      ? Object.freeze({
-        ...category,
-        purposes: Object.freeze([
-          ...category.purposes,
-          'calculate and explain today\'s spending allowance, including whether an expense is counted against it',
-        ]),
-        outcomes: Object.freeze([...category.outcomes, 'today_allowance']),
-      })
-      : category),
-    CATEGORY_MEMORY_NOTICE_CATEGORY,
-  ]),
-});
-
-function noticeVersionForFeatureFlags(featureFlags) {
-  return featureFlags?.quickAddEnabled === true
-    ? CATEGORY_MEMORY_DATA_USE_NOTICE_VERSION
-    : CURRENT_DATA_USE_NOTICE_VERSION;
-}
-
-export function currentDataUseNoticeVersion(environment = process.env) {
-  return noticeVersionForFeatureFlags(readServerFeatureFlags(environment));
-}
-
-export function dataUseNoticeForVersion(version) {
-  if (version === CURRENT_DATA_USE_NOTICE_VERSION) return DATA_USE_NOTICE;
-  if (version === CATEGORY_MEMORY_DATA_USE_NOTICE_VERSION) {
-    return CATEGORY_MEMORY_DATA_USE_NOTICE;
-  }
-  throw new RangeError('Data-use notice version is not supported.');
-}
-
 function settingsError(code, message, httpStatus, details = {}) {
   return new ClaritySettingsError({ code, message, httpStatus, details });
 }
@@ -223,7 +169,7 @@ function assertPositiveUserId(userId) {
   }
 }
 
-function validateSettingsPatch(patch, currentNoticeVersion) {
+function validateSettingsPatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
     throw settingsError(
       'INVALID_SETTINGS_PATCH',
@@ -254,14 +200,14 @@ function validateSettingsPatch(patch, currentNoticeVersion) {
 
   if (Object.hasOwn(patch, 'acknowledgedNoticeVersion')) {
     if (!Number.isSafeInteger(patch.acknowledgedNoticeVersion)
-      || patch.acknowledgedNoticeVersion !== currentNoticeVersion) {
+      || patch.acknowledgedNoticeVersion !== CURRENT_DATA_USE_NOTICE_VERSION) {
       throw settingsError(
         'INVALID_NOTICE_VERSION',
         'acknowledgedNoticeVersion must equal the current data-use notice version.',
         400,
         {
           field: 'acknowledgedNoticeVersion',
-          currentNoticeVersion,
+          currentNoticeVersion: CURRENT_DATA_USE_NOTICE_VERSION,
         }
       );
     }
@@ -295,18 +241,14 @@ function isoTimestamp(value) {
   return Number.isNaN(timestamp.getTime()) ? value : timestamp.toISOString();
 }
 
-function dataNoticeRequiredError({
-  requiredNoticeVersion,
-  currentNoticeVersion,
-  acknowledgedNoticeVersion,
-}) {
+function dataNoticeRequiredError({ requiredNoticeVersion, acknowledgedNoticeVersion }) {
   return settingsError(
     'DATA_NOTICE_REQUIRED',
     'Review and acknowledge the current data-use notice before submitting this financial command.',
     428,
     {
       requiredNoticeVersion,
-      currentNoticeVersion,
+      currentNoticeVersion: CURRENT_DATA_USE_NOTICE_VERSION,
       acknowledgedNoticeVersion,
       settingsPath: '/api/clarity/settings',
     }
@@ -316,12 +258,10 @@ function dataNoticeRequiredError({
 export class ClaritySettingsService {
   #repository;
   #timeZone;
-  #readFeatureFlags;
 
   constructor({
     repository = measurementRepository,
     timeZone = FINANCIAL_CLARITY_TIME_ZONE,
-    readFeatureFlags = readServerFeatureFlags,
   } = {}) {
     if (!repository
       || typeof repository.getConsentState !== 'function'
@@ -332,16 +272,8 @@ export class ClaritySettingsService {
     if (timeZone !== FINANCIAL_CLARITY_TIME_ZONE) {
       throw new RangeError(`timeZone must be ${FINANCIAL_CLARITY_TIME_ZONE}.`);
     }
-    if (typeof readFeatureFlags !== 'function') {
-      throw new TypeError('readFeatureFlags must be a function.');
-    }
     this.#repository = repository;
     this.#timeZone = timeZone;
-    this.#readFeatureFlags = readFeatureFlags;
-  }
-
-  currentDataUseNoticeVersion() {
-    return noticeVersionForFeatureFlags(this.#readFeatureFlags());
   }
 
   async #loadState(userId) {
@@ -353,21 +285,21 @@ export class ClaritySettingsService {
     return state;
   }
 
-  #response(state, currentNoticeVersion) {
+  #response(state) {
     return {
       schemaVersion: CLARITY_SETTINGS_SCHEMA_VERSION,
       schemaVersions: {
         settings: CLARITY_SETTINGS_SCHEMA_VERSION,
-        dataUseNotice: currentNoticeVersion,
+        dataUseNotice: CURRENT_DATA_USE_NOTICE_VERSION,
         productAnalyticsConsent: CURRENT_ANALYTICS_CONSENT_VERSION,
       },
       timeZone: this.#timeZone,
       dataUseNotice: {
-        ...structuredClone(dataUseNoticeForVersion(currentNoticeVersion)),
+        ...structuredClone(DATA_USE_NOTICE),
         acknowledgedVersion: state.dataUseNoticeVersion,
         acknowledgedAt: isoTimestamp(state.dataUseAcknowledgedAt),
         acknowledgementRequired:
-          state.dataUseNoticeVersion < currentNoticeVersion,
+          state.dataUseNoticeVersion < CURRENT_DATA_USE_NOTICE_VERSION,
       },
       productAnalytics: {
         available: true,
@@ -380,8 +312,7 @@ export class ClaritySettingsService {
   }
 
   async getSettings({ userId }) {
-    const state = await this.#loadState(userId);
-    return this.#response(state, this.currentDataUseNoticeVersion());
+    return this.#response(await this.#loadState(userId));
   }
 
   /** Current Product Analytics consent, read at call time for ingestion gates. */
@@ -393,25 +324,18 @@ export class ClaritySettingsService {
     };
   }
 
-  async assertDataUseNotice({ userId, requiredNoticeVersion } = {}) {
-    const currentNoticeVersion = this.currentDataUseNoticeVersion();
-    // Only an omitted version defaults to the current one; null and other
-    // invalid values must still be rejected below.
-    const requiredVersion = requiredNoticeVersion === undefined
-      ? currentNoticeVersion
-      : requiredNoticeVersion;
-    if (!Number.isSafeInteger(requiredVersion)
-      || requiredVersion < 0
-      || requiredVersion > currentNoticeVersion) {
+  async assertDataUseNotice({ userId, requiredNoticeVersion }) {
+    if (!Number.isSafeInteger(requiredNoticeVersion)
+      || requiredNoticeVersion < 0
+      || requiredNoticeVersion > CURRENT_DATA_USE_NOTICE_VERSION) {
       throw new RangeError(
-        `requiredNoticeVersion must be between 0 and ${currentNoticeVersion}.`
+        `requiredNoticeVersion must be between 0 and ${CURRENT_DATA_USE_NOTICE_VERSION}.`
       );
     }
     const state = await this.#loadState(userId);
-    if (requiredVersion > state.dataUseNoticeVersion) {
+    if (requiredNoticeVersion > state.dataUseNoticeVersion) {
       throw dataNoticeRequiredError({
-        requiredNoticeVersion: requiredVersion,
-        currentNoticeVersion,
+        requiredNoticeVersion,
         acknowledgedNoticeVersion: state.dataUseNoticeVersion,
       });
     }
@@ -419,17 +343,15 @@ export class ClaritySettingsService {
   }
 
   async updateSettings({ userId, patch }) {
-    const currentNoticeVersion = this.currentDataUseNoticeVersion();
-    const normalizedPatch = validateSettingsPatch(patch, currentNoticeVersion);
+    const normalizedPatch = validateSettingsPatch(patch);
     let state = await this.#loadState(userId);
     const resultingAcknowledgedVersion = normalizedPatch.acknowledgedNoticeVersion
       ?? state.dataUseNoticeVersion;
 
     if (normalizedPatch.analyticsEnabled === true
-      && resultingAcknowledgedVersion < currentNoticeVersion) {
+      && resultingAcknowledgedVersion < CURRENT_DATA_USE_NOTICE_VERSION) {
       throw dataNoticeRequiredError({
-        requiredNoticeVersion: currentNoticeVersion,
-        currentNoticeVersion,
+        requiredNoticeVersion: CURRENT_DATA_USE_NOTICE_VERSION,
         acknowledgedNoticeVersion: state.dataUseNoticeVersion,
       });
     }
@@ -451,7 +373,7 @@ export class ClaritySettingsService {
       });
     }
 
-    return this.#response(state, currentNoticeVersion);
+    return this.#response(state);
   }
 }
 

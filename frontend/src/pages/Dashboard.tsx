@@ -14,7 +14,6 @@ import { useActionArrival } from '../clarity/useActionArrival';
 import { useClaritySnapshotQuery } from '../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../clarity/useHeaderAction';
 import { buildInsights, legacyDemoInsights } from '../insights';
-import { useKolkataMonth } from '../clarity/quickAdd/kolkata';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
@@ -83,7 +82,7 @@ function useFeedbackThanks(): void {
 
 function ClarityDashboard() {
   const { user } = useAuth();
-  const month = useKolkataMonth();
+  const month = currentMonth();
   const arrival = useActionArrival('home');
   const rankedAction = useHeaderAction('home');
   const query = useClaritySnapshotQuery(month);

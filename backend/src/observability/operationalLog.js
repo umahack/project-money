@@ -73,7 +73,6 @@ export const RECORD_TYPES = Object.freeze([
   'bill',
   'recurring',
   'journey',
-  'category_memory',
 ]);
 
 const HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);

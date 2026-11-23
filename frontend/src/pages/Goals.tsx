@@ -7,8 +7,7 @@ import { selectFinancialClarityRollout } from '../clarity/rollout';
 import { useActionArrival } from '../clarity/useActionArrival';
 import { useClaritySnapshotQuery } from '../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../clarity/useHeaderAction';
-import { useKolkataMonth } from '../clarity/quickAdd/kolkata';
-import { monthLabel } from '../money';
+import { currentMonth, monthLabel } from '../money';
 
 /**
  * Goals. With `VITE_FINANCIAL_CLARITY_ENABLED` off this is the legacy page,
@@ -42,7 +41,7 @@ function LegacyGoals() {
 }
 
 function ClarityGoals() {
-  const month = useKolkataMonth();
+  const month = currentMonth();
   // Scrolls to and focuses the goal named by the link that opened this page. The goal opens its own form when the link asks for one.
   const arrival = useActionArrival('goals');
   const rankedAction = useHeaderAction('goals');

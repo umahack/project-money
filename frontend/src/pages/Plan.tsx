@@ -17,8 +17,7 @@ import { useClaritySnapshotQuery } from '../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../clarity/useHeaderAction';
 import { PlanInputs } from '../components/PlanInputs';
 import { buildInsights, legacyDemoInsights } from '../insights';
-import { useKolkataMonth } from '../clarity/quickAdd/kolkata';
-import { inr, monthLabel } from '../money';
+import { currentMonth, inr, monthLabel } from '../money';
 import { errText } from '../state';
 import type { Emi, Plan as PlanData } from '../types';
 import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
@@ -191,7 +190,7 @@ function LegacyPlan() {
 const PLAN_SCOPE = /^(salary|bill|new-bill):/;
 
 function ClarityPlan() {
-  const month = useKolkataMonth();
+  const month = currentMonth();
   const monthName = monthLabel(month);
   // Scrolls to and focuses the pay or bills form named by the link that opened this page.
   useActionArrival('plan');

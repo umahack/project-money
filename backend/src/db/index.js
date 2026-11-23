@@ -380,26 +380,6 @@ await raw.execute(`CREATE TABLE IF NOT EXISTS user_categories (
   UNIQUE(user_id, name)
 )`);
 
-// Quick Add and Daily Answer (additive, repeatable, no backfill).
-// NULL means counted in the daily allowance; 1 means not counted. Existing
-// rows are never updated, so every legacy expense stays NULL (counted).
-await addColumnIfMissing('expense_log', 'exclude_from_daily_allowance', 'INTEGER');
-
-// Remembered category choices per user, keyed by the normalized note text.
-// Stores no amounts, notes, or expense IDs.
-await raw.execute(`CREATE TABLE IF NOT EXISTS category_memory (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  note_key TEXT NOT NULL,
-  category TEXT NOT NULL COLLATE NOCASE,
-  revision INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(user_id, note_key)
-)`);
-await raw.execute(`CREATE INDEX IF NOT EXISTS idx_category_memory_user_recency
-  ON category_memory(user_id, updated_at, id)`);
-
 // Pending signup — holds name/password hash + bcrypt-hashed OTP while a new
 // user confirms the code sent to their email. Upserted on resend.
 await raw.execute(`CREATE TABLE IF NOT EXISTS pending_registrations (

@@ -41,7 +41,6 @@ export function MutationStatusProvider({ children }: { children: ReactNode }) {
           method: request.method,
           body: request.body,
           idempotencyKey: request.idempotencyKey,
-          timeoutMs: request.timeoutMs,
         })
     ),
     onConfirmed: (snapshot) => setFinancialSnapshot(queryClientRef.current, snapshot),

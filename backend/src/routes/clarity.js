@@ -4,7 +4,7 @@ import clarityService from '../services/clarityService.js';
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const VERSION_PATTERN = /^(0|[1-9]\d*)$/;
-const PERIOD_OUTCOME_PATTERN = /^(?:monthly-plan|spending|today-allowance|trip-summary):(\d{4}-(?:0[1-9]|1[0-2]))$/;
+const PERIOD_OUTCOME_PATTERN = /^(?:monthly-plan|spending|trip-summary):(\d{4}-(?:0[1-9]|1[0-2]))$/;
 const RECORD_OUTCOME_PATTERN = /^(?:goal|trip):([1-9]\d*)$/;
 
 function contractError(res, status, code, message, details = {}) {

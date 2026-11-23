@@ -7,7 +7,7 @@ import { useFinancialClarity } from '../../clarity/FinancialClarityProvider';
 import { useActionArrival } from '../../clarity/useActionArrival';
 import { useClaritySnapshotQuery } from '../../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../../clarity/useHeaderAction';
-import { useKolkataMonth } from '../../clarity/quickAdd/kolkata';
+import { currentMonth } from '../../money';
 import { useAuth } from '../../state';
 import { ClarityPageHeader } from '../clarity/ClarityPageHeader';
 import { DecisionActionHeader } from '../clarity/DecisionActionHeader';
@@ -41,7 +41,7 @@ const TAB_LABELS: Record<TripTab, string> = {
 export function ClarityTripDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const month = useKolkataMonth();
+  const month = currentMonth();
   const gate = useDataUseGate();
   const [params, setParams] = useSearchParams();
   // Opens the tab and focuses the form named by the link that opened this page.

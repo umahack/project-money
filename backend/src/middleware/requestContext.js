@@ -34,7 +34,6 @@ const ID_PATTERN = /^[1-9]\d{0,14}$/;
 const RECORD_FAMILIES = Object.freeze([
   ['/api/finance/goals/:id', 'goal'],
   ['/api/finance/expenses/:id', 'expense'],
-  ['/api/finance/category-memory/:id', 'category_memory'],
   ['/api/finance/emis/:id', 'bill'],
   ['/api/finance/recurring/:id', 'recurring'],
   ['/api/trips/:id', 'trip'],
@@ -84,8 +83,6 @@ function observedFamily(label, req) {
   return label.startsWith('/api/clarity/')
     || label === '/api/finance/clarity'
     || label.startsWith('/api/finance/explanations/')
-    || label.startsWith('/api/finance/quick-add/')
-    || label.startsWith('/api/finance/category-memory')
     || label.startsWith('/api/admin/clarity-reports')
     || label.startsWith('/api/internal/cron/clarity-reports')
     || label === '/api/auth/export'

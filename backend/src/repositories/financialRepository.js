@@ -51,9 +51,6 @@ function mapExpense(row) {
     amount: row.amount,
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? row.created_at,
-    // Nullable column: only a stored 1 marks the expense as not counted
-    // against the daily allowance; NULL (every legacy row) means counted.
-    excludeFromDailyAllowance: Number(row.exclude_from_daily_allowance) === 1,
   }, [{ sourceField: 'amount', targetField: 'amountMinor' }], {
     sourceType: 'expense',
   });
@@ -183,7 +180,7 @@ export class FinancialRepository {
       ).all(userId, month, month),
       this.#database.prepare(
         `SELECT id, user_id, month, category, amount, note, spent_on,
-                created_at, updated_at, exclude_from_daily_allowance
+                created_at, updated_at
            FROM expense_log
           WHERE user_id = ? AND month = ?
           ORDER BY id`

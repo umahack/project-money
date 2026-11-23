@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  OUTCOME_KINDS,
   OUTCOME_STATUSES,
   PUBLIC_TRIP_OUTCOME_TYPE,
   VALUE_CLASSIFICATIONS,
@@ -34,18 +33,6 @@ function sourceAccess() {
     resourceScope: 'user:41:month:2026-11',
   });
 }
-
-test('financial snapshot outcome kinds include today allowance', () => {
-  assert.deepEqual(Object.values(OUTCOME_KINDS), [
-    'monthly_plan',
-    'spending',
-    'goal',
-    'trip',
-    'trip_summary',
-    'today_allowance',
-  ]);
-  assert.equal(Object.isFrozen(OUTCOME_KINDS), true);
-});
 
 function salarySource(order = 1) {
   return {

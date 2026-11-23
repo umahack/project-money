@@ -15,7 +15,6 @@ export const ACCOUNT_DELETION_CATEGORY_DESCRIPTIONS = Object.freeze({
   recurring_expenses: 'Recurring personal expense definitions.',
   savings_goals: 'Savings goals and their confirmed progress.',
   user_categories: 'Personal expense categories.',
-  category_memory: 'Remembered category choices used to suggest categories in Quick Add.',
   user_aliases: 'Email aliases linked to the account.',
   trip_data: 'Owned trips, memberships, invitations, members, and shared expenses.',
   public_sharing_settings: 'Public links and sharing state for owned trips.',
@@ -76,11 +75,6 @@ const ACCOUNT_DELETION_CATEGORY_PROBES = Object.freeze([
   {
     key: 'user_categories',
     sql: 'SELECT EXISTS(SELECT 1 FROM user_categories WHERE user_id = ?) AS present',
-    args: ({ userId }) => [userId],
-  },
-  {
-    key: 'category_memory',
-    sql: 'SELECT EXISTS(SELECT 1 FROM category_memory WHERE user_id = ?) AS present',
     args: ({ userId }) => [userId],
   },
   {
@@ -249,7 +243,6 @@ export function buildAccountDeletionStatements({ userId, email }) {
     ['DELETE FROM category_budgets WHERE user_id = ?', [userId]],
     ['DELETE FROM recurring_expenses WHERE user_id = ?', [userId]],
     ['DELETE FROM savings_goals WHERE user_id = ?', [userId]],
-    ['DELETE FROM category_memory WHERE user_id = ?', [userId]],
     ['DELETE FROM user_categories WHERE user_id = ?', [userId]],
     ['DELETE FROM user_aliases WHERE user_id = ?', [userId]],
     ['DELETE FROM sessions WHERE user_id = ?', [userId]],

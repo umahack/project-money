@@ -120,7 +120,6 @@ test('converts confirmed legacy expense and treatment rows without changing lega
     amountMinor: 1_250,
     note: null,
     spentOn: '2026-01-02',
-    excludeFromDailyAllowance: false,
   });
   assert.deepEqual(expenseMutations.categoryTreatmentRecordFromRow({
     id: 8,
@@ -131,97 +130,4 @@ test('converts confirmed legacy expense and treatment rows without changing lega
     category: 'Food',
     treatment: 'wants',
   });
-});
-
-test('normalizes the optional daily allowance exclusion without changing omitted create fingerprints', () => {
-  const base = {
-    amountMinor: 1_250,
-    category: 'Food',
-    note: 'Lunch',
-    spentOn: '2026-01-10',
-  };
-
-  const omitted = expenseMutations.normalizeExpenseCreateCommand(base, NOW);
-  const explicitlyCounted = expenseMutations.normalizeExpenseCreateCommand({
-    ...base,
-    excludeFromDailyAllowance: false,
-  }, NOW);
-  const excluded = expenseMutations.normalizeExpenseCreateCommand({
-    ...base,
-    excludeFromDailyAllowance: true,
-  }, NOW);
-
-  assert.deepEqual(explicitlyCounted, omitted);
-  assert.equal(Object.hasOwn(omitted.command, 'excludeFromDailyAllowance'), false);
-  assert.equal(excluded.command.excludeFromDailyAllowance, true);
-  assert.deepEqual(
-    expenseMutations.normalizeExpenseUpdateCommand({
-      excludeFromDailyAllowance: false,
-    }, 42, NOW),
-    {
-      command: { id: 42, patch: { excludeFromDailyAllowance: false } },
-      expectedRecordVersion: undefined,
-    }
-  );
-  assert.deepEqual(
-    expenseMutations.EXPENSE_ACCEPTED_CONSTRAINTS.excludeFromDailyAllowance,
-    { type: 'boolean', optional: true }
-  );
-});
-
-test('rejects every non-boolean daily allowance exclusion with the fixed field constraint', () => {
-  for (const value of [null, 0, 1, 'true', [], {}]) {
-    for (const normalize of [
-      () => expenseMutations.normalizeExpenseCreateCommand({
-        amountMinor: 1_250,
-        category: 'Food',
-        spentOn: '2026-01-10',
-        excludeFromDailyAllowance: value,
-      }, NOW),
-      () => expenseMutations.normalizeExpenseUpdateCommand({
-        excludeFromDailyAllowance: value,
-      }, 42, NOW),
-    ]) {
-      assert.throws(normalize, (error) => (
-        error.code === 'INVALID_EXPENSE_EXCLUSION'
-        && error.httpStatus === 400
-        && error.field === 'excludeFromDailyAllowance'
-        && error.message === 'excludeFromDailyAllowance must be a boolean.'
-        && error.constraint === expenseMutations.EXPENSE_ACCEPTED_CONSTRAINTS.excludeFromDailyAllowance
-      ));
-    }
-  }
-});
-
-test('marks todayAllowance as affected only for current-month expense mutations', async () => {
-  const handlers = expenseMutations.createExpenseOperationHandlers({ database: testDatabase.db });
-  const current = await handlers['expense.create'].getContext({
-    command: { month: '2026-01' },
-    idempotencyKey: 'unit-current',
-    receipt: null,
-    userId: 42,
-    now: NOW,
-  });
-  const past = await handlers['expense.create'].getContext({
-    command: { month: '2025-12' },
-    idempotencyKey: 'unit-past',
-    receipt: null,
-    userId: 42,
-    now: NOW,
-  });
-
-  assert.deepEqual(current.affectedOutcomes.map(({ key }) => key), [
-    'monthlyPlan',
-    'spending',
-    'todayAllowance',
-  ]);
-  assert.deepEqual(current.affectedOutcomes.at(-1), {
-    key: 'todayAllowance',
-    id: 'today-allowance:2026-01',
-    kind: 'today_allowance',
-  });
-  assert.deepEqual(past.affectedOutcomes.map(({ key }) => key), [
-    'monthlyPlan',
-    'spending',
-  ]);
 });
