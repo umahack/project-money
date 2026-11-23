@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
+import { OAuth2Client } from 'google-auth-library';
 import db from '../db/index.js';
 import {
   ACCOUNT_DATA_SUPPORT,
@@ -335,6 +336,12 @@ router.post(
       recordFail(email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    // Google-only account (no password set) — tell the user to use Google.
+    if (row.password_hash === '!google') {
+      return res
+        .status(401)
+        .json({ error: 'This account signs in with Google. Click "Sign in with Google" above.' });
+    }
     const ok = await bcrypt.compare(password, row.password_hash);
     if (!ok) {
       recordFail(email);
@@ -352,6 +359,112 @@ router.post(
     // Up to 3 concurrent devices per account. If this login would push the
     // active count above the cap, the oldest session is revoked and that
     // device's next request returns 401 with the 'another_device' message.
+    const sid = await createSession(user.id, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    res.json({
+      token: sign(user, sid),
+      user: { id: user.id, email: user.email, name: user.name, is_admin: !!is_admin },
+    });
+  }
+);
+
+// ---------- Sign in with Google ----------
+// Google Identity Services hands the browser an ID token (a JWT signed by
+// Google). The client POSTs it here; we verify it against our registered
+// client_id and Google's published keys, then look up or create a user.
+//
+// Account-matching rules:
+//   1. google_sub match        -> same account (always).
+//   2. email match AND Google  -> link to existing password account; set
+//      says email_verified=true    google_sub so future Google sign-ins hit rule 1.
+//   3. no match                -> create a fresh account.
+//
+// The sentinel password_hash '!google' is unmatchable by bcrypt.compare — a
+// password-signin attempt on a Google-only account fails cleanly and is
+// nudged to the Google button by the /login handler.
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+async function upsertGoogleUser(payload) {
+  const sub = String(payload.sub);
+  const email = String(payload.email || '').toLowerCase();
+  const name = String(payload.name || payload.given_name || email.split('@')[0]).slice(0, 60);
+  if (!sub || !email) throw new Error('Google payload missing sub or email');
+
+  // 1. By google_sub.
+  let row = await db.prepare('SELECT * FROM users WHERE google_sub = ?').get(sub);
+  if (row) return row;
+
+  // 2. By email — link onto the existing password account. Only trusted
+  //    when Google reports the email as verified.
+  if (payload.email_verified === true) {
+    row = await db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
+    if (row) {
+      await db.prepare('UPDATE users SET google_sub = ? WHERE id = ?').run(sub, row.id);
+      return { ...row, google_sub: sub };
+    }
+  }
+
+  // 3. Fresh account. Sentinel password_hash is unmatchable.
+  const info = await db
+    .prepare('INSERT INTO users (email, name, password_hash, google_sub) VALUES (?, ?, ?, ?)')
+    .run(email, name, '!google', sub);
+  return {
+    id: info.lastInsertRowid,
+    email,
+    name,
+    password_hash: '!google',
+    is_admin: 0,
+    token_version: 1,
+    google_sub: sub,
+  };
+}
+
+router.post(
+  '/google',
+  authLimiter,
+  [body('credential').isString().isLength({ min: 20, max: 4096 })],
+  async (req, res) => {
+    if (!googleClient) {
+      return res.status(503).json({ error: 'Sign in with Google is not configured on this server.' });
+    }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Invalid Google credential' });
+
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: req.body.credential,
+        audience: GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (err) {
+      operationalLogger.warn({ event: 'GOOGLE_VERIFY_FAILED', reason: safeErrorName(err) });
+      return res.status(401).json({ error: 'Could not verify Google sign-in. Please try again.' });
+    }
+    if (!payload || payload.email_verified !== true) {
+      return res.status(401).json({ error: 'Google sign-in rejected: email not verified.' });
+    }
+
+    let row;
+    try {
+      row = await upsertGoogleUser(payload);
+    } catch (err) {
+      logBackgroundFailure('GOOGLE_UPSERT_FAILED', err);
+      return res.status(500).json({ error: 'Could not sign you in. Please try again.' });
+    }
+
+    const is_admin = row.is_admin || (await promoteIfConfigured(row.id, row.email));
+    const user = {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      is_admin: !!is_admin,
+      token_version: Number(row.token_version ?? 1),
+    };
     const sid = await createSession(user.id, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
@@ -736,7 +849,7 @@ const EXPORT_SCHEMA_VERSION = 1;
 const EXPORT_TABLE_DESCRIPTIONS = Object.freeze({
   salary_entries: 'Confirmed take-home income records by applicable month.',
   emis: 'Confirmed bills and fixed obligations used by monthly plans.',
-  expenses: 'Confirmed personal expenses, including expenses created from trip shares.',
+  expenses: 'Confirmed personal expenses, including expenses created from trip shares and whether each expense is counted in the daily allowance.',
   category_budgets: 'Personal expense-category budget settings.',
   recurring_expenses: 'Recurring personal expense definitions and materialization state.',
   savings_goals: 'Confirmed savings goals, progress, and target dates.',
@@ -757,6 +870,7 @@ const EXPORT_TABLE_DESCRIPTIONS = Object.freeze({
   public_sharing_settings: 'Public-link enabled state and token for each owned trip.',
   product_measurement_events: 'Consent-gated Product Analytics events linked to the account.',
   visits: 'Visit records that remain linked to the account.',
+  category_memory: 'Remembered category choices used to suggest a category for notes you type in Quick Add.',
 });
 
 class AccountExportError extends Error {
@@ -851,6 +965,7 @@ router.get('/export', authRequired, async (req, res) => {
       changes,
       measurementEvents,
       visits,
+      categoryMemory,
     ] = await Promise.all([
       readExportRows('salary_entries', 'SELECT * FROM salary_entries WHERE user_id = ?', uid),
       readExportRows('emis', 'SELECT * FROM emis WHERE user_id = ?', uid),
@@ -928,6 +1043,12 @@ router.get('/export', authRequired, async (req, res) => {
         uid
       ),
       readExportRows('visits', 'SELECT * FROM visits WHERE user_id = ?', uid),
+      readExportRows(
+        'category_memory',
+        `SELECT id, note_key, category, revision, created_at, updated_at
+           FROM category_memory WHERE user_id = ?`,
+        uid
+      ),
     ]);
 
     const productAnalyticsSettings = financialState.map((state) => ({
@@ -976,6 +1097,7 @@ router.get('/export', authRequired, async (req, res) => {
         public_sharing_settings: publicSharingSettings,
         product_measurement_events: measurementEvents,
         visits,
+        category_memory: categoryMemory,
       },
     });
   } catch (error) {

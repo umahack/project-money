@@ -201,6 +201,11 @@ await raw.execute('CREATE INDEX IF NOT EXISTS idx_visits_ip_hash ON visits(ip_ha
 // token_version lets us invalidate every outstanding JWT for a user by bumping it (e.g. on password change).
 await addColumnIfMissing('users', 'token_version', 'INTEGER NOT NULL DEFAULT 1');
 
+// Google identity binding. NULL for password-only accounts. Unique when set,
+// so one Google account = one Project Money account.
+await addColumnIfMissing('users', 'google_sub', 'TEXT');
+await raw.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL');
+
 // Audit log: destructive admin actions get a row here. Append-only (no DELETE from code).
 await raw.execute(`CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

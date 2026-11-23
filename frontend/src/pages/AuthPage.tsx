@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Card, Field } from '../components/ui';
 import { Background } from '../components/Shell';
+import { AuthDivider, GoogleSignInButton } from '../components/GoogleSignInButton';
 import { errText, useAuth, useToast } from '../state';
 import { clearUserViewPreference } from '../userViewPref';
 import { parseJourneyIntent, postAuthDestination, withJourneyIntent } from '../clarity/journeys';
@@ -19,7 +20,7 @@ function friendly(message: string, mode: 'login' | 'register'): string {
 type Step = 'form' | 'code';
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
-  const { login, registerStart, registerFinish, registerResend } = useAuth();
+  const { login, loginWithGoogle, registerStart, registerFinish, registerResend } = useAuth();
   const { toast } = useToast();
   const nav = useNavigate();
   const { search } = useLocation();
@@ -59,6 +60,20 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
       nav(postAuthDestination({ isAdmin: u.is_admin, search, registered: false }), { replace: true });
     } catch (err) {
       setError(friendly(errText(err), 'login'));
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogleCredential(credential: string) {
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      const u = await loginWithGoogle(credential);
+      clearUserViewPreference();
+      nav(postAuthDestination({ isAdmin: u.is_admin, search, registered: mode === 'register' }), { replace: true });
+    } catch (err) {
+      setError(friendly(errText(err), mode));
       setBusy(false);
     }
   }
@@ -167,6 +182,17 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               <h1>{title}</h1>
               <p className="muted">{subtitle}</p>
             </div>
+
+            {(isLogin || step === 'form') && (
+              <>
+                <GoogleSignInButton
+                  mode={isLogin ? 'login' : 'register'}
+                  disabled={busy}
+                  onCredential={handleGoogleCredential}
+                />
+                <AuthDivider />
+              </>
+            )}
 
             <AnimatePresence mode="wait">
               {isLogin && (

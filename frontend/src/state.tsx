@@ -49,6 +49,7 @@ export const errText = (e: unknown): string => (e instanceof ApiError ? e.messag
 interface AuthState {
   user: User | null;
   login: (email: string, password: string) => Promise<User>;
+  loginWithGoogle: (credential: string) => Promise<User>;
   registerStart: (name: string, email: string, password: string) => Promise<{ fallback: boolean }>;
   registerFinish: (email: string, code: string) => Promise<User>;
   registerResend: (email: string) => Promise<{ fallback: boolean }>;
@@ -99,6 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       async login(email, password) {
         const r = await api.post<AuthResponse>('/auth/login', { email, password }, false);
+        setAuth(r.token, r.user);
+        setUser(r.user);
+        return r.user;
+      },
+      async loginWithGoogle(credential) {
+        const r = await api.post<AuthResponse>('/auth/google', { credential }, false);
         setAuth(r.token, r.user);
         setUser(r.user);
         return r.user;
