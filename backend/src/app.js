@@ -11,6 +11,7 @@ import settingsRoutes from './routes/settings.js';
 import clarityEventsRoutes from './routes/clarityEvents.js';
 import journeysRoutes from './routes/journeys.js';
 import financeRoutes from './routes/finance.js';
+import quickAddRoutes from './routes/quickAdd.js';
 import tripRoutes from './routes/trips.js';
 import adminRoutes from './routes/admin.js';
 import adminClarityReportsRoutes from './routes/adminClarityReports.js';
@@ -112,6 +113,7 @@ export function createApp({ operationalLogger: logger = operationalLogger } = {}
   app.use('/api/clarity/events', clarityEventsRoutes);
   app.use('/api/clarity/journeys', journeysRoutes);
   app.use('/api/finance', clarityRoutes);
+  app.use('/api/finance', quickAddRoutes);
   app.use('/api/finance', financeRoutes);
   app.use('/api/trips', tripRoutes);
   app.use('/api/admin/clarity-reports', adminClarityReportsRoutes);

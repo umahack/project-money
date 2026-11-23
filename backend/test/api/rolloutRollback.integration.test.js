@@ -314,7 +314,10 @@ after(async () => {
 
 test('rollout flags default off, fail closed on unsupported values, and are read per request', async () => {
   const { readServerFeatureFlags, readBooleanFeatureFlag } = await import('../../src/rollout/featureFlags.js');
-  assert.deepEqual({ ...readServerFeatureFlags({}) }, { clarityShadowCompare: false });
+  assert.deepEqual({ ...readServerFeatureFlags({}) }, {
+    clarityShadowCompare: false,
+    quickAddEnabled: false,
+  });
   for (const value of [undefined, null, '', ' ', '0', 'false', 'no', 'off', 'yes', 'enabled', 'truee', 2, true]) {
     assert.equal(readBooleanFeatureFlag(value), false, `${String(value)} must not enable shadow comparison`);
   }

@@ -44,6 +44,7 @@ export const EXPENSE_ACCEPTED_CONSTRAINTS = Object.freeze({
     earliestYearOffset: -10,
     latestYearOffset: 1,
   }),
+  excludeFromDailyAllowance: Object.freeze({ type: 'boolean', optional: true }),
   expectedRecordVersion: Object.freeze({ min: 0, integer: true, optional: true }),
 });
 
@@ -276,19 +277,41 @@ function normalizeTreatment(value) {
   return value;
 }
 
+function normalizeExcludeFromDailyAllowance(value) {
+  if (typeof value !== 'boolean') {
+    commandError(
+      'INVALID_EXPENSE_EXCLUSION',
+      'excludeFromDailyAllowance must be a boolean.',
+      400,
+      {
+        field: 'excludeFromDailyAllowance',
+        constraint: EXPENSE_ACCEPTED_CONSTRAINTS.excludeFromDailyAllowance,
+      }
+    );
+  }
+  return value;
+}
+
 export function normalizeExpenseCreateCommand(body, now = new Date()) {
   const input = assertBody(body);
   const spentOn = input.spentOn === undefined
     ? localDateForInstant(now)
     : normalizeSpentOn(input.spentOn, now);
+  const command = {
+    amountMinor: normalizeAmountMinor(input),
+    category: normalizeCategory(input.category),
+    note: normalizeNote(input.note),
+    spentOn,
+    month: spentOn.slice(0, 7),
+  };
+  if (
+    Object.hasOwn(input, 'excludeFromDailyAllowance')
+    && normalizeExcludeFromDailyAllowance(input.excludeFromDailyAllowance)
+  ) {
+    command.excludeFromDailyAllowance = true;
+  }
   return {
-    command: {
-      amountMinor: normalizeAmountMinor(input),
-      category: normalizeCategory(input.category),
-      note: normalizeNote(input.note),
-      spentOn,
-      month: spentOn.slice(0, 7),
-    },
+    command,
     expectedRecordVersion: normalizeExpectedRecordVersion(input),
   };
 }
@@ -304,6 +327,11 @@ export function normalizeExpenseUpdateCommand(body, recordId, now = new Date()) 
   if (Object.hasOwn(input, 'spentOn')) {
     patch.spentOn = normalizeSpentOn(input.spentOn, now);
     patch.month = patch.spentOn.slice(0, 7);
+  }
+  if (Object.hasOwn(input, 'excludeFromDailyAllowance')) {
+    patch.excludeFromDailyAllowance = normalizeExcludeFromDailyAllowance(
+      input.excludeFromDailyAllowance
+    );
   }
   if (Object.keys(patch).length === 0) {
     commandError(
@@ -346,11 +374,19 @@ export function normalizeCategoryTreatmentDeleteCommand(body, category) {
   };
 }
 
-function affectedExpenseOutcomes(month) {
-  return [
+function affectedExpenseOutcomes(month, currentMonth = null) {
+  const outcomes = [
     { key: 'monthlyPlan', id: `monthly-plan:${month}`, kind: 'monthly_plan' },
     { key: 'spending', id: `spending:${month}`, kind: 'spending' },
   ];
+  if (month === currentMonth) {
+    outcomes.push({
+      key: 'todayAllowance',
+      id: `today-allowance:${month}`,
+      kind: 'today_allowance',
+    });
+  }
+  return outcomes;
 }
 
 async function expenseContext({ command, idempotencyKey, receipt, userId, now }, database) {
@@ -366,7 +402,7 @@ async function expenseContext({ command, idempotencyKey, receipt, userId, now },
   return {
     snapshotMonth,
     scopeKey: recordId === null ? `new-expense:${idempotencyKey}` : `expense:${recordId}`,
-    affectedOutcomes: affectedExpenseOutcomes(snapshotMonth),
+    affectedOutcomes: affectedExpenseOutcomes(snapshotMonth, currentMonthForInstant(now)),
   };
 }
 
@@ -411,6 +447,7 @@ export function expenseRecordFromRow(row) {
     amountMinor: legacyNumberToPaise(Number(row.amount), { label: 'expense amount' }),
     note: row.note ?? null,
     spentOn: row.spent_on,
+    excludeFromDailyAllowance: row.exclude_from_daily_allowance === 1,
   };
 }
 
@@ -425,7 +462,7 @@ export function categoryTreatmentRecordFromRow(row) {
 
 async function loadExpenseRow(database, userId, id) {
   return database.prepare(
-    `SELECT id, month, category, amount, note, spent_on
+    `SELECT id, month, category, amount, note, spent_on, exclude_from_daily_allowance
        FROM expense_log
       WHERE id = ? AND user_id = ?`
   ).get(id, userId);
@@ -436,7 +473,7 @@ async function loadExpensesForMonths(database, userId, months) {
   if (uniqueMonths.length === 0) return [];
   const placeholders = uniqueMonths.map(() => '?').join(', ');
   const rows = await database.prepare(
-    `SELECT id, month, category, amount, note, spent_on
+    `SELECT id, month, category, amount, note, spent_on, exclude_from_daily_allowance
        FROM expense_log
       WHERE user_id = ? AND month IN (${placeholders})
       ORDER BY id`
@@ -543,6 +580,7 @@ export function createExpenseOperationHandlers({ database = db } = {}) {
               amountMinor: command.amountMinor,
               note: command.note,
               spentOn: command.spentOn,
+              excludeFromDailyAllowance: command.excludeFromDailyAllowance === true,
             },
           }
         );
@@ -552,8 +590,9 @@ export function createExpenseOperationHandlers({ database = db } = {}) {
           recordId: null,
           sourceStatement: {
             sql: `INSERT INTO expense_log
-              (user_id, month, category, amount, note, spent_on, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              (user_id, month, category, amount, note, spent_on,
+               exclude_from_daily_allowance, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
             args: [
               userId,
               command.month,
@@ -561,6 +600,7 @@ export function createExpenseOperationHandlers({ database = db } = {}) {
               command.amountMinor / 100,
               command.note,
               command.spentOn,
+              Object.hasOwn(command, 'excludeFromDailyAllowance') ? 1 : null,
             ],
           },
           result: expenseTransitionResult(transition.lastTransition),
@@ -614,6 +654,11 @@ export function createExpenseOperationHandlers({ database = db } = {}) {
           ['note', 'note', (value) => value],
           ['spentOn', 'spent_on', (value) => value],
           ['month', 'month', (value) => value],
+          [
+            'excludeFromDailyAllowance',
+            'exclude_from_daily_allowance',
+            (value) => value ? 1 : null,
+          ],
         ];
         for (const [field, column, convert] of fields) {
           if (!Object.hasOwn(command.patch, field)) continue;

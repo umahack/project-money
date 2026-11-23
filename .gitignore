@@ -23,6 +23,7 @@ dist
 coverage
 frontend/playwright-report
 frontend/test-results
+test-results
 .DS_Store
 
 # Local-only drafts (Instagram story mockups etc.)

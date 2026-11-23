@@ -14,7 +14,8 @@ import { selectFinancialClarityRollout } from '../clarity/rollout';
 import { useActionArrival } from '../clarity/useActionArrival';
 import { useClaritySnapshotQuery } from '../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../clarity/useHeaderAction';
-import { currentMonth, monthLabel } from '../money';
+import { useKolkataMonth } from '../clarity/quickAdd/kolkata';
+import { monthLabel } from '../money';
 import { errText, useToast } from '../state';
 import type { Plan } from '../types';
 
@@ -85,7 +86,7 @@ function LegacySpending() {
 const SPENDING_SCOPE = /^(expense|new-expense|category-treatment):/;
 
 function ClaritySpending() {
-  const month = currentMonth();
+  const month = useKolkataMonth();
   const monthName = monthLabel(month);
   // Scrolls to and focuses the expense form, an expense row, or the category totals named by the link that opened this page.
   const arrival = useActionArrival('spending');

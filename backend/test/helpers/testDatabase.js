@@ -11,6 +11,7 @@ const TEST_ENV_KEYS = [
   'JWT_SECRET',
   'FINANCIAL_MUTATION_HMAC_KEY',
   'CLARITY_SHADOW_COMPARE',
+  'QUICK_ADD_ENABLED',
   'CORS_ORIGIN',
   'TURSO_DATABASE_URL',
   'TURSO_AUTH_TOKEN',
@@ -79,6 +80,7 @@ export async function createIsolatedTestDatabase(testContext) {
     JWT_SECRET: 'test-only-jwt-secret-at-least-24-characters',
     FINANCIAL_MUTATION_HMAC_KEY: '',
     CLARITY_SHADOW_COMPARE: 'false',
+    QUICK_ADD_ENABLED: 'false',
     CORS_ORIGIN: 'http://127.0.0.1',
     TURSO_DATABASE_URL: databaseUrl,
     // Keep credential variables present and empty so dotenv cannot restore
@@ -137,6 +139,7 @@ export async function createIsolatedTestDatabase(testContext) {
       'emis',
       'user_aliases',
       'user_categories',
+      'category_memory',
       'sessions',
       'visits',
       'users',

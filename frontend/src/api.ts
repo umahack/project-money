@@ -13,6 +13,7 @@ import {
   type StructuredErrorConstraint,
   type VersionedClarityResponse,
 } from './clarity/contracts';
+import { observeResponseTime } from './clarity/quickAdd/kolkata';
 
 const BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '') + '/api';
 export const DATA_NOTICE_REQUIRED_CODE = 'DATA_NOTICE_REQUIRED';
@@ -96,11 +97,18 @@ export interface MutationRequestMetadata {
   idempotencyKey?: string;
 }
 
+/** `ApiError.code` for a request that got no response within its `timeoutMs`. */
+export const REQUEST_TIMEOUT_CODE = 'REQUEST_TIMEOUT';
+export const REQUEST_TIMEOUT_MESSAGE =
+  'The server did not answer in time. Your change may have been saved. Retry to confirm it without saving it twice.';
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   auth?: boolean;
   idempotencyKey?: string;
+  /** Abort and fail with `REQUEST_TIMEOUT` after this many milliseconds. Omitted means no timeout. */
+  timeoutMs?: number;
   forceClarityContract?: boolean;
   expectedSchemaVersion?: typeof CLARITY_SCHEMA_VERSION;
 }
@@ -170,9 +178,51 @@ async function request<T>(
     body,
     auth = true,
     idempotencyKey,
+    timeoutMs,
     forceClarityContract = false,
     expectedSchemaVersion,
   }: RequestOptions = {},
+): Promise<T> {
+  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return requestOnce<T>(path, {
+      method, body, auth, idempotencyKey, forceClarityContract, expectedSchemaVersion,
+    });
+  }
+  // The timer covers the whole exchange, including reading the body. When it fires the
+  // fetch is aborted and the caller gets the timeout error; anything the abandoned
+  // exchange produces later is dropped because requestOnce's result is no longer awaited.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new ApiError(0, REQUEST_TIMEOUT_MESSAGE, { code: REQUEST_TIMEOUT_CODE }));
+    }, timeoutMs);
+  });
+  const exchange = requestOnce<T>(path, {
+    method, body, auth, idempotencyKey, forceClarityContract, expectedSchemaVersion,
+    signal: controller.signal,
+  });
+  // A late rejection from the abandoned exchange must not become an unhandled rejection.
+  exchange.catch(() => undefined);
+  try {
+    return await Promise.race([exchange, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestOnce<T>(
+  path: string,
+  {
+    method = 'GET',
+    body,
+    auth = true,
+    idempotencyKey,
+    forceClarityContract = false,
+    expectedSchemaVersion,
+    signal,
+  }: RequestOptions & { signal?: AbortSignal } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
     ...(forceClarityContract
@@ -192,6 +242,7 @@ async function request<T>(
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: 'no-store',
+      ...(signal ? { signal } : {}),
     });
   } catch {
     throw new ApiError(
@@ -200,6 +251,11 @@ async function request<T>(
     );
   }
   const data: unknown = await res.json().catch(() => ({}));
+  // After a timeout abort, a late response must not clear auth, fire events, or resolve.
+  if (signal?.aborted) {
+    throw new ApiError(0, REQUEST_TIMEOUT_MESSAGE, { code: REQUEST_TIMEOUT_CODE });
+  }
+  observeResponseTime(res.headers?.get('Date'), data);
   if (!res.ok) {
     const structuredError = structuredErrorFrom(data);
     const serverMessage = structuredError?.message ?? errorMessageFrom(data);
@@ -251,6 +307,8 @@ export interface ClarityMutationRequest {
   method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   idempotencyKey: string;
+  /** Abort and fail with `REQUEST_TIMEOUT` after this many milliseconds. Omitted means no timeout. */
+  timeoutMs?: number;
 }
 
 export const clarityApi = {
@@ -260,11 +318,12 @@ export const clarityApi = {
   }),
   mutate: <T extends VersionedClarityResponse>(
     path: string,
-    { method = 'POST', body = {}, idempotencyKey }: ClarityMutationRequest,
+    { method = 'POST', body = {}, idempotencyKey, timeoutMs }: ClarityMutationRequest,
   ) => request<T>(path, {
     method,
     body,
     idempotencyKey,
+    timeoutMs,
     forceClarityContract: true,
     expectedSchemaVersion: CLARITY_SCHEMA_VERSION,
   }),

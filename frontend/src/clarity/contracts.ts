@@ -11,6 +11,12 @@ export type OutcomeStatus =
   | 'calculation_failed';
 export type ValueClassification = 'entered_fact' | 'calculated_result' | 'recommendation';
 export type OutcomeKind = 'monthly_plan' | 'spending' | 'goal' | 'trip' | 'trip_summary';
+/**
+ * The kind of the `today-allowance:<month>` outcome. It is kept out of
+ * `OutcomeKind` so the exhaustive per-kind label tables stay valid until the
+ * headline task labels it.
+ */
+export type TodayAllowanceOutcomeKind = 'today_allowance';
 export type SourceType =
   | 'salary'
   | 'bill'
@@ -153,6 +159,91 @@ export interface SpendingOutcomeValue {
   }>;
 }
 
+/** Why a Today_Allowance of zero is zero. Null while the allowance is above zero. */
+export type TodayAllowanceZeroReason =
+  | 'no_spendable_budget'
+  | 'month_budget_used'
+  | 'below_minimum_unit';
+
+/**
+ * The value of the `today-allowance:<month>` outcome. Old servers omit the
+ * whole outcome. Every amount is calculated on the server in paise.
+ */
+export type TodayAllowanceValue =
+  | {
+      applicable: false;
+      /** Any month other than the current Asia/Kolkata month. */
+      reason: 'not_current_month';
+    }
+  | {
+      applicable: true;
+      /** The Kolkata date the values are for, `YYYY-MM-DD`. */
+      date: string;
+      daysRemainingInclusive: number;
+      todayAllowance: MoneyValue;
+      todaySpent: MoneyValue;
+      leftToday: MoneyValue;
+      overToday: MoneyValue;
+      allowanceBasis: MoneyValue;
+      /** Spent share of the allowance in 0 to 1000, or null when the allowance is zero. */
+      usedPermille: number | null;
+      zeroReason: TodayAllowanceZeroReason | null;
+      usedBeyondBudget: MoneyValue;
+      /** Expenses dated today that carry the Allowance_Exclusion. */
+      excludedToday: { count: number; total: MoneyValue };
+      /** The Large_Entry threshold, or null when there is no spendable budget. */
+      largeEntryThreshold: MoneyValue | null;
+    };
+
+/** The `today-allowance:<month>` outcome as it appears in the snapshot. */
+export type TodayAllowanceOutcome = Omit<Outcome<TodayAllowanceValue>, 'kind'> & {
+  kind: TodayAllowanceOutcomeKind;
+};
+
+/**
+ * One remembered category choice from `GET /finance/quick-add/hints` and the
+ * Memory_API. `revision` guards a restore or delete against a newer change.
+ */
+export interface MemoryEntry {
+  id: number;
+  noteKey: string;
+  category: string;
+  revision: number;
+  updatedAt: string;
+}
+
+/** One distinct Note_Key from the preceding 90 days of expenses, newest first. */
+export interface HistoryEntry {
+  noteKey: string;
+  category: string;
+  /** `YYYY-MM-DD` of the latest expense with this Note_Key. */
+  lastSpentOn: string;
+}
+
+/** The limits the hints response reports. */
+export interface QuickAddHintLimits {
+  memoryEntries: number;
+  historyDays: number;
+  historyKeys: number;
+}
+
+/** Response of `GET /finance/quick-add/hints`. Old servers answer 404 instead. */
+export interface QuickAddHintsResponse {
+  schemaVersion: typeof CLARITY_SCHEMA_VERSION;
+  memory: MemoryEntry[];
+  history: HistoryEntry[];
+  limits: QuickAddHintLimits;
+}
+
+/**
+ * The Allowance_Exclusion mark on an expense request or confirmed record. It
+ * is optional because old servers neither accept nor return it, and a record
+ * from before the feature has no mark. Send it only while Quick_Add_Enabled.
+ */
+export interface ExpenseAllowanceMark {
+  excludeFromDailyAllowance?: boolean;
+}
+
 export interface GoalOutcomeValue {
   goalId: number;
   status: 'funded' | 'active' | 'overdue';
@@ -243,6 +334,8 @@ export interface FinancialSnapshot {
   outcomes: {
     monthlyPlan: Outcome<MonthlyPlanValue>;
     spending: Outcome<SpendingOutcomeValue>;
+    /** Absent when the server predates Quick Add. */
+    todayAllowance?: TodayAllowanceOutcome;
     goals: Array<Outcome<GoalOutcomeValue>>;
     tripSummary: Outcome<TripOutcomeValue[]> & { items?: Array<Outcome<TripOutcomeValue>> };
   };

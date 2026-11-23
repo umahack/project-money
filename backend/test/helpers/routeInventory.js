@@ -4,10 +4,14 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
+// 'POST /api/auth/google' is Sign in with Google: a pre-authentication entry point like /login. It
+// verifies the Google ID token server-side (audience = GOOGLE_CLIENT_ID), answers 503 when
+// GOOGLE_CLIENT_ID is unset, is rate limited by authLimiter, and issues the normal session.
 export const ANONYMOUS_ROUTE_ALLOWLIST = Object.freeze([
   'GET /api/health',
   'GET /api/public/announcement',
   'GET /api/public/trips/:token',
+  'POST /api/auth/google',
   'POST /api/auth/login',
   'POST /api/auth/password-reset-finish',
   'POST /api/auth/password-reset-start',
