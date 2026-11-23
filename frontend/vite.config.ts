@@ -23,7 +23,10 @@ function csp(apiBase: string): Plugin {
   const policy = [
     "default-src 'self'",
     "script-src 'self' https://accounts.google.com/gsi/client",
-    "style-src 'self' https://accounts.google.com/gsi/style",
+    // 'unsafe-inline' is required because GSI injects inline <style> blocks
+    // into the button iframe; their hashes rotate with each release, so
+    // pinning hashes is brittle. No user-controlled styles reach the page.
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
     "img-src 'self' data: https://*.googleusercontent.com https://accounts.google.com",
     "font-src 'self'",
     `connect-src 'self' https://accounts.google.com/gsi/${apiOrigin ? ' ' + apiOrigin : ''}`,
