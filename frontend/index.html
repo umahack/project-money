@@ -4,7 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0b1a" />
-    <meta name="referrer" content="no-referrer" />
+    <!-- strict-origin-when-cross-origin sends only the bare origin
+         (e.g. https://project-money.online) as the Referer on cross-origin
+         requests, not the full URL. Required by Google Identity Services,
+         which uses the Referer to verify the page's origin against the
+         Authorized JavaScript origins list. "no-referrer" strips it
+         entirely and breaks the "Sign in with Google" button. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-icon-192.png" />
