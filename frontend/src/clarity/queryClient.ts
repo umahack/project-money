@@ -17,6 +17,8 @@ export const queryKeys = Object.freeze({
   bills: () => ['finance', 'emis'] as const,
   /** The most recent saved salary, which may belong to a prior month. */
   latestSalary: () => ['finance', 'salary-latest'] as const,
+  /** Quick Add category memory and history hints. Read once per page load, memory only. */
+  quickAddHints: () => ['quick-add', 'hints'] as const,
 });
 
 export function createAppQueryClient(): QueryClient {

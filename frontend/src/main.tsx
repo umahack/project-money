@@ -11,6 +11,7 @@ import { AuthProvider, ToastProvider } from './state';
 import { queryClient } from './clarity/queryClient';
 import { FinancialClarityProvider } from './clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from './clarity/MutationStatusProvider';
+import { QuickAddProvider } from './clarity/quickAdd/QuickAddProvider';
 import { RenderErrorBoundary } from './components/clarity/RenderErrorBoundary';
 import { MotionPreferences } from './components/MotionPreferences';
 import { Capacitor } from '@capacitor/core';
@@ -50,11 +51,13 @@ createRoot(document.getElementById('root')!).render(
             <AuthProvider>
               <FinancialClarityProvider>
                 <MutationStatusProvider>
-                  {/* Last resort for failures outside the app shell (sign-in, public
-                      pages). It sits inside the providers, so confirmed state survives. */}
-                  <RenderErrorBoundary scope="app" label="Project Money">
-                    <App />
-                  </RenderErrorBoundary>
+                  <QuickAddProvider>
+                    {/* Last resort for failures outside the app shell (sign-in, public
+                        pages). It sits inside the providers, so confirmed state survives. */}
+                    <RenderErrorBoundary scope="app" label="Project Money">
+                      <App />
+                    </RenderErrorBoundary>
+                  </QuickAddProvider>
                 </MutationStatusProvider>
               </FinancialClarityProvider>
             </AuthProvider>

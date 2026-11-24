@@ -36,6 +36,8 @@ export interface RecordedApiRequest {
   hasAuthorization: boolean;
   /** The `X-Clarity-Contract` header the browser sent, or null. A legacy (flag off) client never sends it. */
   clarityContract?: string | null;
+  /** The `Idempotency-Key` header the browser sent, or null. A retry of one command carries the same key. */
+  idempotencyKey?: string | null;
 }
 
 type ApiResponder = ApiReply | ((request: RecordedApiRequest) => ApiReply | Promise<ApiReply>);
@@ -147,6 +149,7 @@ export class DeterministicApiFixtures {
       body: parseRequestBody(request),
       hasAuthorization: request.headers().authorization !== undefined,
       clarityContract: request.headers()['x-clarity-contract'] ?? null,
+      idempotencyKey: request.headers()['idempotency-key'] ?? null,
     };
     this.requests.push(record);
 

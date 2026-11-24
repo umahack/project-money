@@ -8,6 +8,9 @@ import './dataUse.css';
 /** Id of the paused-entries reason. Disabled submit controls can reference it with `aria-describedby`. */
 export const DATA_USE_REASON_ID = 'clarity-data-use-reason';
 
+/** Id of the notice the User opens with "Review the data-use notice". The Quick Add shortcut leaves the key alone while it is open. */
+export const DATA_USE_NOTICE_REVIEW_ID = 'clarity-notice-review';
+
 function formatAcknowledgedAt(value: string | null, timeZone: string): string | null {
   if (!value) return null;
   const date = new Date(value);
@@ -167,13 +170,13 @@ export function DataUseGate() {
                 type="button"
                 className="btn ghost sm"
                 aria-expanded={reviewOpen}
-                aria-controls="clarity-notice-review"
+                aria-controls={DATA_USE_NOTICE_REVIEW_ID}
                 onClick={() => setReviewOpen((open) => !open)}
               >
                 <span aria-hidden="true" className="clarity-chevron">{reviewOpen ? '▾' : '▸'}</span>
                 Review the data-use notice
               </button>
-              <div id="clarity-notice-review" hidden={!reviewOpen}>
+              <div id={DATA_USE_NOTICE_REVIEW_ID} hidden={!reviewOpen}>
                 {reviewOpen && <DataUseNotice notice={notice} />}
               </div>
             </div>

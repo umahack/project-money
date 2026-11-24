@@ -103,6 +103,46 @@ test('financial repository scopes exact-period records and normalizes every amou
   });
 });
 
+test('financial repository maps the daily allowance exclusion to a boolean without rewriting stored values', async () => {
+  const userId = 6104;
+  await insertUser(userId);
+
+  await db.batch([
+    [`INSERT INTO expense_log (user_id, month, category, amount, note, spent_on)
+     VALUES (?, ?, ?, ?, ?, ?)`, [userId, '2026-03', 'Groceries', 10, 'legacy', '2026-03-02']],
+    [`INSERT INTO expense_log (user_id, month, category, amount, note, spent_on, exclude_from_daily_allowance)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`, [userId, '2026-03', 'Rent', 20, 'rent', '2026-03-03', 1]],
+    [`INSERT INTO expense_log (user_id, month, category, amount, note, spent_on, exclude_from_daily_allowance)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`, [userId, '2026-03', 'Food', 30, 'zero', '2026-03-04', 0]],
+  ]);
+  const storedBefore = await db.prepare(
+    'SELECT id, exclude_from_daily_allowance FROM expense_log WHERE user_id = ? ORDER BY id'
+  ).all(userId);
+
+  const period = await financialRepository.loadPeriod({ userId, month: '2026-03' });
+  assert.deepEqual(
+    period.expenses.records.map(({ note, amountMinor, excludeFromDailyAllowance }) => (
+      { note, amountMinor, excludeFromDailyAllowance }
+    )),
+    [
+      { note: 'legacy', amountMinor: 1_000, excludeFromDailyAllowance: false },
+      { note: 'rent', amountMinor: 2_000, excludeFromDailyAllowance: true },
+      { note: 'zero', amountMinor: 3_000, excludeFromDailyAllowance: false },
+    ]
+  );
+  assert.ok(period.expenses.records.every((record) => (
+    typeof record.excludeFromDailyAllowance === 'boolean'
+    && !Object.hasOwn(record, 'exclude_from_daily_allowance')
+    && record.normalizationIssues.length === 0
+  )));
+
+  const storedAfter = await db.prepare(
+    'SELECT id, exclude_from_daily_allowance FROM expense_log WHERE user_id = ? ORDER BY id'
+  ).all(userId);
+  assert.deepEqual(storedAfter, storedBefore);
+  assert.equal(storedAfter[0].exclude_from_daily_allowance, null);
+});
+
 test('financial repository preserves owner/member trip access and monotonic versions', async () => {
   const ownerId = 6201;
   const memberId = 6202;

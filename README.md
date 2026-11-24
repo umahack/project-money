@@ -150,6 +150,48 @@ calculation, and leave `CLARITY_SHADOW_COMPARE` off (it logs only mismatch codes
 when on). The additive tables and columns stay in place and no record is
 deleted or rewritten.
 
+### Quick Add rollout
+
+Quick Add and the Home headline ship behind two flags. Both default to `false`
+(in `render.yaml` and the `.env` examples), so a deploy that sets neither behaves
+as before.
+
+| Flag | Where | Default | Effect |
+|---|---|---|---|
+| `QUICK_ADD_ENABLED` | API environment | `false` | Allows category-memory writes and selects data-use notice version 2. |
+| `VITE_QUICK_ADD_ENABLED` | SPA build | `false` | Shows Quick Add, the Home headline, the exclusion control, and the memory panel. Also needs `VITE_FINANCIAL_CLARITY_ENABLED=true`. |
+
+Back up Turso before the first deploy (see Backups). The migration is additive and
+repeatable: a nullable `exclude_from_daily_allowance` column and a category-memory
+table. No existing row changes and nothing is backfilled.
+
+**Release order.** Deploy with both flags off, then set `QUICK_ADD_ENABLED=true`
+on the API, then set `VITE_QUICK_ADD_ENABLED=true` and rebuild the SPA. Server
+first, client second.
+
+**Rollback.** Either half can be flipped alone and no data is deleted.
+
+- Server: set `QUICK_ADD_ENABLED=false`. Memory writes stop (404 `QUICK_ADD_DISABLED`)
+  and the notice returns to version 1. The SPA keeps saving entries.
+- Client: set `VITE_QUICK_ADD_ENABLED=false` and rebuild the SPA. Every Quick Add
+  surface disappears; saved expenses, exclusion marks, and memory rows stay.
+
+**Behavior to know**
+
+- The data-use notice changes from version 1 to version 2 while
+  `QUICK_ADD_ENABLED` is on. Existing users acknowledge it once.
+- While the clarity flag is on, `currentMonth()` in `frontend/src/money.ts` is the
+  Asia/Kolkata month, corrected by the server time. With it off it is the device month.
+- Recurring expenses that auto-post are marked excluded from the daily allowance
+  (`exclude_from_daily_allowance = 1`). They still count in monthly totals, the guide,
+  exports, and the monthly review.
+- The CSV export has a trailing `counted_in_daily_allowance` column (`yes` or `no`).
+- Thresholds are named constants, each defined in one place:
+  - Large_Entry: `LARGE_ENTRY_PERCENT` (25) and `LARGE_ENTRY_FLOOR_MINOR` (100000 minor
+    units, ₹1,000.00) in `backend/src/domain/allowance.js`.
+  - Bill_Match minimum label length: `BILL_MATCH_MIN_LABEL_LENGTH` (3) in
+    `frontend/src/clarity/quickAdd/warning.ts`.
+
 ### Backups
 
 Turso provides **automatic point-in-time backups** on every plan,

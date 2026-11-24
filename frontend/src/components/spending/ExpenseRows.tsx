@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutationStatus } from '../../clarity/MutationStatusProvider';
+import { selectQuickAddEnabled } from '../../clarity/rollout';
 import {
   expenseYearRange,
   validateExpenseFields,
@@ -17,6 +18,10 @@ import './spending.css';
 function Problem({ id, problem }: { id: string; problem: FieldProblem | undefined }) {
   return problem ? <FieldError id={id} field={problem.field} reason={problem.reason} correction={problem.correction} /> : null;
 }
+
+/** The text beside an expense that is not counted in the daily allowance. Never colour alone. */
+export const EXCLUDED_LABEL = 'Not counted in daily allowance';
+export const EXCLUSION_NOTE = 'This changes only the daily allowance of the day this expense is dated. Your month totals still include it.';
 
 function describeEntry(view: Pick<ExpenseView, 'displayDate' | 'note'>): string {
   return `${view.displayDate}${view.note ? ` · ${view.note}` : ''}`;
@@ -56,8 +61,11 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
   const [dCategory, setDCategory] = useState('');
   const [dNote, setDNote] = useState('');
   const [dDate, setDDate] = useState('');
+  const [dExcluded, setDExcluded] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<ExpenseField | 'form', FieldProblem>>>({});
   const statusId = `${ids}-status`;
+  // The mark and its controls exist only while Quick Add is enabled. With it off this row is the row it was.
+  const exclusionOn = selectQuickAddEnabled();
   const amountText = inr(original.amountMinor / 100);
   const range = expenseYearRange();
 
@@ -79,6 +87,7 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
     setDCategory(original.category);
     setDNote(original.note ?? '');
     setDDate(original.displayDate);
+    setDExcluded(original.excluded);
     setErrors({});
     setEditing(true);
   }
@@ -108,6 +117,8 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
     if (values.category !== original.category) body.category = values.category;
     if (values.note !== original.note) body.note = values.note;
     if (spentOn !== original.displayDate) body.spentOn = spentOn;
+    // The mark is sent only when the checkbox differs from the confirmed record.
+    if (exclusionOn && dExcluded !== original.excluded) body.excludeFromDailyAllowance = dExcluded;
     if (Object.keys(body).length === 0) {
       setErrors({ form: { field: 'This expense', reason: 'has no changes to save.', correction: 'Change at least one field, or choose Cancel.' } });
       return;
@@ -134,6 +145,7 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
         amountMinor: values.amountMinor,
         note: values.note,
         spentOn,
+        ...(exclusionOn ? { excluded: dExcluded } : {}),
       },
       onSettled: (result) => {
         if (result.outcome !== 'confirmed') return;
@@ -141,6 +153,35 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
         if (leaves) onRemoved();
         else setReturnFocus(true);
       },
+    });
+  }
+
+  /** Sets or clears the mark through the update operation, alone, with this row's own status and retry. */
+  function setExclusion(next: boolean) {
+    if (pending) return;
+    const version = changes.versionOf('expense', original.id);
+    void changes.run({
+      scopeKey: scope,
+      label: next ? `Do not count ${original.category} expense in daily allowance` : `Count ${original.category} expense in daily allowance`,
+      path: `/finance/expenses/${original.id}`,
+      method: 'PATCH',
+      body: { excludeFromDailyAllowance: next, ...(version === undefined ? {} : { expectedRecordVersion: version }) },
+      months: [original.month],
+    }, {
+      doneLabel: next ? 'Marked not counted in daily allowance' : 'Counted in daily allowance',
+      versionKey: `expense:${original.id}`,
+      overlay: {
+        id: original.id,
+        month: original.month,
+        category: original.category,
+        amountMinor: original.amountMinor,
+        note: original.note,
+        spentOn: original.displayDate,
+        excluded: next,
+      },
+      describe: () => (next
+        ? `This ${original.category} expense is not counted in the daily allowance of the day it is dated. Your month totals still include it.`
+        : `This ${original.category} expense counts in the daily allowance of the day it is dated.`),
     });
   }
 
@@ -228,6 +269,20 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
             />
           </Field>
           <Problem id={`${ids}-date`} problem={errors.date} />
+          {exclusionOn && (
+            <>
+              <label className="plan-check spending-exclusion-check">
+                <input
+                  type="checkbox"
+                  checked={dExcluded}
+                  onChange={(e) => setDExcluded(e.target.checked)}
+                  aria-describedby={`${ids}-exclusion-note`}
+                />
+                <span>{EXCLUDED_LABEL}</span>
+              </label>
+              <p id={`${ids}-exclusion-note`} className="muted small spending-exclusion-note">{EXCLUSION_NOTE}</p>
+            </>
+          )}
           <Problem id={`${ids}-form`} problem={errors.form} />
           <div className="row" style={{ gap: '0.4rem' }}>
             <button className="btn primary sm" type="submit" aria-disabled={pending || undefined} aria-describedby={statusId}>
@@ -243,8 +298,23 @@ export function ExpenseItem({ view, original, categories, month, changes, onRemo
             <strong>{view.category}</strong>
             <small className="muted">{describeEntry(view)}</small>
             {movingTo && <small className="muted spending-moving">Moving to {movingTo}…</small>}
+            {exclusionOn && view.excluded && (
+              <small className="muted spending-excluded" data-excluded="true">{EXCLUDED_LABEL}</small>
+            )}
           </div>
           <b className="mono">{inr(view.amountMinor / 100)}</b>
+          {exclusionOn && (
+            <button
+              type="button"
+              className="btn sm ghost"
+              aria-disabled={pending || undefined}
+              aria-describedby={statusId}
+              aria-label={`${view.excluded ? 'Count in daily allowance' : "Don't count in daily allowance"}, ${original.category} ${amountText}`}
+              onClick={() => setExclusion(!original.excluded)}
+            >
+              {view.excluded ? 'Count in daily allowance' : "Don't count in daily allowance"}
+            </button>
+          )}
           <button
             ref={editButton}
             type="button"

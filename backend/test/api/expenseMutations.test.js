@@ -77,6 +77,16 @@ async function count(sql, ...args) {
   return Number(row.count);
 }
 
+function monthlyOutcomesSnapshot(snapshot) {
+  const monthlyOutcomes = Object.fromEntries(
+    Object.entries(snapshot.outcomes).filter(([key]) => key !== 'todayAllowance')
+  );
+  // A confirmed mutation advances freshness metadata even when calculated values stay equal.
+  return JSON.stringify(monthlyOutcomes, (key, value) => (
+    key === 'dataVersion' ? undefined : value
+  ));
+}
+
 before(async () => {
   testDatabase = await createIsolatedTestDatabase();
   db = testDatabase.db;
@@ -439,4 +449,247 @@ test('correcting and deleting a materialized recurring expense cannot materializ
     'SELECT last_logged_month FROM recurring_expenses WHERE user_id = ?'
   ).get(owner.id);
   assert.equal(recurring.last_logged_month, month);
+});
+
+test('contract expense create stores true or NULL, reports a boolean, and fingerprints the mark', async () => {
+  const month = monthAtOffset(0);
+  const spentOn = localDateAtOffset(0, 3);
+  const body = {
+    amountMinor: 12_500,
+    category: 'Food',
+    note: 'Allowance create',
+    spentOn,
+    expectedRecordVersion: 0,
+  };
+  const markedKey = '97000000-0000-4000-8000-000000000001';
+
+  const marked = await canonical(
+    request(app).post('/api/finance/expenses'),
+    markedKey
+  ).send({ ...body, excludeFromDailyAllowance: true });
+  assert.equal(marked.status, 200);
+  assert.equal(marked.body.mutation.record.excludeFromDailyAllowance, true);
+  assert.deepEqual(marked.body.mutation.acceptedConstraints.excludeFromDailyAllowance, {
+    type: 'boolean',
+    optional: true,
+  });
+  const markedRow = await db.prepare(
+    'SELECT exclude_from_daily_allowance FROM expense_log WHERE id = ? AND user_id = ?'
+  ).get(marked.body.id, owner.id);
+  assert.equal(markedRow.exclude_from_daily_allowance, 1);
+
+  const replay = await canonical(
+    request(app).post('/api/finance/expenses'),
+    markedKey.toUpperCase()
+  ).send({ ...body, excludeFromDailyAllowance: true });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.mutation.replayed, true);
+  assert.equal(replay.body.mutation.changeId, marked.body.mutation.changeId);
+  assert.equal(replay.body.mutation.record.excludeFromDailyAllowance, true);
+
+  const conflict = await canonical(
+    request(app).post('/api/finance/expenses'),
+    markedKey
+  ).send({ ...body, excludeFromDailyAllowance: false });
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.body.error.code, 'IDEMPOTENCY_KEY_REUSED');
+
+  const explicitlyCounted = await canonical(
+    request(app).post('/api/finance/expenses'),
+    '97000000-0000-4000-8000-000000000002'
+  ).send({ ...body, note: 'Explicit false', excludeFromDailyAllowance: false });
+  const omitted = await canonical(
+    request(app).post('/api/finance/expenses'),
+    '97000000-0000-4000-8000-000000000003'
+  ).send({ ...body, note: 'Omitted' });
+  assert.equal(explicitlyCounted.status, 200);
+  assert.equal(omitted.status, 200);
+  assert.equal(explicitlyCounted.body.mutation.record.excludeFromDailyAllowance, false);
+  assert.equal(omitted.body.mutation.record.excludeFromDailyAllowance, false);
+
+  const stored = await db.prepare(
+    `SELECT id, exclude_from_daily_allowance
+       FROM expense_log
+      WHERE user_id = ? AND month = ?
+      ORDER BY id`
+  ).all(owner.id, month);
+  assert.deepEqual(stored.map((row) => [
+    Number(row.id),
+    row.exclude_from_daily_allowance,
+  ]), [
+    [marked.body.id, 1],
+    [explicitlyCounted.body.id, null],
+    [omitted.body.id, null],
+  ]);
+  assert.equal(
+    await count('SELECT COUNT(*) AS count FROM expense_log WHERE user_id = ?', owner.id),
+    3
+  );
+});
+
+test('contract expense updates set, preserve, clear, and move the allowance mark', async () => {
+  const originalMonth = monthAtOffset(0);
+  const resultingMonth = monthAtOffset(1);
+  const [target, untouched] = await db.batch([
+    [`INSERT INTO expense_log
+      (user_id, month, category, amount, note, spent_on)
+     VALUES (?, ?, ?, ?, ?, ?)`, [owner.id, originalMonth, 'Food', 100, 'Target legacy NULL', `${originalMonth}-01`]],
+    [`INSERT INTO expense_log
+      (user_id, month, category, amount, note, spent_on)
+     VALUES (?, ?, ?, ?, ?, ?)`, [owner.id, originalMonth, 'Food', 200, 'Untouched legacy NULL', `${originalMonth}-02`]],
+  ]);
+  const targetId = Number(target.lastInsertRowid);
+  const untouchedId = Number(untouched.lastInsertRowid);
+
+  const marked = await canonical(
+    request(app).patch(`/api/finance/expenses/${targetId}`),
+    '98000000-0000-4000-8000-000000000001'
+  ).send({ excludeFromDailyAllowance: true, expectedRecordVersion: 0 });
+  assert.equal(marked.status, 200);
+  assert.equal(marked.body.mutation.record.excludeFromDailyAllowance, true);
+  assert.deepEqual(Object.keys(marked.body.expense).sort(), [
+    'amount',
+    'category',
+    'id',
+    'month',
+    'note',
+    'spent_on',
+  ]);
+
+  const markedReplay = await canonical(
+    request(app).patch(`/api/finance/expenses/${targetId}`),
+    '98000000-0000-4000-8000-000000000001'.toUpperCase()
+  ).send({ excludeFromDailyAllowance: true, expectedRecordVersion: 0 });
+  assert.equal(markedReplay.status, 200);
+  assert.equal(markedReplay.body.mutation.replayed, true);
+  assert.equal(markedReplay.body.mutation.changeId, marked.body.mutation.changeId);
+  assert.equal(markedReplay.body.mutation.record.excludeFromDailyAllowance, true);
+
+  const markedConflict = await canonical(
+    request(app).patch(`/api/finance/expenses/${targetId}`),
+    '98000000-0000-4000-8000-000000000001'
+  ).send({ excludeFromDailyAllowance: false, expectedRecordVersion: 0 });
+  assert.equal(markedConflict.status, 409);
+  assert.equal(markedConflict.body.error.code, 'IDEMPOTENCY_KEY_REUSED');
+
+  const amountOnly = await canonical(
+    request(app).patch(`/api/finance/expenses/${targetId}`),
+    '98000000-0000-4000-8000-000000000002'
+  ).send({ amountMinor: 15_000, expectedRecordVersion: 1 });
+  assert.equal(amountOnly.status, 200);
+  assert.equal(amountOnly.body.mutation.record.amountMinor, 15_000);
+  assert.equal(amountOnly.body.mutation.record.excludeFromDailyAllowance, true);
+
+  const movedAndCleared = await canonical(
+    request(app).patch(`/api/finance/expenses/${targetId}`),
+    '98000000-0000-4000-8000-000000000003'
+  ).send({
+    spentOn: `${resultingMonth}-01`,
+    excludeFromDailyAllowance: false,
+    expectedRecordVersion: 2,
+  });
+  assert.equal(movedAndCleared.status, 200);
+  assert.equal(movedAndCleared.body.mutation.expenseTransition.type, 'move');
+  assert.equal(movedAndCleared.body.mutation.originalPeriod, originalMonth);
+  assert.equal(movedAndCleared.body.mutation.resultingPeriod, resultingMonth);
+  assert.equal(movedAndCleared.body.mutation.record.month, resultingMonth);
+  assert.equal(movedAndCleared.body.mutation.record.excludeFromDailyAllowance, false);
+
+  const rows = await db.prepare(
+    `SELECT id, month, amount, exclude_from_daily_allowance
+       FROM expense_log
+      WHERE id IN (?, ?)
+      ORDER BY id`
+  ).all(targetId, untouchedId);
+  assert.deepEqual(rows.map((row) => ({
+    id: Number(row.id),
+    month: row.month,
+    amount: Number(row.amount),
+    exclusion: row.exclude_from_daily_allowance,
+  })), [
+    { id: targetId, month: resultingMonth, amount: 150, exclusion: null },
+    { id: untouchedId, month: originalMonth, amount: 200, exclusion: null },
+  ]);
+});
+
+test('setting and clearing the allowance mark leaves every monthly outcome byte-equal', async () => {
+  const month = monthAtOffset(0);
+  const spentOn = localDateAtOffset(0, new Date().getDate());
+  const [, expense] = await db.batch([
+    ['INSERT INTO salary_entries (user_id, month, amount) VALUES (?, ?, ?)', [owner.id, month, 10_000]],
+    [`INSERT INTO expense_log
+      (user_id, month, category, amount, note, spent_on)
+     VALUES (?, ?, ?, ?, ?, ?)`, [owner.id, month, 'Food', 100, 'Monthly outcomes stay fixed', spentOn]],
+  ]);
+  const expenseId = Number(expense.lastInsertRowid);
+
+  const before = await request(app)
+    .get(`/api/finance/clarity?month=${month}`)
+    .set('Authorization', authorization);
+  assert.equal(before.status, 200);
+  const expectedMonthlyOutcomes = monthlyOutcomesSnapshot(before.body.snapshot);
+
+  const marked = await canonical(
+    request(app).patch(`/api/finance/expenses/${expenseId}`),
+    '98000000-0000-4000-8000-000000000004'
+  ).send({ excludeFromDailyAllowance: true, expectedRecordVersion: 0 });
+  assert.equal(marked.status, 200);
+  assert.equal(marked.body.mutation.record.excludeFromDailyAllowance, true);
+  assert.equal(monthlyOutcomesSnapshot(marked.body.clarity), expectedMonthlyOutcomes);
+
+  const cleared = await canonical(
+    request(app).patch(`/api/finance/expenses/${expenseId}`),
+    '98000000-0000-4000-8000-000000000005'
+  ).send({ excludeFromDailyAllowance: false, expectedRecordVersion: 1 });
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.body.mutation.record.excludeFromDailyAllowance, false);
+  assert.equal(monthlyOutcomesSnapshot(cleared.body.clarity), expectedMonthlyOutcomes);
+});
+
+test('contract expense create and update reject non-boolean allowance marks before writing', async () => {
+  const month = monthAtOffset(0);
+  const spentOn = localDateAtOffset(0, 4);
+  const info = await db.prepare(
+    `INSERT INTO expense_log
+      (user_id, month, category, amount, note, spent_on)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(owner.id, month, 'Food', 100, 'Validation target', spentOn);
+  const invalidValues = [null, 0, 1, 'true', [], {}];
+  let sequence = 1;
+
+  for (const value of invalidValues) {
+    const suffix = String(sequence).padStart(12, '0');
+    sequence += 1;
+    const created = await canonical(
+      request(app).post('/api/finance/expenses'),
+      `99000000-0000-4000-8000-${suffix}`
+    ).send({
+      amountMinor: 10_000,
+      category: 'Food',
+      spentOn,
+      excludeFromDailyAllowance: value,
+    });
+    assert.equal(created.status, 400, `create rejects ${JSON.stringify(value)}`);
+    assert.deepEqual(created.body.error, {
+      code: 'INVALID_EXPENSE_EXCLUSION',
+      message: 'excludeFromDailyAllowance must be a boolean.',
+      field: 'excludeFromDailyAllowance',
+      constraint: { type: 'boolean', optional: true },
+    });
+
+    const updateSuffix = String(sequence).padStart(12, '0');
+    sequence += 1;
+    const updated = await canonical(
+      request(app).patch(`/api/finance/expenses/${info.lastInsertRowid}`),
+      `99000000-0000-4000-8000-${updateSuffix}`
+    ).send({ excludeFromDailyAllowance: value, expectedRecordVersion: 0 });
+    assert.equal(updated.status, 400, `update rejects ${JSON.stringify(value)}`);
+    assert.deepEqual(updated.body.error, created.body.error);
+  }
+
+  const row = await db.prepare(
+    'SELECT exclude_from_daily_allowance FROM expense_log WHERE id = ? AND user_id = ?'
+  ).get(info.lastInsertRowid, owner.id);
+  assert.equal(row.exclude_from_daily_allowance, null);
+  assert.equal(await count('SELECT COUNT(*) AS count FROM financial_record_changes'), 0);
 });

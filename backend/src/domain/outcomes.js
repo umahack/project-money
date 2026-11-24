@@ -13,6 +13,15 @@ export const OUTCOME_STATUSES = Object.freeze({
   CALCULATION_FAILED: 'calculation_failed',
 });
 
+export const OUTCOME_KINDS = Object.freeze({
+  MONTHLY_PLAN: 'monthly_plan',
+  SPENDING: 'spending',
+  GOAL: 'goal',
+  TRIP: 'trip',
+  TRIP_SUMMARY: 'trip_summary',
+  TODAY_ALLOWANCE: 'today_allowance',
+});
+
 export const VALUE_CLASSIFICATIONS = Object.freeze({
   ENTERED_FACT: 'entered_fact',
   CALCULATED_RESULT: 'calculated_result',

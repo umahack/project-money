@@ -4,6 +4,7 @@ import {
   FINANCIAL_CLARITY_TIME_ZONE,
   calculateMonthlyPlan,
 } from '../domain/monthlyPlan.js';
+import { calculateTodayAllowance } from '../domain/allowance.js';
 import { calculateTripOutcome } from '../domain/trips.js';
 import {
   buildActionSummary,
@@ -11,6 +12,7 @@ import {
   selectNearestTripSettlement,
 } from '../domain/insights.js';
 import {
+  OUTCOME_KINDS,
   OUTCOME_STATUSES,
   VALUE_CLASSIFICATIONS,
   createAuthorizedSourceAccess,
@@ -84,7 +86,7 @@ function explanationMonth(outcomeId, now, timeZone) {
     throw new TypeError('outcomeId must identify a supported outcome.');
   }
 
-  const periodOutcome = /^(?:monthly-plan|spending|trip-summary):(\d{4}-(?:0[1-9]|1[0-2]))$/.exec(
+  const periodOutcome = /^(?:monthly-plan|spending|today-allowance|trip-summary):(\d{4}-(?:0[1-9]|1[0-2]))$/.exec(
     outcomeId
   );
   if (periodOutcome) return assertMonth(periodOutcome[1], 'outcome month');
@@ -446,6 +448,36 @@ function spendingValue(plan, summary) {
   };
 }
 
+function todayAllowanceValue(result) {
+  if (result.applicable !== true) {
+    return {
+      applicable: false,
+      reason: result.reason,
+    };
+  }
+
+  return {
+    applicable: true,
+    date: result.date,
+    daysRemainingInclusive: result.daysRemainingInclusive,
+    todayAllowance: money(result.todayAllowanceMinor),
+    todaySpent: money(result.todaySpentMinor),
+    leftToday: money(result.leftTodayMinor),
+    overToday: money(result.overTodayMinor),
+    allowanceBasis: money(result.allowanceBasisMinor),
+    usedPermille: result.usedPermille,
+    zeroReason: result.zeroReason,
+    usedBeyondBudget: money(result.usedBeyondBudgetMinor),
+    excludedToday: {
+      count: result.excludedToday.count,
+      total: money(result.excludedToday.totalMinor),
+    },
+    largeEntryThreshold: result.largeEntryThresholdMinor === null
+      ? null
+      : money(result.largeEntryThresholdMinor),
+  };
+}
+
 function goalIssue(goal) {
   const normalized = firstNormalizationIssue([goal], 'goal');
   if (normalized) return normalized;
@@ -625,6 +657,7 @@ export class ClarityService {
   #repository;
   #calculateMonthlyPlan;
   #calculateExpenseSummary;
+  #calculateTodayAllowance;
   #calculateGoal;
   #calculateTripOutcome;
   #buildActionSummary;
@@ -633,6 +666,7 @@ export class ClarityService {
     repository = null,
     monthlyPlanCalculator = calculateMonthlyPlan,
     expenseSummaryCalculator = calculateExpenseSummary,
+    todayAllowanceCalculator = calculateTodayAllowance,
     goalCalculator = calculateGoal,
     tripOutcomeCalculator = calculateTripOutcome,
     actionSummaryBuilder = buildActionSummary,
@@ -645,6 +679,10 @@ export class ClarityService {
     this.#calculateExpenseSummary = assertFunction(
       expenseSummaryCalculator,
       'expenseSummaryCalculator'
+    );
+    this.#calculateTodayAllowance = assertFunction(
+      todayAllowanceCalculator,
+      'todayAllowanceCalculator'
     );
     this.#calculateGoal = assertFunction(goalCalculator, 'goalCalculator');
     this.#calculateTripOutcome = assertFunction(
@@ -767,6 +805,7 @@ export class ClarityService {
     let rawMonthlyPlan = null;
     let monthlyPlanOutcome;
     let spendingOutcome;
+    let dependencies = [];
     if (!periodData) {
       monthlyPlanOutcome = failedOutcome({
         sourceAccess,
@@ -783,7 +822,7 @@ export class ClarityService {
         dataVersion,
       });
     } else {
-      const dependencies = monthlyDependencies(periodData, exactPeriodRefs);
+      dependencies = monthlyDependencies(periodData, exactPeriodRefs);
       const monthlyResolution = createDependentOutcome({
         sourceAccess,
         id: `monthly-plan:${requestedMonth}`,
@@ -857,6 +896,64 @@ export class ClarityService {
       spendingOutcome = spendingResolution.outcome;
       if (spendingResolution.explanation) {
         explanations.set(spendingOutcome.id, spendingResolution.explanation);
+      }
+    }
+
+    const currentLocalDate = localDateForInstant(generationTime, configuredTimeZone);
+    const currentMonth = currentLocalDate.slice(0, 7);
+    let todayAllowanceOutcome;
+    if (requestedMonth !== currentMonth) {
+      const resolution = createDependentOutcome({
+        sourceAccess,
+        id: `today-allowance:${requestedMonth}`,
+        kind: OUTCOME_KINDS.TODAY_ALLOWANCE,
+        classification: VALUE_CLASSIFICATIONS.CALCULATED_RESULT,
+        period,
+        dataVersion,
+        dependencies: [],
+        retryScopeKey: `outcome:today-allowance:${requestedMonth}`,
+        calculate: () => ({
+          value: { applicable: false, reason: 'not_current_month' },
+        }),
+      });
+      todayAllowanceOutcome = { ...resolution.outcome };
+      delete todayAllowanceOutcome.explanationRef;
+    } else if (!periodData) {
+      todayAllowanceOutcome = failedOutcome({
+        sourceAccess,
+        id: `today-allowance:${requestedMonth}`,
+        kind: OUTCOME_KINDS.TODAY_ALLOWANCE,
+        period,
+        dataVersion,
+      });
+    } else {
+      const resolution = createDependentOutcome({
+        sourceAccess,
+        id: `today-allowance:${requestedMonth}`,
+        kind: OUTCOME_KINDS.TODAY_ALLOWANCE,
+        classification: VALUE_CLASSIFICATIONS.CALCULATED_RESULT,
+        period,
+        dataVersion,
+        dependencies,
+        retryScopeKey: `outcome:today-allowance:${requestedMonth}`,
+        calculate: () => {
+          const result = this.#calculateTodayAllowance({
+            month: requestedMonth,
+            localDate: currentLocalDate,
+            plan: rawMonthlyPlan,
+            expenses: periodData.expenses.records,
+          });
+          return {
+            value: todayAllowanceValue(result),
+            sourceRefs: result.sourceRefs,
+            operations: result.operations,
+            rounding: result.rounding,
+          };
+        },
+      });
+      todayAllowanceOutcome = resolution.outcome;
+      if (resolution.explanation) {
+        explanations.set(todayAllowanceOutcome.id, resolution.explanation);
       }
     }
 
@@ -1121,6 +1218,7 @@ export class ClarityService {
       outcomes: {
         monthlyPlan: monthlyPlanOutcome,
         spending: spendingOutcome,
+        todayAllowance: todayAllowanceOutcome,
         goals: goalOutcomes,
         tripSummary: tripSummaryOutcome,
       },

@@ -125,6 +125,9 @@ function baseRoutes(snapshot = spendingSnapshot(MONTH, { expenses: BASE }), expe
 const reload = vi.fn();
 beforeEach(() => {
   vi.stubEnv('VITE_FINANCIAL_CLARITY_ENABLED', 'true');
+  // This file is the contract of the page before Quick Add (Requirement 16.1): it stays flag-off whatever the build
+  // environment says. The flag-on page is covered by Spending.quickAdd*.test.tsx.
+  vi.stubEnv('VITE_QUICK_ADD_ENABLED', '');
   reload.mockClear();
   vi.stubGlobal('location', { ...window.location, reload });
 });

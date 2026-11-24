@@ -6,6 +6,7 @@ import { CategoryManager } from '../components/CategoryManager';
 import { ProfileSettings } from '../components/ProfileSettings';
 import { DangerZone } from '../components/DangerZone';
 import { AnalyticsControl } from '../components/clarity/AnalyticsControl';
+import { CategoryMemoryPanel } from '../components/clarity/CategoryMemoryPanel';
 
 export function Settings() {
   return (
@@ -19,6 +20,7 @@ export function Settings() {
       <CategoryManager />
       <ChangePassword />
       <AnalyticsControl />
+      <CategoryMemoryPanel />
       <ExportData />
       <DangerZone />
     </>

@@ -18,6 +18,7 @@ import type {
 import type { SnapshotPatch } from './patchReducer';
 import { parseMinor, type FieldProblem } from './planInputs';
 import type { ConfirmedState } from './purposeRegistry';
+import type { ConfirmedExpenseChange } from './quickAdd/expenseEvents';
 
 export const EXPENSE_NOTE_MAX = 120;
 /** Used until the server's category list loads. */
@@ -36,6 +37,8 @@ export interface ExpenseRow {
   note: string | null;
   spent_on: string | null;
   created_at: string;
+  /** The "not counted in the daily allowance" mark. Absent from servers that do not report it, which means counted. */
+  excludeFromDailyAllowance?: boolean;
 }
 
 export interface ExpensesResponse {
@@ -54,6 +57,8 @@ export interface ExpenseView {
   /** The saved date, or null for an old row that has none. */
   spentOn: string | null;
   displayDate: string;
+  /** The row carries the "not counted in the daily allowance" mark. */
+  excluded: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,6 +74,7 @@ export function toExpenseView(row: ExpenseRow): ExpenseView {
     note: row.note,
     spentOn: row.spent_on,
     displayDate: row.spent_on ?? row.created_at.slice(0, 10),
+    excluded: row.excludeFromDailyAllowance === true,
   };
 }
 
@@ -87,11 +93,13 @@ export function sortExpenses(rows: readonly ExpenseRow[]): ExpenseRow[] {
 /** Reads the confirmed expense record a mutation response carries. Returns null for any other shape. */
 export function expenseRowFromRecord(record: unknown, previous?: ExpenseRow): ExpenseRow | null {
   if (!isRecord(record)) return null;
-  const { id, month, category, amountMinor, note, spentOn } = record;
+  const { id, month, category, amountMinor, note, spentOn, excludeFromDailyAllowance } = record;
   if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) return null;
   if (typeof month !== 'string' || typeof category !== 'string') return null;
   if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor)) return null;
   const date = typeof spentOn === 'string' ? spentOn : null;
+  // A record that does not report the mark leaves the one the row already had.
+  const mark = typeof excludeFromDailyAllowance === 'boolean' ? excludeFromDailyAllowance : previous?.excludeFromDailyAllowance;
   return {
     id,
     month,
@@ -100,6 +108,7 @@ export function expenseRowFromRecord(record: unknown, previous?: ExpenseRow): Ex
     note: typeof note === 'string' ? note : null,
     spent_on: date,
     created_at: previous?.created_at ?? `${date ?? `${month}-01`} 00:00:00`,
+    ...(mark === undefined ? {} : { excludeFromDailyAllowance: mark }),
   };
 }
 
@@ -121,6 +130,37 @@ export function applyConfirmedExpense(list: ExpensesResponse, mutation: Mutation
   if (!row) return list;
   if (row.month !== list.month) return { ...list, expenses: without };
   return { ...list, expenses: sortExpenses([...without, row]) };
+}
+
+/**
+ * Whether a confirmed change from the change bus concerns the month this list shows:
+ * it left that month, arrived in it, or happened inside it.
+ */
+export function expenseChangeTouchesMonth(change: ConfirmedExpenseChange, month: string): boolean {
+  return change.originalMonth === month || change.resultingMonth === month || change.record?.month === month;
+}
+
+/**
+ * Applies one confirmed change published by Quick Add to the list for `list.month`, from the server's confirmed
+ * record alone. A create or update inserts or replaces the row (so the same event twice leaves one row), a record
+ * that moved to another month and a delete remove it, and a change for another month leaves the list as it was.
+ * Returns the same object when nothing applies. Totals are not touched: they come from the server's snapshot.
+ */
+export function applyExpenseChange(list: ExpensesResponse, change: ConfirmedExpenseChange): ExpensesResponse {
+  const id = change.expenseId;
+  const previous = list.expenses.find((row) => row.id === id);
+  const without = (): ExpensesResponse => ({ ...list, expenses: list.expenses.filter((row) => row.id !== id) });
+  if (change.kind === 'delete') {
+    if (!previous) return list;
+    if (change.originalMonth !== null && change.originalMonth !== list.month) return list;
+    return without();
+  }
+  const { record } = change;
+  if (!record || record.id !== id) return list;
+  const row = expenseRowFromRecord(record, previous);
+  if (!row) return list;
+  if (row.month !== list.month) return previous ? without() : list;
+  return { ...list, expenses: sortExpenses([...list.expenses.filter((item) => item.id !== id), row]) };
 }
 
 /* ------------------------------ Validation ------------------------------ */

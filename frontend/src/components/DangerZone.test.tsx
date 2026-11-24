@@ -131,3 +131,47 @@ describe('DangerZone failure containment', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+// Quick Add's category memory is one more record category of the account (Requirements 6.15 to 6.17): when export or
+// deletion cannot cover it, it is named like any other category, with the server's plain-language description.
+const MEMORY_DESCRIPTION = 'Remembered category choices used to suggest a category for notes you type in Quick Add.';
+describe('DangerZone with category memory', () => {
+  it('names category memory when an export is unsuccessful, beside the other categories', async () => {
+    const payload = {
+      ...EXPORT_FAILURE,
+      failed_record_categories: [
+        ...EXPORT_FAILURE.failed_record_categories,
+        { key: 'category_memory', description: MEMORY_DESCRIPTION },
+      ],
+    };
+    queueApiResponses({ status: 500, body: payload });
+    const result = renderAuthenticated(<DangerZone />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /download my data/i }));
+    const failure = await screen.findByRole('alert', { name: 'Export unsuccessful' });
+    expect(within(failure).getByText(/Product measurement events:/i)).toBeInTheDocument();
+    const memory = within(failure).getByText(/Category memory:/i).closest('li') as HTMLElement;
+    expect(memory).toHaveTextContent(MEMORY_DESCRIPTION);
+    expect(within(failure).getAllByRole('listitem')).toHaveLength(2);
+    expect(await axe(result.container)).toHaveNoViolations();
+  });
+
+  it('reports category memory as an undeleted record category and keeps the account for a retry', async () => {
+    const payload = {
+      ...DELETION_FAILURE,
+      undeleted_record_categories: [{ key: 'category_memory', description: MEMORY_DESCRIPTION }],
+    };
+    queueApiResponses({ status: 500, body: payload });
+    const result = renderAuthenticated(<DangerZone />);
+    const user = userEvent.setup();
+    await confirmDeletion(user);
+    const failure = await screen.findByRole('alert', { name: 'Account deletion incomplete' });
+    const memory = within(failure).getByText(/Category memory:/i).closest('li') as HTMLElement;
+    expect(memory).toHaveTextContent(MEMORY_DESCRIPTION);
+    expect(within(failure).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(failure).getByRole('button', { name: 'Retry account deletion' })).toBeEnabled();
+    expect(sessionStorage.getItem('pm_token')).toBe('test.jwt.token');
+    expect(await axe(result.container)).toHaveNoViolations();
+  });
+});
+

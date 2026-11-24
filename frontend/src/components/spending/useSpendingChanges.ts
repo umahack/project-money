@@ -4,11 +4,15 @@ import { api } from '../../api';
 import type { MutationMetadata } from '../../clarity/contracts';
 import { useMutationRunner } from '../../clarity/MutationStatusProvider';
 import type { MutationCommand, MutationSubmitResult } from '../../clarity/mutationStatusStore';
+import { subscribeToExpenseChanges } from '../../clarity/quickAdd/expenseEvents';
 import { queryKeys } from '../../clarity/queryClient';
+import { selectQuickAddEnabled } from '../../clarity/rollout';
 import {
   TREATMENT_LABEL,
   applyConfirmedExpense,
+  applyExpenseChange,
   describeExpenseTransition,
+  expenseChangeTouchesMonth,
   readExpenseTransition,
   treatmentPatch,
   treatmentScope,
@@ -39,6 +43,8 @@ export interface RowOverlay {
   amountMinor: number;
   note: string | null;
   spentOn: string;
+  /** The mark shown while the change is pending. Absent when the change does not carry it. */
+  excluded?: boolean;
 }
 
 /** A new expense that has been submitted and is not confirmed yet, or failed. */
@@ -83,6 +89,11 @@ function localToday(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+export interface ExpenseListOptions {
+  /** A Quick Add change is removing a row that holds keyboard focus. Called before the row leaves, so focus can move on. */
+  onRowLeaving?: (expenseId: number) => void;
+}
+
 export interface ExpenseListState {
   data: ExpensesResponse | undefined;
   error: unknown;
@@ -97,13 +108,24 @@ export interface ExpenseListState {
  * applied from its own response, so a change never triggers a broad refetch.
  * A read that was running when a change was confirmed is repeated, so it cannot
  * bring back an older list.
+ *
+ * While Quick_Add_Enabled, the list also follows the confirmed-change bus: an
+ * expense that Quick Add created, corrected, moved, or removed is inserted,
+ * replaced, or removed in place from the server's confirmed record, with no read
+ * and no loading state. Changes for other months are ignored, and the month's
+ * snapshot is marked stale so the server's totals are read again, never summed here.
  */
-export function useExpenseList(month: string): ExpenseListState {
+export function useExpenseList(month: string, options: ExpenseListOptions = {}): ExpenseListState {
   const [data, setData] = useState<ExpensesResponse | undefined>();
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const epoch = useRef(0);
   const alive = useRef(true);
+  const queryClient = useQueryClient();
+  const latest = useRef(data);
+  latest.current = data;
+  const onRowLeaving = useRef(options.onRowLeaving);
+  onRowLeaving.current = options.onRowLeaving;
 
   useEffect(() => {
     alive.current = true;
@@ -139,6 +161,28 @@ export function useExpenseList(month: string): ExpenseListState {
     epoch.current += 1;
     setData((current) => (current ? applyConfirmedExpense(current, mutation) : current));
   }, []);
+
+  useEffect(() => {
+    if (!selectQuickAddEnabled()) return undefined;
+    return subscribeToExpenseChanges((change) => {
+      if (!expenseChangeTouchesMonth(change, month)) return;
+      // A read that is running now may have started before this change, so it is repeated.
+      epoch.current += 1;
+      const current = latest.current;
+      if (current) {
+        const next = applyExpenseChange(current, change);
+        if (next !== current) {
+          // The row is about to leave the list. Tell the page while it still holds focus, so focus can be handed on.
+          const leaving = !next.expenses.some((row) => row.id === change.expenseId);
+          const row = leaving ? document.getElementById(`expense-${change.expenseId}`) : null;
+          if (row?.contains(document.activeElement)) onRowLeaving.current?.(change.expenseId);
+        }
+        setData((previous) => (previous ? applyExpenseChange(previous, change) : previous));
+      }
+      // The month's totals come from the server. Mark the confirmed snapshot stale so it is read again.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clarity(month) });
+    });
+  }, [month, queryClient]);
 
   return useMemo(() => ({ data, error, loading, reload, apply }), [data, error, loading, reload, apply]);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
-import { AnimatePresence, motion, useMotionValue, useSpring } from 'framer-motion';
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
 import { inr } from '../money';
 
 /** Glass card with a cursor-following spotlight and a gentle 3D tilt on hover. */
@@ -182,6 +182,9 @@ const MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):
 /** Accessible modal: Esc and backdrop close it (unless `locked`), focus moves into it and stays in it, scroll is frozen. */
 export function Modal({ open, onClose, children, title, locked = false }: { open: boolean; onClose: () => void; children: ReactNode; title: string; locked?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
+  // CSS cannot stop Framer Motion, which writes the transform inline. With reduced motion the box only fades, so nothing
+  // scales or slides (Requirement 12.10 of Quick Add, which opens in this dialog).
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
@@ -229,10 +232,10 @@ export function Modal({ open, onClose, children, title, locked = false }: { open
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            initial={{ scale: 0.92, y: 24, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            exit={{ scale: 0.96, y: 16, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+            initial={reduceMotion ? { opacity: 0 } : { scale: 0.92, y: 24, opacity: 0 }}
+            animate={reduceMotion ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { scale: 0.96, y: 16, opacity: 0 }}
+            transition={reduceMotion ? { duration: 0.12 } : { type: 'spring', stiffness: 300, damping: 26 }}
           >
             {children}
           </motion.div>

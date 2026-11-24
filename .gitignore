@@ -22,7 +22,9 @@ data.sqlite-shm
 dist
 coverage
 frontend/playwright-report
+frontend/playwright-report-quickadd
 frontend/test-results
+test-results
 .DS_Store
 
 # Local-only drafts (Instagram story mockups etc.)

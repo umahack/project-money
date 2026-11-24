@@ -12,5 +12,6 @@ export function readBooleanFeatureFlag(value) {
 export function readServerFeatureFlags(environment = process.env) {
   return Object.freeze({
     clarityShadowCompare: readBooleanFeatureFlag(environment?.CLARITY_SHADOW_COMPARE),
+    quickAddEnabled: readBooleanFeatureFlag(environment?.QUICK_ADD_ENABLED),
   });
 }

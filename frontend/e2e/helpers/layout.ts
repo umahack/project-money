@@ -289,9 +289,11 @@ export async function contentHiddenByBottomNavigation(page: Page): Promise<strin
 /** Waits for finite entrance animations and transitions to finish, so the audit sees the settled layout. */
 export async function settleAnimations(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const finite = document.getAnimations().filter((animation) => (
-      animation.effect?.getComputedTiming().iterations !== Infinity
-    ));
+    // A progress animation such as the 8-second Undo bar is not an entrance, and a paused one never ends.
+    const finite = document.getAnimations().filter((animation) => {
+      const timing = animation.effect?.getComputedTiming();
+      return timing !== undefined && timing.iterations !== Infinity && Number(timing.endTime) <= 3000;
+    });
     await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
   });
 }

@@ -1,0 +1,53 @@
+/* Home's "You can spend ₹X today" headline. Reuses the clarity tokens (--text, --muted, --border, --clarity-*)
+   and the outcome-card styles, so it follows the light and dark themes with no colours of its own. */
+.today-headline-region { min-width: 0; max-width: 100%; margin-bottom: 0.75rem; overflow-wrap: anywhere; }
+.today-headline-region .card { margin: 0; }
+.today-headline { display: grid; gap: 0.3rem; margin: 0.2rem 0 0; min-width: 0; }
+.today-headline p { margin: 0; }
+/* The allowance and "left today" sit side by side. When they do not fit (a narrow screen or enlarged text) the
+   second one wraps under the first. Widths are in rem and follow the text size, so nothing is clipped. */
+.today-headline-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1.2rem; min-width: 0; }
+.today-headline-main { font-size: clamp(1.35rem, 6vw, 1.9rem); font-weight: 700; line-height: 1.2; min-width: 0; }
+.today-headline-amount { font-weight: 800; }
+.today-headline-left { font-size: 1.05rem; font-weight: 600; min-width: 0; }
+.today-headline-left-amount { font-weight: 700; }
+/* Over today's allowance: the words and the "!" carry the meaning; the tone only reinforces it. */
+.today-headline-over { --tone: var(--clarity-danger); color: var(--tone); }
+.today-headline-glyph { font-weight: 800; margin-right: 0.35rem; }
+.today-headline-spent { color: var(--text); }
+.today-headline-basis { display: inline; }
+.today-headline-progress { display: grid; gap: 0.3rem; margin-top: 0.1rem; }
+.today-headline-track {
+  height: 10px;
+  max-width: 28rem;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--border);
+}
+.today-headline-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--c-save, var(--clarity-ok));
+  transition: width 0.25s ease;
+}
+.today-headline-fill-over { background: var(--clarity-danger); }
+.today-headline-percent { color: var(--text); }
+.today-headline-reason { display: grid; gap: 0.3rem; justify-items: start; }
+.today-headline-excluded { color: var(--muted); }
+.today-headline-needed { margin: 0 0 0.4rem; font-weight: 600; }
+/* Every control in the headline, including the retry, the explanation toggle, and the links, is at least 44 by
+   44 CSS pixels at every width (Requirement 12.7). */
+.today-headline-region :is(.btn, .clarity-action-link, .clarity-retry, .clarity-disclosure) {
+  min-height: 44px;
+  min-width: 44px;
+}
+.today-headline-region .clarity-action-link { display: inline-flex; align-items: center; }
+@media (min-width: 900px) {
+  .today-headline-main { font-size: clamp(1.7rem, 2.2vw, 2.1rem); }
+  .today-headline-left { font-size: 1.2rem; }
+}
+/* Reduced motion: the bar changes at once and nothing moves (Requirement 12.10). */
+@media (prefers-reduced-motion: reduce) {
+  .today-headline-fill { transition: none !important; animation: none !important; }
+}

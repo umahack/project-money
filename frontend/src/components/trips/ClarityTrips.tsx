@@ -9,7 +9,8 @@ import { useFinancialClarity } from '../../clarity/FinancialClarityProvider';
 import { useActionArrival } from '../../clarity/useActionArrival';
 import { useClaritySnapshotQuery } from '../../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../../clarity/useHeaderAction';
-import { currentMonth, inr, parseAmount } from '../../money';
+import { useKolkataMonth } from '../../clarity/quickAdd/kolkata';
+import { inr, parseAmount } from '../../money';
 import { errText, useToast } from '../../state';
 import type { Trip } from '../../types';
 import { ClarityPageHeader } from '../clarity/ClarityPageHeader';
@@ -48,7 +49,7 @@ export function ClarityTrips() {
   const nav = useNavigate();
   const ids = useId();
   const gate = useDataUseGate();
-  const month = currentMonth();
+  const month = useKolkataMonth();
   const [trips, setTrips] = useState<Trip[] | null>(null);
   const [loadError, setLoadError] = useState<unknown>();
   const [open, setOpen] = useState(false);

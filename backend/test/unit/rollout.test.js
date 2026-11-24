@@ -67,18 +67,47 @@ test('server rollout flags remain disabled for absent or unsupported values', ()
   assert.equal(readBooleanFeatureFlag(undefined), false);
   assert.equal(readBooleanFeatureFlag(''), false);
   assert.equal(readBooleanFeatureFlag('yes'), false);
-  assert.deepEqual(readServerFeatureFlags({}), { clarityShadowCompare: false });
-  assert.deepEqual(readServerFeatureFlags({ CLARITY_SHADOW_COMPARE: 'false' }), {
+  assert.deepEqual(readServerFeatureFlags({}), {
     clarityShadowCompare: false,
+    quickAddEnabled: false,
+  });
+  assert.deepEqual(readServerFeatureFlags({
+    CLARITY_SHADOW_COMPARE: 'false',
+    QUICK_ADD_ENABLED: 'yes',
+  }), {
+    clarityShadowCompare: false,
+    quickAddEnabled: false,
   });
 });
 
 test('server rollout flag accepts only explicit true values', () => {
   assert.equal(readBooleanFeatureFlag('1'), true);
   assert.equal(readBooleanFeatureFlag(' true '), true);
-  assert.deepEqual(readServerFeatureFlags({ CLARITY_SHADOW_COMPARE: 'TRUE' }), {
+  assert.deepEqual(readServerFeatureFlags({
+    CLARITY_SHADOW_COMPARE: 'TRUE',
+    QUICK_ADD_ENABLED: '1',
+  }), {
     clarityShadowCompare: true,
+    quickAddEnabled: true,
   });
+});
+
+test('QUICK_ADD_ENABLED accepts only the approved fail-closed true forms', () => {
+  for (const value of ['1', 'true', 'TRUE', ' TrUe ', ' 1 ']) {
+    assert.equal(
+      readServerFeatureFlags({ QUICK_ADD_ENABLED: value }).quickAddEnabled,
+      true,
+      `${JSON.stringify(value)} should enable Quick Add`
+    );
+  }
+
+  for (const value of [undefined, '', '0', 'false', 'yes', 'on', '1.0', 'true1', 1, true]) {
+    assert.equal(
+      readServerFeatureFlags({ QUICK_ADD_ENABLED: value }).quickAddEnabled,
+      false,
+      `${JSON.stringify(value)} should fail closed`
+    );
+  }
 });
 
 test('legacy response stays exact without contract version 1', () => {

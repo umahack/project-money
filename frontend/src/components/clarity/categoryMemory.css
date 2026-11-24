@@ -1,0 +1,56 @@
+@import './clarity.css';
+
+/* Settings panel for remembered category choices. Reuses the app tokens from styles.css so both themes keep their
+   palette. Meaning is always carried by text. One column from 320 to 3840 CSS pixels, long notes wrap. */
+
+.memory-panel { min-width: 0; overflow-wrap: anywhere; }
+.memory-panel h2:focus { outline: none; }
+.memory-panel h2:focus-visible { outline: 3px solid var(--clarity-focus, var(--accent)); outline-offset: 3px; border-radius: 6px; }
+
+.memory-panel :focus-visible { outline: 3px solid var(--clarity-focus, var(--accent)); outline-offset: 2px; }
+
+/* Every control is at least 44 by 44 CSS pixels, including the small button variant. */
+.memory-panel .btn,
+.memory-panel .btn.sm { min-height: 44px; min-width: 44px; white-space: normal; text-align: center; }
+.memory-panel .btn[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+
+.memory-facts { margin: 0.6rem 0; display: grid; gap: 0.35rem; }
+.memory-facts > div { display: grid; gap: 0.05rem; min-width: 0; }
+.memory-facts dt { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.memory-facts dd { margin: 0; min-width: 0; }
+@media (min-width: 720px) {
+  .memory-facts > div { grid-template-columns: 11rem 1fr; gap: 0.6rem; }
+}
+
+.memory-list { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+.memory-row {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.3rem 0.8rem; align-items: center;
+  border: 1px solid var(--border); border-radius: 14px; padding: 0.55rem 0.8rem; min-width: 0;
+}
+.memory-row-text { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.memory-row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.memory-row-status { margin: 0; color: var(--muted); min-width: 0; }
+.memory-row-failure { margin: 0; min-width: 0; color: var(--text); border-left: 4px solid var(--clarity-danger, var(--danger)); padding-left: 0.6rem; }
+@media (min-width: 640px) {
+  .memory-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .memory-row-status, .memory-row-failure { grid-column: 1 / -1; }
+}
+
+.memory-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.8rem 0 0; }
+
+.memory-confirm {
+  margin: 0.8rem 0 0; padding: 0.7rem 0.9rem; min-width: 0;
+  border: 1px solid var(--clarity-warn, var(--warn)); border-left-width: 4px; border-radius: 12px;
+  background: color-mix(in srgb, var(--clarity-warn, var(--warn)) 8%, transparent);
+}
+.memory-confirm p { margin: 0.2rem 0; }
+.memory-confirm-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+
+.memory-notice {
+  margin: 0.7rem 0 0; padding: 0.5rem 0.7rem; border-left: 4px solid var(--clarity-info, var(--accent));
+  border-radius: 10px; background: var(--glass); color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-panel, .memory-panel * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}

@@ -1,6 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import express from 'express';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { createIsolatedTestDatabase } from '../helpers/testDatabase.js';
@@ -11,14 +12,18 @@ import {
 
 let testDatabase;
 let server;
+let fixedClockApp;
 let ownerToken;
 let revokedToken;
+let noPlanToken;
 
 const OWNER_ID = 101;
 const OTHER_USER_ID = 102;
+const NO_PLAN_USER_ID = 103;
 const OWNER_SESSION_ID = 201;
 const REVOKED_SESSION_ID = 202;
 const OTHER_SESSION_ID = 203;
+const NO_PLAN_SESSION_ID = 204;
 const JANUARY = '2026-01';
 const FEBRUARY = '2026-02';
 
@@ -70,8 +75,10 @@ before(async () => {
   const { db } = testDatabase;
   const owner = buildUserFixture({ id: OWNER_ID, email: 'clarity-owner@example.test' });
   const otherUser = buildUserFixture({ id: OTHER_USER_ID, email: 'clarity-other@example.test' });
+  const noPlanUser = buildUserFixture({ id: NO_PLAN_USER_ID, email: 'clarity-no-plan@example.test' });
   await insertUser(db, owner);
   await insertUser(db, otherUser);
+  await insertUser(db, noPlanUser);
 
   await insertSession(db, buildSessionFixture({
     id: OWNER_SESSION_ID,
@@ -90,6 +97,11 @@ before(async () => {
     userId: OTHER_USER_ID,
     ip_hash: 'clarity-other-session',
   }));
+  await insertSession(db, buildSessionFixture({
+    id: NO_PLAN_SESSION_ID,
+    userId: NO_PLAN_USER_ID,
+    ip_hash: 'clarity-no-plan-session',
+  }));
 
   await db.prepare(
     'INSERT INTO user_financial_state (user_id, data_version) VALUES (?, ?)'
@@ -97,6 +109,9 @@ before(async () => {
   await db.prepare(
     'INSERT INTO user_financial_state (user_id, data_version) VALUES (?, ?)'
   ).run(OTHER_USER_ID, 6);
+  await db.prepare(
+    'INSERT INTO user_financial_state (user_id, data_version) VALUES (?, ?)'
+  ).run(NO_PLAN_USER_ID, 4);
 
   await db.prepare(
     `INSERT INTO salary_entries (id, user_id, month, amount, created_at, updated_at)
@@ -148,10 +163,18 @@ before(async () => {
 
   ownerToken = signToken(OWNER_ID, OWNER_SESSION_ID);
   revokedToken = signToken(OWNER_ID, REVOKED_SESSION_ID);
+  noPlanToken = signToken(NO_PLAN_USER_ID, NO_PLAN_SESSION_ID);
 
   const { createApp } = await import('../../src/app.js');
   server = createApp().listen(0, '127.0.0.1');
   await once(server, 'listening');
+
+  const { createClarityRouter } = await import('../../src/routes/clarity.js');
+  fixedClockApp = express();
+  fixedClockApp.use(express.json());
+  fixedClockApp.use('/api/finance', createClarityRouter({
+    clock: () => new Date('2026-01-15T06:30:00.000Z'),
+  }));
 });
 
 after(async () => {
@@ -255,6 +278,86 @@ test('explanation reads enforce outcome ownership and validate identifiers', asy
     .set('Authorization', `Bearer ${ownerToken}`);
   assert.equal(invalidVersion.status, 400);
   assert.equal(invalidVersion.body.error.code, 'INVALID_VERSION');
+});
+
+test('today allowance is current-date explainable, non-current unavailable, and malformed IDs are rejected', async () => {
+  const snapshotResponse = await request(fixedClockApp)
+    .get(`/api/finance/clarity?month=${JANUARY}`)
+    .set('Authorization', `Bearer ${ownerToken}`);
+  assert.equal(snapshotResponse.status, 200);
+  const outcome = snapshotResponse.body.snapshot.outcomes.todayAllowance;
+  assert.equal(outcome.id, `today-allowance:${JANUARY}`);
+  assert.equal(outcome.kind, 'today_allowance');
+  assert.equal(outcome.status, 'available');
+  assert.equal(outcome.dataVersion, 3);
+  assert.deepEqual(outcome.period, snapshotResponse.body.snapshot.period);
+  assert.deepEqual(outcome.value, {
+    applicable: true,
+    date: '2026-01-15',
+    daysRemainingInclusive: 17,
+    todayAllowance: { currency: 'INR', amountMinor: 463_232 },
+    todaySpent: { currency: 'INR', amountMinor: 0 },
+    leftToday: { currency: 'INR', amountMinor: 463_232 },
+    overToday: { currency: 'INR', amountMinor: 0 },
+    allowanceBasis: { currency: 'INR', amountMinor: 7_874_950 },
+    usedPermille: 0,
+    zeroReason: null,
+    usedBeyondBudget: { currency: 'INR', amountMinor: 0 },
+    excludedToday: {
+      count: 0,
+      total: { currency: 'INR', amountMinor: 0 },
+    },
+    largeEntryThreshold: { currency: 'INR', amountMinor: 2_000_000 },
+  });
+
+  const explanation = await request(fixedClockApp)
+    .get(`/api/finance/explanations/today-allowance:${JANUARY}?version=3`)
+    .set('Authorization', `Bearer ${ownerToken}`);
+  assert.equal(explanation.status, 200);
+  assert.equal(explanation.body.schemaVersion, 1);
+  assert.equal(explanation.body.explanation.outcomeId, `today-allowance:${JANUARY}`);
+  assert.equal(explanation.body.explanation.kind, 'today_allowance');
+  assert.equal(explanation.body.explanation.dataVersion, 3);
+  assert.deepEqual(explanation.body.explanation.period, outcome.period);
+  assert.deepEqual(explanation.body.explanation.result.value, outcome.value);
+  assert.deepEqual(
+    explanation.body.explanation.operations.map(({ stage }) => stage),
+    [
+      'spendable_budget',
+      'expenses_used',
+      'remaining_spendable',
+      'add_today_spent',
+      'divide_days',
+      'floor_zero',
+      'subtract_today_spent',
+      'versus_guide',
+    ]
+  );
+  assert.ok(explanation.body.explanation.sourceRefs.every(({ recordId }) => recordId !== 322));
+
+  const notOwned = await request(fixedClockApp)
+    .get(`/api/finance/explanations/today-allowance:${JANUARY}?version=3`)
+    .set('Authorization', `Bearer ${noPlanToken}`);
+  assert.equal(notOwned.status, 404);
+  assert.equal(notOwned.body.error.code, 'OUTCOME_NOT_FOUND');
+
+  const nonCurrent = await request(fixedClockApp)
+    .get(`/api/finance/explanations/today-allowance:${FEBRUARY}`)
+    .set('Authorization', `Bearer ${ownerToken}`);
+  assert.equal(nonCurrent.status, 404);
+  assert.equal(nonCurrent.body.error.code, 'OUTCOME_NOT_FOUND');
+
+  for (const malformed of [
+    'today-allowance:2026-1',
+    'today-allowance:2026-13',
+    'today-allowance:2026-01-extra',
+  ]) {
+    const response = await request(fixedClockApp)
+      .get(`/api/finance/explanations/${malformed}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    assert.equal(response.status, 400, malformed);
+    assert.equal(response.body.error.code, 'INVALID_OUTCOME_ID', malformed);
+  }
 });
 
 test('superseded explanation responses contain one coherent current version', async () => {

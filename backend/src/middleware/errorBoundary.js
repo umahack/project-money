@@ -20,6 +20,8 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const CLARITY_PATH_PREFIXES = Object.freeze([
   '/api/clarity/',
   '/api/finance/explanations/',
+  '/api/finance/quick-add/',
+  '/api/finance/category-memory',
   '/api/admin/clarity-reports',
   '/api/internal/cron/clarity-reports',
 ]);

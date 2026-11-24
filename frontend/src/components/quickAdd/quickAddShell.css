@@ -1,0 +1,71 @@
+@import '../clarity/clarity.css';
+
+/* The Quick Add panel, dialog, floating action, and failed-entries status. Colors come from the app tokens, so both
+   themes keep their palette. One column from 320 to 3840 CSS pixels, long text wraps, and nothing scrolls sideways.
+   Every control is at least 44 by 44 CSS pixels, and the floating action is at least 48 by 48. */
+
+.qa-label-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.2rem 0.75rem; min-width: 0; }
+.qa-shortcut-hint { color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.qa-shortcut-hint kbd {
+  white-space: nowrap; padding: 0.05rem 0.4rem; border: 1px solid var(--border); border-radius: 6px;
+  font: inherit; font-weight: 600; color: var(--text); background: transparent;
+}
+
+.qa-panel { display: grid; gap: 1rem; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+
+/* The dialog */
+.qa-dialog-body { display: grid; gap: 1rem; min-width: 0; max-width: 100%; }
+.qa-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-width: 0; }
+.qa-dialog-title { margin: 0; font-size: 1.2rem; min-width: 0; overflow-wrap: anywhere; }
+.qa-dialog-close { min-width: 44px; min-height: 44px; }
+.qa-dialog-foot { margin: 0; min-width: 0; }
+.qa-dialog-foot:empty { display: none; }
+/* A wider dialog than the standard modal, and at the top of a phone screen so the on-screen keyboard leaves it in view. */
+.modal:has(.qa-dialog-body) { width: min(600px, 100%); overscroll-behavior: contain; }
+.modal-backdrop:has(.qa-dialog-body) { align-items: start; overflow: auto; }
+@media (min-width: 900px) {
+  .modal-backdrop:has(.qa-dialog-body) { align-items: center; }
+}
+
+/* The floating action. It is not rendered at 900px and wider. */
+.qa-fab {
+  position: fixed; z-index: 80;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: calc(var(--bottom-nav-h, 0px) + env(safe-area-inset-bottom) + 1rem);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 48px; min-height: 48px; max-width: calc(100vw - 2rem); padding: 0.4rem 1rem; gap: 0.4rem;
+  border: 0; border-radius: 999px; cursor: pointer; text-align: center;
+  /* The page color on the info tone is 12:1 in the dark theme and 5.2:1 in the light theme. The old accent fill with white
+     text was 1.6:1 in the dark theme and 2.5:1 in the light theme. The same tone against the page is far above 3:1. */
+  background: var(--clarity-info); color: var(--bg); font: inherit; font-weight: 700;
+  box-shadow: var(--shadow);
+}
+.qa-fab-plus { font-size: 1.5rem; line-height: 1; }
+.qa-fab:focus-visible { outline: 3px solid var(--clarity-focus); outline-offset: 3px; }
+@media (min-width: 900px) {
+  .qa-fab { display: none; }
+}
+
+/* The nonblocking status for entries that were not saved. It sits in the page flow, so it never covers anything. */
+.qa-failed-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; min-width: 0;
+  margin: 0 0 1rem; padding: 0.6rem 0.8rem;
+  border: 1px solid var(--clarity-danger); border-left-width: 4px; border-radius: 12px;
+  background: color-mix(in srgb, var(--clarity-danger) 8%, transparent); color: var(--text);
+}
+.qa-failed-status p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.qa-failed-status .btn { min-height: 44px; min-width: 44px; white-space: normal; }
+
+.qa-dialog-body :focus-visible, .qa-failed-status :focus-visible { outline: 3px solid var(--clarity-focus); outline-offset: 2px; }
+.qa-dialog-body .btn { min-height: 44px; min-width: 44px; }
+/* The dialog is not inside `main`, so the page-level field and placeholder rules do not reach its fields. */
+.qa-dialog-body :is(input, select) { min-height: 44px; border-color: var(--field-border, var(--muted)); }
+/* The light theme styles `input`, `select`, and their `:focus` with `:root[data-theme='light'] ...`, which outranks the rule
+   above. That left a 1.3:1 edge on a select and a 2.5:1 edge on a focused input in the light dialog. This one outranks it
+   (the clarity page rule that does the same inside `main` cannot reach the dialog). */
+:root .qa-dialog-body :is(input, select):not([type='checkbox']):not([type='radio']) { border-color: var(--field-border, var(--muted)); }
+.qa-dialog-body input::placeholder { color: var(--muted); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-fab, .qa-dialog-body, .qa-failed-status { transition: none !important; animation: none !important; }
+}

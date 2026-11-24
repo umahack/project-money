@@ -28,6 +28,9 @@ services:
       # Shadow comparison is opt-in and emits mismatch codes only.
       - key: CLARITY_SHADOW_COMPARE
         value: "false"
+      # Quick Add server half (memory writes, data-use notice v2). Turn on before the client flag.
+      - key: QUICK_ADD_ENABLED
+        value: "false"
       - key: ADMIN_EMAILS
         sync: false
       - key: TURSO_DATABASE_URL
@@ -60,6 +63,9 @@ services:
         sync: false
       # Roll back to the established UI/read path unless explicitly enabled.
       - key: VITE_FINANCIAL_CLARITY_ENABLED
+        value: "false"
+      # Quick Add client half. Needs the clarity flag and QUICK_ADD_ENABLED on the API.
+      - key: VITE_QUICK_ADD_ENABLED
         value: "false"
     routes:
       - type: rewrite

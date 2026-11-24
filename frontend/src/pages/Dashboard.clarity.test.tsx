@@ -1,12 +1,16 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PAGE_DECISIONS } from '../clarity/actionContext';
-import type { FinancialSnapshot, GoalOutcomeValue, Outcome, SpendingOutcomeValue } from '../clarity/contracts';
+import type { FinancialSnapshot, GoalOutcomeValue, Outcome, SpendingOutcomeValue, TodayAllowanceOutcome } from '../clarity/contracts';
 import { FinancialClarityProvider } from '../clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from '../clarity/MutationStatusProvider';
 import { queryKeys } from '../clarity/queryClient';
+import { kolkataToday } from '../clarity/quickAdd/kolkata';
+import { QuickAddProvider } from '../clarity/quickAdd/QuickAddProvider';
+import { createQuickAddStore } from '../clarity/quickAdd/quickAddStore';
+import { QUICK_ADD_LABEL } from '../components/quickAdd/QuickAddInput';
 import { correctiveActionFor, selectHomeSummary } from '../components/dashboard/homeSummary';
 import { currentMonth, monthLabel } from '../money';
 import {
@@ -686,5 +690,206 @@ describe.each(['light', 'dark'] as const)('accessibility in the %s theme', (them
       goals: [],
       trips: [],
     }));
+  });
+});
+
+// ---- Task 14.3: the order and the flags with Quick Add (Requirements 1.1, 11.1, 11.19) ----
+//
+// Every test above runs with the Rollout_Flag on and the Quick_Add_Flag off, so they pin the pre-feature Home. These pin
+// the new order while Quick_Add_Enabled and the flag combinations that must leave the pre-feature Home as it was.
+
+describe('Home with Quick Add: the new order and the flags', () => {
+  const TODAY_OUTCOME_ID = `today-allowance:${MONTH}`;
+  const money = (amountMinor: number) => ({ currency: 'INR' as const, amountMinor });
+
+  /** The server's `todayAllowance` outcome for today in Asia/Kolkata: allowance ₹2,000, spent ₹250. */
+  function todayAllowanceOutcome(overrides: Partial<TodayAllowanceOutcome> = {}): TodayAllowanceOutcome {
+    return {
+      id: TODAY_OUTCOME_ID,
+      kind: 'today_allowance',
+      status: 'available',
+      classification: 'calculated_result',
+      dataVersion: 1,
+      period: { month: MONTH, start: `${MONTH}-01`, endExclusive: `${MONTH}-31`, timeZone: 'Asia/Kolkata' },
+      value: {
+        applicable: true,
+        date: kolkataToday(),
+        daysRemainingInclusive: 17,
+        todayAllowance: money(200000),
+        todaySpent: money(25000),
+        leftToday: money(175000),
+        overToday: money(0),
+        allowanceBasis: money(3400000),
+        usedPermille: 125,
+        zeroReason: null,
+        usedBeyondBudget: money(0),
+        excludedToday: { count: 0, total: money(0) },
+        largeEntryThreshold: money(100000),
+      },
+      sourceRefs: [],
+      explanationRef: { outcomeId: TODAY_OUTCOME_ID, dataVersion: 1 },
+      ...overrides,
+    } as TodayAllowanceOutcome;
+  }
+
+  function withToday(snapshot: FinancialSnapshot, outcome: TodayAllowanceOutcome | undefined): FinancialSnapshot {
+    const { todayAllowance: _dropped, ...rest } = snapshot.outcomes;
+    return { ...snapshot, outcomes: outcome ? { ...rest, todayAllowance: outcome } : rest };
+  }
+
+  function renderQuickAddHome(options: { route?: string } = {}) {
+    const store = createQuickAddStore();
+    return renderAuthenticated(
+      <FinancialClarityProvider>
+        <MutationStatusProvider>
+          <QuickAddProvider store={store}>
+            <Routes>
+              <Route index element={<Dashboard />} />
+              <Route path="plan" element={<Plan />} />
+              <Route path="*" element={<p>Elsewhere</p>} />
+            </Routes>
+          </QuickAddProvider>
+        </MutationStatusProvider>
+      </FinancialClarityProvider>,
+      { route: options.route ?? '/', queryClient: createTestQueryClient() },
+    );
+  }
+
+  const headlineRegion = () => region('today');
+  const quickAddInput = () => screen.queryByLabelText(QUICK_ADD_LABEL);
+
+  it('orders the header, the headline, the input, the quick actions, the key numbers, the next actions, the journey, and the streak', async () => {
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', 'true');
+    mockApi(
+      () => snapshotResponse(withToday(homeSnapshot(MONTH, { actions: [GOAL_ACTION, TRIP_ACTION] }), todayAllowanceOutcome())),
+      { '/finance/streak': { current: 4, longest: 9, days_logged: 20 } },
+    );
+    const { container } = renderQuickAddHome();
+
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+    const streak = await screen.findByRole('heading', { name: /Logging streak/ });
+    const input = await screen.findByLabelText(QUICK_ADD_LABEL);
+    const header = container.querySelector('.clarity-decision-header') as HTMLElement;
+    const sections = [
+      header,
+      headlineRegion(),
+      input,
+      screen.getByRole('navigation', { name: 'Quick actions' }),
+      region('monthly-plan'),
+      region('spending'),
+      region('goal'),
+      region('trip'),
+      region('actions'),
+      screen.getByRole('heading', { name: 'Guided journey' }),
+      streak,
+    ];
+    for (let i = 0; i < sections.length - 1; i += 1) {
+      expect(comesBefore(sections[i]!, sections[i + 1]!), `section ${i} comes before section ${i + 1}`).toBe(true);
+    }
+    // The headline directly follows the decision header, and the input panel sits between it and the quick actions.
+    expect(header.nextElementSibling).toBe(screen.getByTestId('today-headline'));
+    const panel = input.closest('.home-quick-add') as HTMLElement;
+    expect(screen.getByTestId('today-headline').nextElementSibling).toBe(panel);
+    expect(panel.nextElementSibling).toBe(screen.getByRole('navigation', { name: 'Quick actions' }));
+    expect(screen.getByRole('article', { name: "Today's allowance" })).toHaveTextContent('You can spend ₹2,000 today');
+  });
+
+  it('keeps the Daily spending guide and every other summary value unchanged beside the headline', async () => {
+    const snapshot = homeSnapshot(MONTH, { actions: [GOAL_ACTION, TRIP_ACTION] });
+    serve(snapshot);
+    renderHome();
+    const off = (await screen.findByRole('article', { name: /Remaining to spend/ })).textContent;
+    const summaryOff = screen.getByTestId('monthly-clarity-summary').textContent;
+    cleanup();
+
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', 'true');
+    serve(withToday(snapshot, todayAllowanceOutcome()));
+    renderQuickAddHome();
+    const plan = await screen.findByRole('article', { name: /Remaining to spend/ });
+    expect(plan.textContent).toBe(off);
+    expect(within(plan).getByText('Daily spending guide')).toBeInTheDocument();
+    expect(within(plan).getByText('₹3,176')).toBeInTheDocument();
+    expect(screen.getByTestId('monthly-clarity-summary').textContent).toBe(summaryOff);
+    // The headline's own number is a separate value, not the guide.
+    expect(screen.getByRole('article', { name: "Today's allowance" })).not.toHaveTextContent('₹3,176');
+  });
+
+  it('with the Quick_Add_Flag off, Home has no headline, no input, no Quick Add request, and the pre-feature order', async () => {
+    const calls = mockApi(() => snapshotResponse(withToday(homeSnapshot(MONTH), todayAllowanceOutcome())));
+    const { container } = renderHome();
+
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+    expect(headlineRegion()).toBeNull();
+    expect(screen.queryByTestId('today-headline')).toBeNull();
+    expect(quickAddInput()).toBeNull();
+    expect(container.querySelector('.home-quick-add')).toBeNull();
+    expect(screen.queryByText(/You can spend/)).toBeNull();
+    const header = container.querySelector('.clarity-decision-header') as HTMLElement;
+    expect(header.nextElementSibling).toBe(screen.getByRole('navigation', { name: 'Quick actions' }));
+    expect(calls.filter((call) => /quick-add|category-memory|\/finance\/categories/.test(call))).toEqual([]);
+  });
+
+  it.each(['', '0', 'false', 'no', 'on', 'yes', 'enabled'])('reads %j as off and shows no headline (fail closed)', async (value) => {
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', value);
+    serve(withToday(homeSnapshot(MONTH), todayAllowanceOutcome()));
+    renderHome();
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+    expect(headlineRegion()).toBeNull();
+    expect(quickAddInput()).toBeNull();
+  });
+
+  it.each(['1', 'true', 'TRUE', 'True'])('reads %j as on and shows the headline above the input', async (value) => {
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', value);
+    serve(withToday(homeSnapshot(MONTH), todayAllowanceOutcome()));
+    renderQuickAddHome();
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+    expect(await screen.findByLabelText(QUICK_ADD_LABEL)).toBeInTheDocument();
+    expect(comesBefore(headlineRegion(), screen.getByLabelText(QUICK_ADD_LABEL))).toBe(true);
+  });
+
+  it('with the Rollout_Flag off, the Quick_Add_Flag alone adds nothing to the legacy Home', async () => {
+    vi.stubEnv('VITE_FINANCIAL_CLARITY_ENABLED', '');
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', 'true');
+    const calls = mockApi(() => createApiResponse({ status: 500, body: { error: 'must not be called' } }), LEGACY_ROUTES);
+    renderHome();
+
+    await screen.findByRole('heading', { name: /Hey/ });
+    await waitFor(() => expect(calls).toContain('GET /finance/plan'));
+    expect(calls.some((call) => call.includes('/finance/clarity'))).toBe(false);
+    expect(headlineRegion()).toBeNull();
+    expect(quickAddInput()).toBeNull();
+    expect(screen.queryByText(/You can spend/)).toBeNull();
+  });
+
+  it('a server without todayAllowance shows the unavailable headline and keeps every other region in order', async () => {
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', 'true');
+    serve(withToday(homeSnapshot(MONTH, { actions: [GOAL_ACTION] }), undefined));
+    renderQuickAddHome();
+
+    await screen.findByRole('article', { name: /Remaining to spend/ });
+    const card = screen.getByTestId('today-headline');
+    expect(card.querySelector('[data-state="unavailable"]')).toHaveAttribute('data-reason', 'no_field');
+    expect(card).toHaveTextContent('Temporarily unavailable.');
+    expect(card).toHaveTextContent('You can still save expenses');
+    expect(comesBefore(headlineRegion(), await screen.findByLabelText(QUICK_ADD_LABEL))).toBe(true);
+    expect(comesBefore(screen.getByLabelText(QUICK_ADD_LABEL), screen.getByRole('navigation', { name: 'Quick actions' }))).toBe(true);
+    expect(region('goal')).toBeTruthy();
+  });
+
+  it('a failed todayAllowance calculation stays inside the headline and the summary keeps its values', async () => {
+    vi.stubEnv('VITE_QUICK_ADD_ENABLED', 'true');
+    serve(withToday(homeSnapshot(MONTH), todayAllowanceOutcome({
+      status: 'calculation_failed',
+      value: undefined,
+      explanationRef: undefined,
+      retry: { action: 'recalculate', scopeKey: `outcome:${TODAY_OUTCOME_ID}` },
+    })));
+    renderQuickAddHome();
+
+    const plan = await screen.findByRole('article', { name: /Remaining to spend/ });
+    expect(plan).toHaveAttribute('data-status', 'available');
+    expect(within(plan).getByText('₹3,176')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "Recalculate Today's allowance" })).toBeInTheDocument();
+    expect(screen.getByTestId('today-headline')).toHaveTextContent('Temporarily unavailable');
   });
 });

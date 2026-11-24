@@ -56,7 +56,9 @@ function Problem({ id, problem }: { id: string; problem: FieldProblem | undefine
 export function ClaritySpendingTracker({ month, snapshot, focusExpenseId, onConfirmed, onRefresh }: ClaritySpendingTrackerProps) {
   const gate = useDataUseGate();
   const ids = useId();
-  const list = useExpenseList(month);
+  const [removedCount, setRemovedCount] = useState(0);
+  // A row that Quick Add removes while it holds focus hands focus to the list heading, as a row removed here does.
+  const list = useExpenseList(month, { onRowLeaving: () => setRemovedCount((count) => count + 1) });
   const changes = useSpendingChanges({ month, list, onConfirmed, onRefresh });
   const categories = list.data?.categories ?? FALLBACK_EXPENSE_CATEGORIES;
   const [amount, setAmount] = useState('');
@@ -64,7 +66,6 @@ export function ClaritySpendingTracker({ month, snapshot, focusExpenseId, onConf
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Partial<Record<ExpenseField, FieldProblem>>>({});
   const [showAll, setShowAll] = useState(false);
-  const [removedCount, setRemovedCount] = useState(0);
   const amountRef = useRef<HTMLInputElement>(null);
   const entriesHeading = useRef<HTMLHeadingElement>(null);
   const monthName = monthLabel(month);
@@ -128,6 +129,7 @@ export function ClaritySpendingTracker({ month, snapshot, focusExpenseId, onConf
       note: overlay.note,
       spentOn: overlay.spentOn,
       displayDate: overlay.spentOn,
+      excluded: overlay.excluded ?? original.excluded,
     };
   }
 

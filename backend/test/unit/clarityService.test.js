@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ClarityService } from '../../src/services/clarityService.js';
+import { calculateTodayAllowance } from '../../src/domain/allowance.js';
 import { calculateGoal } from '../../src/domain/goals.js';
+import { calculateMonthlyPlan } from '../../src/domain/monthlyPlan.js';
 import { calculateTripOutcome } from '../../src/domain/trips.js';
 
 const NOW = new Date('2026-01-15T06:30:00.000Z');
@@ -184,11 +186,11 @@ function populatedRepository(overrides = {}) {
   });
 }
 
-async function snapshot(service) {
+async function snapshot(service, { month = MONTH, now = NOW } = {}) {
   return service.getSnapshot({
     userId: USER_ID,
-    month: MONTH,
-    now: NOW,
+    month,
+    now,
     timeZone: 'Asia/Kolkata',
   });
 }
@@ -213,6 +215,11 @@ test('empty confirmed collections produce exact-period independent outcomes', as
     unlocks: ['monthly_plan', 'spending'],
   }]);
   assert.equal(result.outcomes.spending.status, 'missing_input');
+  assert.equal(result.outcomes.todayAllowance.status, 'missing_input');
+  assert.deepEqual(
+    result.outcomes.todayAllowance.missing,
+    result.outcomes.spending.missing
+  );
   assert.deepEqual(result.outcomes.goals, []);
   assert.equal(result.outcomes.tripSummary.status, 'available');
   assert.deepEqual(result.outcomes.tripSummary.value, []);
@@ -325,6 +332,7 @@ test('calculator failures affect only their outcomes and retain confirmed facts'
   assert.equal(result.outcomes.monthlyPlan.status, 'available');
   assert.equal(result.outcomes.spending.status, 'calculation_failed');
   assert.equal(result.outcomes.spending.confirmedInputsRetained, true);
+  assert.equal(result.outcomes.todayAllowance.status, 'available');
   assert.deepEqual(result.outcomes.goals.map(({ status }) => status), [
     'calculation_failed',
     'available',
@@ -356,4 +364,181 @@ test('a goal repository failure does not suppress confirmed monthly, spending, o
   assert.deepEqual(result.actions.map(({ conditionCode }) => conditionCode), [
     'trip_balance_receivable',
   ]);
+});
+
+test('todayAllowance uses the produced monthly plan, Kolkata date, wrapped money, period and version', async () => {
+  let producedPlan;
+  let allowanceInput;
+  const service = new ClarityService({
+    repository: populatedRepository(),
+    monthlyPlanCalculator(input) {
+      producedPlan = calculateMonthlyPlan(input);
+      return producedPlan;
+    },
+    todayAllowanceCalculator(input) {
+      allowanceInput = input;
+      return calculateTodayAllowance(input);
+    },
+  });
+
+  const result = await snapshot(service);
+  const outcome = result.outcomes.todayAllowance;
+
+  assert.strictEqual(allowanceInput.plan, producedPlan);
+  assert.equal(allowanceInput.localDate, '2026-01-15');
+  assert.deepEqual(allowanceInput.expenses, [expense()]);
+  assert.equal(outcome.id, `today-allowance:${MONTH}`);
+  assert.equal(outcome.kind, 'today_allowance');
+  assert.equal(outcome.status, 'available');
+  assert.equal(outcome.dataVersion, 7);
+  assert.deepEqual(outcome.period, result.period);
+  assert.deepEqual(outcome.value, {
+    applicable: true,
+    date: '2026-01-15',
+    daysRemainingInclusive: 17,
+    todayAllowance: { currency: 'INR', amountMinor: 3_176 },
+    todaySpent: { currency: 'INR', amountMinor: 0 },
+    leftToday: { currency: 'INR', amountMinor: 3_176 },
+    overToday: { currency: 'INR', amountMinor: 0 },
+    allowanceBasis: { currency: 'INR', amountMinor: 54_000 },
+    usedPermille: 0,
+    zeroReason: null,
+    usedBeyondBudget: { currency: 'INR', amountMinor: 0 },
+    excludedToday: {
+      count: 0,
+      total: { currency: 'INR', amountMinor: 0 },
+    },
+    largeEntryThreshold: { currency: 'INR', amountMinor: 100_000 },
+  });
+  assert.equal(outcome.rounding.precisionMinor, 1);
+  assert.deepEqual(outcome.explanationRef, {
+    outcomeId: `today-allowance:${MONTH}`,
+    dataVersion: 7,
+  });
+});
+
+test('todayAllowance has the same invalid dependency result as spending', async () => {
+  const repository = populatedRepository({
+    period: {
+      status: 'confirmed',
+      month: MONTH,
+      salary: confirmedRecord(salary({
+        normalizationIssues: [{ field: 'amountMinor' }],
+      })),
+      bills: confirmedCollection([bill()]),
+      expenses: confirmedCollection([expense()]),
+      categoryTreatments: confirmedCollection(),
+    },
+  });
+
+  const result = await snapshot(new ClarityService({ repository }));
+
+  assert.equal(result.outcomes.monthlyPlan.status, 'invalid_input');
+  assert.equal(result.outcomes.spending.status, 'invalid_input');
+  assert.equal(result.outcomes.todayAllowance.status, 'invalid_input');
+  assert.deepEqual(
+    result.outcomes.todayAllowance.invalid.map(({ input, constraint }) => ({ input, constraint })),
+    result.outcomes.spending.invalid.map(({ input, constraint }) => ({ input, constraint }))
+  );
+  assert.deepEqual(result.outcomes.todayAllowance.invalid[0].affects, ['today_allowance']);
+});
+
+test('todayAllowance reports the same first invalid bill correction as the existing monthly outcomes', async () => {
+  const repository = populatedRepository({
+    period: {
+      status: 'confirmed',
+      month: MONTH,
+      salary: confirmedRecord(salary()),
+      bills: confirmedCollection([
+        bill({ normalizationIssues: [{ field: 'amountMinor' }] }),
+        bill({ id: 4, normalizationIssues: [{ field: 'amountMinor' }] }),
+      ]),
+      expenses: confirmedCollection([expense()]),
+      categoryTreatments: confirmedCollection(),
+    },
+  });
+
+  const result = await snapshot(new ClarityService({ repository }));
+  const correction = (outcome) => outcome.invalid.map(({ input, constraint }) => ({
+    input,
+    constraint,
+  }));
+
+  assert.equal(result.outcomes.monthlyPlan.status, 'invalid_input');
+  assert.equal(result.outcomes.spending.status, 'invalid_input');
+  assert.equal(result.outcomes.todayAllowance.status, 'invalid_input');
+  assert.deepEqual(correction(result.outcomes.monthlyPlan), [{
+    input: 'bill:2.amountMinor',
+    constraint: 'a value representable as a safe integer number of paise',
+  }]);
+  assert.deepEqual(
+    correction(result.outcomes.todayAllowance),
+    correction(result.outcomes.monthlyPlan)
+  );
+  assert.deepEqual(
+    correction(result.outcomes.todayAllowance),
+    correction(result.outcomes.spending)
+  );
+  assert.deepEqual(result.outcomes.todayAllowance.invalid[0].affects, ['today_allowance']);
+});
+
+test('todayAllowance is not applicable outside the Kolkata current month and has no explanation', async () => {
+  const service = new ClarityService({ repository: populatedRepository() });
+  const result = await snapshot(service, { month: '2025-12' });
+  const outcome = result.outcomes.todayAllowance;
+
+  assert.equal(outcome.id, 'today-allowance:2025-12');
+  assert.equal(outcome.kind, 'today_allowance');
+  assert.equal(outcome.status, 'available');
+  assert.equal(outcome.dataVersion, 7);
+  assert.deepEqual(outcome.period, result.period);
+  assert.deepEqual(outcome.value, {
+    applicable: false,
+    reason: 'not_current_month',
+  });
+  assert.equal(Object.hasOwn(outcome, 'explanationRef'), false);
+  assert.equal(await service.getExplanation({
+    userId: USER_ID,
+    outcomeId: 'today-allowance:2025-12',
+    now: NOW,
+    timeZone: 'Asia/Kolkata',
+  }), null);
+});
+
+test('a todayAllowance calculator exception is isolated from monthlyPlan and spending', async () => {
+  const repository = populatedRepository();
+  const normal = await snapshot(new ClarityService({ repository }));
+  const failed = await snapshot(new ClarityService({
+    repository,
+    todayAllowanceCalculator() {
+      throw new Error('injected today allowance calculator failure');
+    },
+  }));
+
+  assert.deepEqual(failed.outcomes.monthlyPlan, normal.outcomes.monthlyPlan);
+  assert.deepEqual(failed.outcomes.spending, normal.outcomes.spending);
+  assert.equal(failed.outcomes.todayAllowance.status, 'calculation_failed');
+  assert.equal(failed.outcomes.todayAllowance.confirmedInputsRetained, true);
+  assert.deepEqual(failed.outcomes.todayAllowance.retry, {
+    action: 'recalculate',
+    scopeKey: `outcome:today-allowance:${MONTH}`,
+  });
+  assert.deepEqual(failed.outcomes.goals, normal.outcomes.goals);
+  assert.deepEqual(failed.outcomes.tripSummary, normal.outcomes.tripSummary);
+});
+
+test('a spending calculator exception leaves monthlyPlan and todayAllowance byte-equal', async () => {
+  const repository = populatedRepository();
+  const normal = await snapshot(new ClarityService({ repository }));
+  const failed = await snapshot(new ClarityService({
+    repository,
+    expenseSummaryCalculator() {
+      throw new Error('injected spending calculator failure');
+    },
+  }));
+
+  assert.deepEqual(failed.outcomes.monthlyPlan, normal.outcomes.monthlyPlan);
+  assert.equal(failed.outcomes.spending.status, 'calculation_failed');
+  assert.equal(failed.outcomes.spending.confirmedInputsRetained, true);
+  assert.deepEqual(failed.outcomes.todayAllowance, normal.outcomes.todayAllowance);
 });

@@ -25,7 +25,11 @@ export const THEMES: readonly Theme[] = ['light', 'dark'];
 export async function waitForTransitions(page: Page): Promise<void> {
   await page.evaluate(async () => {
     for (let round = 0; round < 6; round += 1) {
-      const running = document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity);
+      // A progress animation such as the 8-second Undo bar is not a fade or a transition, and a paused one never ends.
+      const running = document.getAnimations().filter((animation) => {
+        const timing = animation.effect?.getComputedTiming();
+        return timing !== undefined && timing.iterations !== Infinity && Number(timing.endTime) <= 3000;
+      });
       if (running.length === 0) return;
       await Promise.all(running.map((animation) => animation.finished.catch(() => undefined)));
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

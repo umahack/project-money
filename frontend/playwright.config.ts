@@ -10,6 +10,8 @@ const TEST_ORIGIN = `http://${TEST_HOST}:${TEST_PORT}`;
 const CLARITY_PORT = 4174;
 const CLARITY_ORIGIN = `http://${TEST_HOST}:${CLARITY_PORT}`;
 const CLARITY_SPEC = '**/*.clarity.spec.ts';
+// Specs that need Quick Add on run only under playwright.quickadd.config.ts, against a server with that flag on.
+const QUICK_ADD_SPEC = '**/*.quickadd.spec.ts';
 const VIEWPORT_WIDTHS = [320, 360, 375, 390, 768, 820, 899, 1024, 1440, 3840] as const;
 // A phone and a desktop width are enough for the flag-on flows.
 const CLARITY_VIEWPORT_WIDTHS = [390, 1440] as const;
@@ -70,7 +72,7 @@ export default defineConfig({
   projects: [
     ...VIEWPORT_WIDTHS.map((width) => ({
       name: `chromium-${width}`,
-      testIgnore: CLARITY_SPEC,
+      testIgnore: [CLARITY_SPEC, QUICK_ADD_SPEC],
       use: {
         browserName: 'chromium' as const,
         viewport: { width, height: 900 },

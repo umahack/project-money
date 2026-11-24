@@ -56,6 +56,12 @@ export interface MutationCommand {
   patch?: SnapshotPatch;
   /** Months the patch applies to. Omitted means every loaded month. */
   months?: readonly string[];
+  /**
+   * Abort the request after this many milliseconds and fail the command with code
+   * `REQUEST_TIMEOUT`. Retry reuses the original body and Idempotency-Key, so it is safe
+   * even if the timed-out request committed. Omitted means no timeout.
+   */
+  timeoutMs?: number;
 }
 
 export interface MutationRequest {
@@ -63,6 +69,7 @@ export interface MutationRequest {
   method: NonNullable<MutationCommand['method']>;
   body: unknown;
   idempotencyKey: string;
+  timeoutMs?: number;
 }
 
 export type MutationSubmitResult =
@@ -279,6 +286,7 @@ export function createMutationStatusStore({
         method: command.method ?? 'POST',
         body: command.body ?? {},
         idempotencyKey: attempt.idempotencyKey,
+        ...(command.timeoutMs !== undefined ? { timeoutMs: command.timeoutMs } : {}),
       },
       clarityStore.getGeneration(),
       generation,

@@ -376,7 +376,7 @@ export async function measureSubmitToPaint(
   page: Page,
   action: () => Promise<void>,
   feedback: { selector: string; text: string },
-  eventType: 'submit' | 'click' = 'submit',
+  eventType: 'submit' | 'click' | 'keydown' = 'submit',
 ): Promise<SubmitToPaintTiming> {
   await page.evaluate(({ key, type, selector, text }) => {
     interface Probe {

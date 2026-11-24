@@ -4,6 +4,7 @@ import db from '../db/index.js';
 import { authRequired } from '../middleware/auth.js';
 import { createDataUseNoticeGate } from '../middleware/dataUse.js';
 import clarityService from '../services/clarityService.js';
+import { removeForCategoryStatement } from '../services/categoryMemory.js';
 import {
   CATEGORY_TREATMENT_ACCEPTED_CONSTRAINTS,
   EXPENSE_ACCEPTED_CONSTRAINTS,
@@ -165,7 +166,7 @@ async function loadBillRow(userId, id) {
 
 async function loadExpenseRow(userId, id) {
   return db.prepare(
-    `SELECT id, month, category, amount, note, spent_on
+    `SELECT id, month, category, amount, note, spent_on, exclude_from_daily_allowance
        FROM expense_log
       WHERE user_id = ? AND id = ?`
   ).get(userId, id);
@@ -291,8 +292,8 @@ async function materializeRecurring(userId) {
       if (!claim.changes) continue;
       await db
         .prepare(
-          `INSERT INTO expense_log (user_id, month, category, amount, note, spent_on)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT INTO expense_log (user_id, month, category, amount, note, spent_on, exclude_from_daily_allowance)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`
         )
         .run(userId, month, r.category, Number(r.amount), `${r.label} (recurring)`, spentOn);
     } catch (e) {
@@ -805,15 +806,24 @@ router.get('/expenses', async (req, res) => {
   const month = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? String(req.query.month) : monthKey();
   const rows = await db
     .prepare(
-      `SELECT id, month, category, amount, note, spent_on, created_at
+      `SELECT id, month, category, amount, note, spent_on, created_at,
+              exclude_from_daily_allowance
          FROM expense_log
         WHERE user_id = ? AND month = ?
         ORDER BY COALESCE(spent_on, created_at) DESC, id DESC
         LIMIT 500`
     )
     .all(req.user.id, month);
+  const expenses = rows.map((row) => {
+    const { exclude_from_daily_allowance: storedExclusion, ...legacyRow } = row;
+    if (!requestsClarityContract(req)) return legacyRow;
+    return {
+      ...legacyRow,
+      excludeFromDailyAllowance: Number(storedExclusion) === 1,
+    };
+  });
   const categories = await allowedCategoriesFor(req.user.id);
-  res.json({ month, categories, expenses: rows });
+  res.json({ month, categories, expenses });
 });
 
 // GET/POST/DELETE user-defined categories (on top of the 10 defaults).
@@ -855,9 +865,16 @@ router.post(
 router.delete('/categories/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id' });
-  const info = await db
-    .prepare('DELETE FROM user_categories WHERE id = ? AND user_id = ?')
-    .run(id, req.user.id);
+  const category = await db
+    .prepare('SELECT name FROM user_categories WHERE id = ? AND user_id = ?')
+    .get(id, req.user.id);
+  if (!category) return res.status(404).json({ error: 'Not found' });
+  // The remembered choices for this category go in the same batch, so a
+  // failure leaves both the category and its memory entries in place.
+  const [, info] = await db.batch([
+    removeForCategoryStatement(req.user.id, category.name),
+    ['DELETE FROM user_categories WHERE id = ? AND user_id = ?', [id, req.user.id]],
+  ]);
   if (!info.changes) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
@@ -1499,12 +1516,14 @@ function csvEscape(v) {
 router.get('/export.csv', async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT spent_on, created_at, month, category, amount, note
+      `SELECT spent_on, created_at, month, category, amount, note, exclude_from_daily_allowance
          FROM expense_log WHERE user_id = ?
         ORDER BY COALESCE(spent_on, substr(created_at, 1, 10)) ASC, id ASC`
     )
     .all(req.user.id);
-  const header = ['date', 'month', 'category', 'amount', 'note'];
+  // The first five columns and their order are the pre-feature contract. The
+  // last column says whether the expense counts toward the daily allowance.
+  const header = ['date', 'month', 'category', 'amount', 'note', 'counted_in_daily_allowance'];
   const lines = [header.join(',')];
   for (const r of rows) {
     // SQLite's CURRENT_TIMESTAMP is always UTC regardless of TZ env, so when
@@ -1517,7 +1536,14 @@ router.get('/export.csv', async (req, res) => {
         date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       }
     }
-    const row = { date, month: r.month, category: r.category, amount: r.amount, note: r.note };
+    const row = {
+      date,
+      month: r.month,
+      category: r.category,
+      amount: r.amount,
+      note: r.note,
+      counted_in_daily_allowance: Number(r.exclude_from_daily_allowance) === 1 ? 'no' : 'yes',
+    };
     lines.push(header.map((h) => csvEscape(row[h])).join(','));
   }
   const filename = `project-money-expenses-${todayISO()}.csv`;

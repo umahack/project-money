@@ -484,7 +484,9 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
 .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 99px; }
 
 /* ============ Toasts, confetti ============ */
-.toasts { position: fixed; z-index: 100; right: 1rem; bottom: calc(var(--bottom-nav-h, 90px) + 0.5rem + env(safe-area-inset-bottom)); display: grid; gap: 0.5rem; max-width: min(380px, calc(100vw - 2rem)); }
+/* While the Quick Add floating action is shown it publishes --quick-add-fab-h. The stack moves above it, with half a rem
+   between them. With the property unset, max() gives the original 0.5rem. */
+.toasts { position: fixed; z-index: 100; right: 1rem; bottom: calc(var(--bottom-nav-h, 90px) + env(safe-area-inset-bottom) + max(0.5rem, var(--quick-add-fab-h, -2rem) + 1.5rem)); display: grid; gap: 0.5rem; max-width: min(380px, calc(100vw - 2rem)); }
 @media (min-width: 900px) { .toasts { bottom: 1.5rem; } }
 .toast { padding: 0.75rem 1rem; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--border); backdrop-filter: blur(14px); box-shadow: var(--shadow); font-weight: 500; }
 .toast.ok { border-color: var(--ok); } .toast.err { border-color: var(--danger); }
@@ -526,7 +528,7 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
   .brand-mark { width: 30px; height: 30px; border-radius: 10px; font-size: 0.95rem; flex-shrink: 0; }
   .beta-badge { display: none; }
   .list-item { gap: 0.5rem; padding: 0.5rem; }
-  .container.app-main { padding: 0.9rem 0.85rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); }
+  .container.app-main { padding: 0.9rem 0.85rem calc(var(--bottom-nav-h, 96px) + env(safe-area-inset-bottom) + max(1rem, var(--quick-add-fab-h, -2rem) + 1.5rem)); }
   .page-title { margin-bottom: 0.8rem; gap: 0.5rem; }
   .page-title h1 { font-size: 1.4rem; line-height: 1.2; }
   .page-title p { font-size: 0.85rem; }
@@ -759,7 +761,7 @@ input[aria-invalid='true'] { border-color: var(--warn); }
 .app-shell { display: block; }
 .primary-nav { display: none; }
 /* The bottom padding keeps the last content clear of the fixed bottom navigation; Shell measures its height. */
-.container.app-main { padding: 1rem 1rem calc(var(--bottom-nav-h, 96px) + 1rem + env(safe-area-inset-bottom)); max-width: 1200px; margin: 0 auto; }
+.container.app-main { padding: 1rem 1rem calc(var(--bottom-nav-h, 96px) + env(safe-area-inset-bottom) + max(1rem, var(--quick-add-fab-h, -2rem) + 1.5rem)); max-width: 1200px; margin: 0 auto; }
 
 @media (min-width: 900px) {
   /* No sidebar column: the content uses the whole app width. Only on ultra-wide screens is it capped

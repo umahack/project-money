@@ -1,0 +1,82 @@
+@import '../clarity/clarity.css';
+
+/* Quick Add input, preview, warning, and category choice. Reuses the app tokens from styles.css and the status tones
+   from clarity.css, so both themes keep their palette. Meaning is always carried by text, never by color alone.
+   One column from 320 to 3840 CSS pixels, long notes and category names wrap, and nothing scrolls sideways. */
+
+.qa-input, .qa-preview, .qa-warning { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+
+.qa-input { display: grid; gap: 0.4rem; }
+.qa-label { font-weight: 600; }
+/* styles.css also styles `.qa-label` for the Home quick-action tiles, and shrinks it to 0.72rem under 520px. The input's
+   label keeps the body size at every width, so it stays legible on a phone and at 200 percent text. */
+.qa-input .qa-label { font-size: 1rem; font-weight: 600; line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
+.qa-input-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; min-width: 0; }
+.qa-input-row input { flex: 1 1 12rem; min-width: 0; width: auto; }
+.qa-input-row .btn { flex: 0 0 auto; }
+.qa-help, .qa-limit, .qa-reason-note { margin: 0; min-width: 0; }
+.qa-help { color: var(--muted); }
+.qa-limit { color: var(--text); }
+.qa-paused {
+  margin: 0; padding: 0.5rem 0.7rem; min-width: 0;
+  border-left: 4px solid var(--clarity-warn); border-radius: 10px;
+  background: color-mix(in srgb, var(--clarity-warn) 8%, transparent); color: var(--text);
+}
+
+.qa-preview { display: grid; gap: 0.5rem; }
+.qa-preview-body { display: grid; gap: 0.5rem; min-width: 0; }
+.qa-preview-body:empty { display: none; }
+.qa-preview-title { margin: 0; font-weight: 600; }
+.qa-status { margin: 0; padding: 0.4rem 0.7rem; border-left: 4px solid var(--clarity-info); border-radius: 10px; color: var(--text); }
+.qa-status.is-not-ready { border-left-color: var(--border); }
+.qa-rows { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.qa-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.15rem; min-width: 0; }
+.qa-row-label { color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+.qa-row-value { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; }
+.qa-row.qa-row-wide { grid-template-columns: minmax(0, 1fr); }
+.qa-note-text { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (min-width: 560px) {
+  .qa-row { grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0.6rem; align-items: start; }
+}
+
+.qa-problems { margin: 0; padding: 0.5rem 0.7rem 0.5rem 1.6rem; border-left: 4px solid var(--clarity-danger); border-radius: 10px; color: var(--text); background: color-mix(in srgb, var(--clarity-danger) 8%, transparent); }
+.qa-problems li { margin: 0.2rem 0; }
+.qa-problems-plain { border-left-color: var(--border); background: transparent; }
+
+.qa-hint { margin: 0; padding: 0.4rem 0.7rem; border-left: 4px solid var(--clarity-info); border-radius: 10px; color: var(--text); }
+
+.qa-category { display: grid; gap: 0.35rem; min-width: 0; width: 100%; }
+.qa-category-line { display: flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; align-items: center; min-width: 0; }
+.qa-category-line select { flex: 1 1 11rem; min-width: 0; width: auto; }
+.qa-category .qa-reason { margin: 0; color: var(--text); min-width: 0; }
+.qa-category .qa-forget-status:empty { margin-top: -0.35rem; }
+.qa-category-label { color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+
+.qa-warning {
+  display: grid; gap: 0.5rem; padding: 0.7rem 0.8rem;
+  border: 1px solid var(--clarity-warn); border-left-width: 4px; border-radius: 12px;
+  background: color-mix(in srgb, var(--clarity-warn) 8%, transparent);
+}
+.qa-warning p { margin: 0; color: var(--text); }
+.qa-warning-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* Every control is at least 44 by 44 CSS pixels. */
+.qa-input .btn, .qa-input .btn.sm, .qa-preview .btn, .qa-preview .btn.sm,
+.qa-warning .btn, .qa-warning .btn.sm { min-height: 44px; min-width: 44px; white-space: normal; text-align: center; }
+.qa-input input, .qa-preview select { min-height: 44px; }
+/* A field edge needs 3:1 against its surface (WCAG 1.4.11). The dialog sits outside `main`, so the clarity page rule does
+   not reach it. The token is inherited from the root, and the muted text color is the fallback. */
+.qa-input input, .qa-preview select { border-color: var(--field-border, var(--muted)); }
+.qa-input input::placeholder { color: var(--muted); opacity: 1; }
+.qa-input .btn[aria-disabled='true'], .qa-preview .btn[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+
+/* Keyboard focus is visible and at least 3:1 in both themes. */
+.qa-input :focus-visible, .qa-preview :focus-visible, .qa-warning :focus-visible {
+  outline: 3px solid var(--clarity-focus); outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-input, .qa-input *, .qa-preview, .qa-preview *, .qa-warning, .qa-warning * {
+    transition: none !important; animation: none !important; scroll-behavior: auto !important;
+  }
+}

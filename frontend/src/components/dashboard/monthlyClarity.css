@@ -80,3 +80,7 @@
 .home-secondary > .card.card { margin: 0; display: flex; flex-direction: column; }
 .home-secondary > .card > .btn { margin-top: auto; align-self: flex-start; }
 .home-secondary > .card > .row { align-items: flex-start; }
+/* The inline Quick Add panel, directly below the "You can spend today" headline and above the quick actions. It is
+   as compact as the page's other clarity cards (see clarity.css), so the headline, the input, and the quick actions share the first screen. */
+.home-quick-add.card { margin: 0 0 0.75rem; min-width: 0; }
+.home-quick-add .qa-panel { gap: 0.75rem; }

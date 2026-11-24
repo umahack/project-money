@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { FinancialClarityProvider } from './clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from './clarity/MutationStatusProvider';
+import { QuickAddProvider } from './clarity/quickAdd/QuickAddProvider';
 import { PAGE_DECISIONS } from './clarity/actionContext';
 import { currentMonth } from './money';
 import { buildSettings } from './test/claritySettingsBuilder';
@@ -84,7 +85,10 @@ function renderApp(route: string, signedIn: boolean) {
   const ui = (
     <FinancialClarityProvider>
       <MutationStatusProvider>
-        <App />
+        {/* As in main.tsx: the Shell mounts Quick Add inside this provider while Quick_Add_Enabled. */}
+        <QuickAddProvider>
+          <App />
+        </QuickAddProvider>
       </MutationStatusProvider>
     </FinancialClarityProvider>
   );
@@ -202,5 +206,72 @@ describe.each([['OFF', ''], ['ON', 'true']])('flag %s, guest', (_label, value) =
     const journeyLinks = document.querySelectorAll('a[href*="start="]');
     expect(journeyLinks.length).toBe(value === 'true' ? 4 : 0);
     expect(fetches.calls.filter((call) => /^\/(?:finance|trips|clarity)(?:\/|$)/.test(call.path))).toEqual([]);
+  });
+});
+
+// Task 11.6: the Quick_Add_Flag joins the matrix. While the Rollout_Flag is off it has no effect, and
+// while the Rollout_Flag is on the pages and requests are the same whatever the Quick_Add_Flag says.
+// Nothing Quick Add is requested in any combination that leaves Quick_Add_Enabled false.
+const isQuickAddRequest = (path: string) => /quick-add|category-memory/.test(path);
+
+describe('Quick_Add_Flag combinations, signed in', () => {
+  describe('Rollout_Flag OFF, Quick_Add_Flag ON', () => {
+    beforeEach(() => {
+      vi.stubEnv('VITE_FINANCIAL_CLARITY_ENABLED', '');
+      vi.stubEnv('VITE_QUICK_ADD_ENABLED', 'true');
+    });
+
+    it.each(PAGES)('$route still renders the legacy page and makes no clarity or Quick Add request', async ({ route, legacy, clarity }) => {
+      const fetches = install();
+      renderApp(route, true);
+      await screen.findAllByText(legacy);
+      expect(screen.queryByText(clarity)).toBeNull();
+      expect(document.querySelector('.clarity-decision-header')).toBeNull();
+      await waitFor(() => expect(fetches.calls.length).toBeGreaterThan(0));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(fetches.calls.filter((call) => isClarityRequest(call.path) || isQuickAddRequest(call.path))).toEqual([]);
+      const fetchMock = vi.mocked(globalThis.fetch) as unknown as ReturnType<typeof vi.fn>;
+      for (const call of fetches.calls) expect(contractHeaderOf(call, fetchMock), `${call.method} ${call.path}`).toBeUndefined();
+      expect(fetches.calls.filter((call) => isMutation(call.method))).toEqual([]);
+    });
+  });
+
+  describe.each([['OFF', ''], ['ON', 'true']])('Rollout_Flag ON, Quick_Add_Flag %s', (_label, quickAdd) => {
+    beforeEach(() => {
+      vi.stubEnv('VITE_FINANCIAL_CLARITY_ENABLED', 'true');
+      vi.stubEnv('VITE_QUICK_ADD_ENABLED', quickAdd);
+    });
+
+    it.each(PAGES)('$route renders the clarity page with the contract header', async ({ route, legacy, clarity }) => {
+      const fetches = install();
+      renderApp(route, true);
+      await screen.findAllByText(clarity);
+      expect(screen.queryByText(legacy)).toBeNull();
+      await waitFor(() => expect(fetches.to('GET', '/finance/clarity').length).toBeGreaterThan(0));
+
+      const fetchMock = vi.mocked(globalThis.fetch) as unknown as ReturnType<typeof vi.fn>;
+      const contractRoutes = fetches.calls.filter((call) => /^\/(?:finance|trips)(?:\/|$)/.test(call.path));
+      expect(contractRoutes.length).toBeGreaterThan(0);
+      for (const call of contractRoutes) expect(contractHeaderOf(call, fetchMock), `${call.method} ${call.path}`).toBe('1');
+      expect(fetches.to('GET', '/finance/plan')).toEqual([]);
+      expect(fetches.calls.filter((call) => isMutation(call.method))).toEqual([]);
+    });
+
+  });
+
+  describe('Rollout_Flag ON, Quick_Add_Flag OFF', () => {
+    beforeEach(() => {
+      vi.stubEnv('VITE_FINANCIAL_CLARITY_ENABLED', 'true');
+      vi.stubEnv('VITE_QUICK_ADD_ENABLED', '');
+    });
+
+    it.each(PAGES)('$route makes no Quick Add or memory request', async ({ route, clarity }) => {
+      const fetches = install();
+      renderApp(route, true);
+      await screen.findAllByText(clarity);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(fetches.calls.filter((call) => isQuickAddRequest(call.path))).toEqual([]);
+    });
   });
 });

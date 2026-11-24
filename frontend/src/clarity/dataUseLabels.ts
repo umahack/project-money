@@ -21,6 +21,8 @@ const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   change_receipts: 'Change receipts',
   sharing_settings: 'Sharing settings',
   product_analytics: 'Product Analytics (optional)',
+  // Notice version 2, shown only while the server's Quick Add flag is on.
+  category_memory: 'Remembered category choices',
 };
 
 export interface OutcomeLabel {
@@ -48,6 +50,9 @@ const OUTCOME_LABELS: Readonly<Record<string, OutcomeLabel>> = {
   confirmed_financial_change: { label: 'Confirmed change record', definition: 'a record that a saved edit was applied once' },
   public_trip_view: { label: 'Public trip view', definition: 'the trip fields visible to people with a public link you create' },
   aggregate_product_clarity_metrics: { label: 'Combined product metrics', definition: 'counts that show whether the product is clear, without your values' },
+  // Notice version 2 (Quick Add).
+  category_suggestion: { label: 'Category suggestion', definition: 'the category Quick Add proposes for a note you have typed before' },
+  today_allowance: { label: 'Today\'s allowance', definition: 'what you can spend today, leaving out any expense you mark as not counted in the daily allowance' },
 };
 
 const ACCESS_ROLE_LABELS: Readonly<Record<string, string>> = {

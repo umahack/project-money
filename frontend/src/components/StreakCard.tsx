@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
+import { subscribeToExpenseChanges } from '../clarity/quickAdd/expenseEvents';
+import { selectQuickAddEnabled } from '../clarity/rollout';
 import { Card } from './ui';
 
 interface StreakRes {
@@ -49,7 +51,23 @@ export function StreakCard() {
         });
     };
     fetchStreak();
-    return () => { alive = false; };
+
+    // While Quick Add is enabled, an expense that Quick Add confirmed can change the streak. The streak is the server's
+    // count of logged days, so it is read again quietly and the card keeps its last value until the answer arrives.
+    let latest = 0;
+    const unsubscribe = selectQuickAddEnabled()
+      ? subscribeToExpenseChanges(() => {
+        latest += 1;
+        const request = latest;
+        api.get<StreakRes>('/finance/streak')
+          .then((r) => { if (alive && request === latest) setState({ kind: 'ok', data: r }); })
+          .catch(() => { /* The last confirmed streak stays. */ });
+      })
+      : undefined;
+    return () => {
+      alive = false;
+      unsubscribe?.();
+    };
   }, []);
 
   if (state.kind === 'loading') return null;

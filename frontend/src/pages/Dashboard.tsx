@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../api';
@@ -6,20 +6,23 @@ import { Card, Donut, Empty, Money, burst } from '../components/ui';
 import { ClarityPageHeader } from '../components/clarity/ClarityPageHeader';
 import { RegionBoundary } from '../components/clarity/RegionBoundary';
 import { MonthlyClaritySummary } from '../components/dashboard/MonthlyClaritySummary';
+import { SNAPSHOT_RETRY, TodayHeadline } from '../components/dashboard/TodayHeadline';
 import { selectHomeSummary } from '../components/dashboard/homeSummary';
 import { FALLBACK_ACTIONS, PAGE_DECISIONS } from '../clarity/actionContext';
 import { useFinancialClarity } from '../clarity/FinancialClarityProvider';
-import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { selectFinancialClarityRollout, selectQuickAddEnabled } from '../clarity/rollout';
 import { useActionArrival } from '../clarity/useActionArrival';
 import { useClaritySnapshotQuery } from '../clarity/useClaritySnapshot';
 import { useHeaderAction } from '../clarity/useHeaderAction';
 import { buildInsights, legacyDemoInsights } from '../insights';
+import { useKolkataMonth, useKolkataToday } from '../clarity/quickAdd/kolkata';
 import { amountToInput, currentMonth, inr, monthLabel, parseAmount } from '../money';
 import { errText, useAuth, useToast } from '../state';
 import type { Emi, Plan } from '../types';
 import { InvitesInbox } from '../components/InvitesInbox';
 import { StreakCard } from '../components/StreakCard';
 import { QuickActions } from '../components/QuickActions';
+import { QuickAddPanel } from '../components/quickAdd/QuickAddPanel';
 import { FiveYearProjection } from '../components/FiveYearProjection';
 import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
 import { readCachedPlan, writeCachedPlan } from '../hooks/useCachedPlan';
@@ -80,9 +83,38 @@ function useFeedbackThanks(): void {
   }, [toast, user?.name]);
 }
 
+/**
+ * Names the headline's retry while it runs. `SNAPSHOT_RETRY` is the only retry the headline offers (region error and the
+ * unavailable states), and the card's own retry for a failed calculation does the same thing: one re-read of the snapshot.
+ */
+const TODAY_RETRYING_KEY = SNAPSHOT_RETRY.scopeKey;
+/**
+ * Re-reads the snapshot once when the Asia/Kolkata date moves past the date of the headline's values. The date is
+ * re-read every 30 seconds and when the page becomes visible (`useKolkataToday`), so the re-read starts well inside
+ * 60 seconds of midnight, and again when Home is shown after being hidden across midnight (Requirements 11.14, 11.15).
+ * A month change needs no help: the query key changes with the month.
+ */
+function useRefreshOnNewDay(
+  enabled: boolean,
+  today: string,
+  valueDate: string | undefined,
+  fetching: boolean,
+  refetch: () => Promise<unknown>,
+): void {
+  const requestedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!enabled || !valueDate || valueDate === today || fetching) return;
+    if (requestedFor.current === today) return;
+    requestedFor.current = today;
+    void refetch();
+  }, [enabled, today, valueDate, fetching, refetch]);
+}
 function ClarityDashboard() {
   const { user } = useAuth();
-  const month = currentMonth();
+  const month = useKolkataMonth();
+  const today = useKolkataToday();
+  // One switch covers the headline and Quick Add. With it off, Home has neither.
+  const quickAdd = selectQuickAddEnabled();
   const arrival = useActionArrival('home');
   const rankedAction = useHeaderAction('home');
   const query = useClaritySnapshotQuery(month);
@@ -104,6 +136,9 @@ function ClarityDashboard() {
     }
   }, [refetch]);
 
+  const todayOutcome = snapshot?.outcomes.todayAllowance;
+  const todayValue = todayOutcome?.value;
+  useRefreshOnNewDay(quickAdd, today, todayValue?.applicable ? todayValue.date : undefined, query.isFetching, refetch);
   // Home has no pay form. An old `?action=set-pay` link goes to the existing Plan form.
   if (arrival.action === 'set-pay') return <Navigate to={FALLBACK_ACTIONS.planSetPay.to} replace />;
 
@@ -120,9 +155,26 @@ function ClarityDashboard() {
         right={<span className="pill info">{monthLabel(month)}</span>}
       />
 
-      {/* Order in the page and on the screen: the greeting and next action (above), the four quick actions,
-          the key numbers, Next actions (inside the summary), the guided journey, then the streak. The quick
-          actions do not depend on the summary, so they stay while it loads or fails. */}
+      {/* Order in the page and on the screen: the greeting and next action (above), then, while Quick Add is on, the
+          "You can spend today" headline and the Quick Add input, then the four quick actions, the key numbers,
+          Next actions (inside the summary), the guided journey, and the streak. The headline is its own region and
+          the input never waits for the snapshot, so neither hides the other regions or the quick actions. */}
+      {quickAdd && (
+        <>
+          <TodayHeadline
+            outcome={todayOutcome}
+            hasSnapshot={!!snapshot}
+            loading={query.isFetching}
+            error={query.isError ? query.error : undefined}
+            today={today}
+            retrying={retryingOutcomeId === TODAY_RETRYING_KEY}
+            onRetry={() => retry(TODAY_RETRYING_KEY)}
+          />
+          <section className="card home-quick-add" aria-label="Quick add">
+            <QuickAddPanel variant="inline" headingLevel={3} />
+          </section>
+        </>
+      )}
       <QuickActions />
 
       <RegionBoundary

@@ -10,10 +10,12 @@ import { TopbarClock } from './TopbarClock';
 import { WhatWeStoreLink } from './WhatWeStore';
 import { markUserViewPreferred, clearUserViewPreference } from '../userViewPref';
 import { DataUseGateProvider } from '../clarity/DataUseGateProvider';
-import { selectFinancialClarityRollout } from '../clarity/rollout';
+import { selectFinancialClarityRollout, selectQuickAddEnabled } from '../clarity/rollout';
 import { CorePromiseStrip } from './clarity/CorePromiseStrip';
 import { DataUseGate } from './clarity/DataUseGate';
 import { RenderErrorBoundary } from './clarity/RenderErrorBoundary';
+import { QuickAddFailedStatus } from './quickAdd/QuickAddFailedStatus';
+import { QuickAddShellHost } from './quickAdd/QuickAddShellHost';
 
 export function Background() {
   return (
@@ -100,6 +102,8 @@ export function Shell() {
   };
 
   const inAdmin = loc.pathname === '/admin' || loc.pathname.startsWith('/admin/');
+  // Quick Add exists only for a signed-in User on the user view, and only while Quick_Add_Enabled (Requirements 1.18, 1.19).
+  const quickAddOn = Boolean(user) && !inAdmin && selectQuickAddEnabled();
   const tabs = TABS;
   const adminTabs = user?.is_admin
     ? [
@@ -196,6 +200,11 @@ export function Shell() {
               </div>
             </RenderErrorBoundary>
           )}
+          {quickAddOn && (
+            <RenderErrorBoundary scope="region" label="The entries status" resetKeys={[loc.pathname]}>
+              <QuickAddFailedStatus />
+            </RenderErrorBoundary>
+          )}
           <AnimatePresence mode="wait">
             {/* With reduced motion the page fades only: no slide in, and no jump of 8px as the old page leaves (Requirement 12.7). */}
             <motion.div key={loc.pathname} initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -8 }} transition={{ duration: 0.25 }}>
@@ -253,6 +262,13 @@ export function Shell() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Quick Add: the shortcut, floating action, dialog, announcer, and Undo toast. User view only. */}
+      {quickAddOn && (
+        <RenderErrorBoundary scope="region" label="Quick Add" resetKeys={[loc.pathname]}>
+          <QuickAddShellHost />
+        </RenderErrorBoundary>
+      )}
 
       <FeedbackModal open={feedback} onCancel={() => setFeedback(false)} onDone={finishLogout} />
     </DataUseGateProvider>

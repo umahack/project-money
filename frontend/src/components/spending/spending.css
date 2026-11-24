@@ -28,3 +28,6 @@
 .spending-limit p { margin: 0; }
 .spending-entries-title { margin-top: 1rem; }
 .spending-form .clarity-field-error { grid-column: 1 / -1; }
+.spending-excluded { display: block; }
+.spending-exclusion-check { margin: 0.2rem 0 0; }
+.spending-exclusion-note { margin: 0 0 0.4rem; }

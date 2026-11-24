@@ -1,0 +1,91 @@
+@import '../clarity/clarity.css';
+
+/* Quick Add entry status rows, the immediate answer, and the Undo control. Colors come from the app and clarity tokens,
+   so both themes keep their palette. Meaning is always carried by text beside any glyph or color. One column from 320 to
+   3840 CSS pixels, long notes and category names wrap, and nothing scrolls sideways. */
+
+.qa-entries, .qa-entry, .qa-answer, .qa-undo, .qa-undo-toast { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+
+.qa-entries { display: grid; gap: 0.5rem; }
+.qa-entries-title, .qa-answer-title { margin: 0; font-size: 1rem; font-weight: 600; }
+.qa-entries-list { display: grid; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+
+.qa-entry {
+  --qa-tone: var(--border);
+  display: grid; gap: 0.5rem; padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border); border-left: 4px solid var(--qa-tone); border-radius: 12px;
+}
+.qa-entry[data-phase='saved'] { --qa-tone: var(--clarity-ok); }
+.qa-entry[data-phase='pending'], .qa-entry[data-phase='removing'] { --qa-tone: var(--clarity-info); }
+.qa-entry[data-phase='failed'], .qa-entry[data-phase='undo_failed'] { --qa-tone: var(--clarity-danger); }
+.qa-entry[data-phase='undone'] { --qa-tone: var(--border); }
+.qa-entry p { margin: 0; min-width: 0; }
+.qa-entry-summary { color: var(--text); }
+.qa-entry-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.4rem; color: var(--text); }
+.qa-entry-oneline, .qa-entry-detail { color: var(--text); }
+.qa-entry-failure, .qa-entry-change { display: grid; gap: 0.4rem; min-width: 0; }
+.qa-entry-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.qa-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
+.qa-undo-text, .qa-undo-left { color: var(--text); min-width: 0; }
+.qa-undo-bar {
+  flex: 1 1 100%; height: 4px; border-radius: 2px; overflow: hidden;
+  background: color-mix(in srgb, var(--clarity-info) 18%, transparent);
+}
+.qa-undo-fill {
+  display: block; height: 100%; width: 100%; border-radius: 2px; background: var(--clarity-info);
+  transform-origin: left center; animation-name: qa-undo-shrink; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes qa-undo-shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+.qa-answer {
+  display: grid; gap: 0.5rem; padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border); border-left: 4px solid var(--clarity-info); border-radius: 12px;
+}
+.qa-answer[data-mode='removed'] { border-left-color: var(--border); }
+.qa-answer[data-status='missing_input'], .qa-answer[data-status='invalid_input'] { border-left-color: var(--clarity-warn); }
+.qa-answer[data-status='calculation_failed'] { border-left-color: var(--clarity-danger); }
+.qa-answer p { margin: 0; min-width: 0; }
+.qa-answer-label { color: var(--text); }
+.qa-answer-lines { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.qa-answer-line { min-width: 0; color: var(--text); }
+.qa-answer-actions { display: grid; gap: 0.4rem; justify-items: start; min-width: 0; }
+.qa-answer-note { color: var(--text); }
+
+/* The Undo toast sits above the regular toast area and above the floating action while one is shown. */
+.qa-undo-toasts {
+  position: fixed; z-index: 101; right: 1rem;
+  bottom: calc(var(--bottom-nav-h, 90px) + 5.5rem + var(--quick-add-fab-h, 0px) + env(safe-area-inset-bottom));
+  display: grid; gap: 0.5rem; max-width: min(380px, calc(100vw - 2rem));
+}
+.qa-undo-toasts:empty { display: none; }
+@media (min-width: 900px) {
+  .qa-undo-toasts { bottom: calc(5.5rem + var(--quick-add-fab-h, 0px)); }
+}
+.qa-undo-toast {
+  display: grid; gap: 0.4rem; padding: 0.75rem 1rem; border-radius: 14px; box-shadow: var(--shadow);
+  background: var(--glass-strong); border: 1px solid var(--border);
+}
+.qa-undo-toast-text { margin: 0; color: var(--text); font-weight: 500; }
+
+/* Every control is at least 44 by 44 CSS pixels. */
+.qa-entry .btn, .qa-entry .btn.sm, .qa-answer .btn, .qa-answer .btn.sm, .qa-undo-toast .btn, .qa-undo-toast .btn.sm,
+.qa-answer .clarity-action-link { min-height: 44px; min-width: 44px; white-space: normal; text-align: center; }
+.qa-entry select { min-height: 44px; }
+.qa-entry select { border-color: var(--field-border, var(--muted)); }
+.qa-entry .btn[aria-disabled='true'], .qa-answer .btn[aria-disabled='true'], .qa-undo-toast .btn[aria-disabled='true'] {
+  opacity: 0.6; cursor: progress;
+}
+
+/* Keyboard focus is visible and at least 3:1 in both themes. */
+.qa-entry :focus-visible, .qa-answer :focus-visible, .qa-undo-toast :focus-visible, .qa-entry:focus-visible, .qa-answer:focus-visible {
+  outline: 3px solid var(--clarity-focus); outline-offset: 2px;
+}
+
+/* With reduced motion the Undo window is only the static text: the bar and the countdown are not shown. */
+@media (prefers-reduced-motion: reduce) {
+  .qa-undo-bar, .qa-undo-left { display: none; }
+  .qa-entries, .qa-entries *, .qa-answer, .qa-answer *, .qa-undo-toasts, .qa-undo-toasts * {
+    transition: none !important; animation: none !important; scroll-behavior: auto !important;
+  }
+}

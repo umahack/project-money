@@ -3,6 +3,7 @@ export const CLARITY_CONTRACT_VERSION = '1';
 
 export type FinancialClarityEnvironment = Readonly<Record<string, unknown>> & {
   VITE_FINANCIAL_CLARITY_ENABLED?: unknown;
+  VITE_QUICK_ADD_ENABLED?: unknown;
 };
 
 export type FinancialClarityUiMode = 'legacy' | 'clarity';
@@ -15,14 +16,43 @@ export interface FinancialClarityRollout {
   contractVersion: typeof CLARITY_CONTRACT_VERSION | null;
 }
 
+/** Fail-closed: only the strings `1` and `true`, in any letter case and ignoring surrounding whitespace, are on. */
+function isFlagOn(rawValue: unknown): boolean {
+  return typeof rawValue === 'string' && ['1', 'true'].includes(rawValue.trim().toLowerCase());
+}
+
 export function readClientFeatureFlags(
-  environment: FinancialClarityEnvironment = import.meta.env,
+  // `currentMonth()` reads this, and the end-to-end fakes call `currentMonth()` in the Playwright Node process, where
+  // Vite does not define `import.meta.env`. An absent environment reads as flag off, like any other missing value.
+  environment: FinancialClarityEnvironment = import.meta.env ?? {},
 ): Readonly<{ financialClarityEnabled: boolean }> {
-  const rawValue = environment.VITE_FINANCIAL_CLARITY_ENABLED;
-  const financialClarityEnabled = typeof rawValue === 'string'
-    && ['1', 'true'].includes(rawValue.trim().toLowerCase());
+  const financialClarityEnabled = isFlagOn(environment.VITE_FINANCIAL_CLARITY_ENABLED);
 
   return Object.freeze({ financialClarityEnabled });
+}
+
+/**
+ * The Quick_Add_Flag (`VITE_QUICK_ADD_ENABLED`) read on its own, with the same
+ * fail-closed reading as the Rollout_Flag. Off when absent, malformed, or any
+ * value other than `1` or `true`. It has no effect by itself: use
+ * `selectQuickAddEnabled` to decide whether any Quick Add surface exists.
+ */
+export function readQuickAddFlag(
+  environment: FinancialClarityEnvironment = import.meta.env,
+): boolean {
+  return isFlagOn(environment.VITE_QUICK_ADD_ENABLED);
+}
+
+/**
+ * Quick_Add_Enabled: true only while both the Rollout_Flag and the
+ * Quick_Add_Flag are on. Every Quick Add surface, request, and the
+ * Allowance_Exclusion control must stay behind this value. The flags are read
+ * from the build environment, so a change applies at the next application load.
+ */
+export function selectQuickAddEnabled(
+  environment: FinancialClarityEnvironment = import.meta.env,
+): boolean {
+  return readClientFeatureFlags(environment).financialClarityEnabled && readQuickAddFlag(environment);
 }
 
 /**
