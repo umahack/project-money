@@ -385,6 +385,234 @@ per-table cleanup inside a single handler.
 
 ---
 
+## Android release
+
+Capacitor 8 wrapper in `frontend/android`: application id `online.projectmoney.app` (permanent once
+published), minSdk 24, targetSdk 36. The WebView loads the bundled `dist` from `https://localhost`
+(`server.androidScheme: 'https'`, no `server.url`) and calls the Render API over HTTPS. Submitting to
+Google Play is a manual step for the owner: see [docs/android-play-store-checklist.md](docs/android-play-store-checklist.md).
+Spec: `.kiro/specs/android-app-release/` (requirements, design, tasks). A shorter summary is in `README.md`.
+Run every command from `frontend/` unless noted.
+
+### Prerequisites
+
+- **JDK 21.** `capacitor.build.gradle` sets source and target compatibility to Java 21. On this machine
+  the Android Studio JBR 21 is the active JDK (`/usr/libexec/java_home -V` to check).
+- **Android SDK** at `~/Library/Android/sdk` (override with `ANDROID_HOME`). `frontend/android/local.properties`
+  has `sdk.dir` (gitignored). Build-tools 35.0.0 and 36.0.0 are installed; `verify.mjs` picks the newest.
+  `adb`, `emulator`, `apksigner`, `aapt2` are not on `PATH`. Call them by full path
+  (`~/Library/Android/sdk/platform-tools/adb`, `~/Library/Android/sdk/emulator/emulator`); the scripts do.
+- **Emulator**: AVD `Pixel_7_2`, with system images for API 34 (`android-34/google_apis_playstore`) and
+  API 37 (`android-37.0/google_apis_playstore`), both arm64.
+- Run one heavy process at a time (Gradle, emulator, test suites). Log long commands to a file.
+
+### Env file: `.env.android`
+
+`cp .env.android.example .env.android` (gitignored together with `.env.android.local`).
+
+| Key | Value | Rule |
+|---|---|---|
+| `VITE_API_BASE` | `https://project-money-api.onrender.com` | `https://` only, no trailing slash. `vite build --mode android` throws a message naming the variable if it is missing or not https. `capacitor.config.ts` also reads it (release throws too) to build `server.allowNavigation`. |
+| `VITE_FINANCIAL_CLARITY_ENABLED` | `false` | Default. |
+| `VITE_QUICK_ADD_ENABLED` | `false` | Default. Does nothing unless the clarity flag is `true`. |
+
+Precedence: real environment, then `.env.android.local`, then `.env.android`. Nothing here is secret
+(everything `VITE_*` ends up in the public bundle). Android mode also strips `console.*` and removes the
+`accounts.google.com` entries from the CSP; `connect-src` is `'self'` plus the API origin.
+
+### Commands (all in `frontend/package.json`)
+
+| Script | Runs |
+|---|---|
+| `android:build` | `vite build --mode android` |
+| `android:sync` | `android:build`, then `CAPACITOR_ENV=release npx cap sync android` |
+| `android:sync:debug` | `vite build`, then `CAPACITOR_ENV=debug npx cap sync android` |
+| `android:release` | `android:sync`, then `cd android && ./gradlew bundleRelease assembleRelease` |
+| `android:verify` | `node scripts/android/verify.mjs` |
+| `android` | `android:sync:debug`, then `cap open android` (Android Studio) |
+| `android:run` | `android:sync:debug`, then `cap run android` |
+
+- **Debug build**: `npm run android:sync:debug`, then `cd android && ./gradlew assembleDebug`
+  (`app/build/outputs/apk/debug/app-debug.apk`). No keystore or build number needed. `CAPACITOR_ENV=debug`
+  gives `allowMixedContent` and WebView debugging on, native logging `debug`, and `allowNavigation` for the API
+  host plus `10.0.2.2` and `localhost`. The debug source set overlays `network_security_config.xml` to permit
+  cleartext to `10.0.2.2` and `localhost` only. `FLAG_SECURE` is off, so screenshots work.
+- **Release build**: `npm run android:release -- -PbuildNumber=N`. npm appends the argument to the end of the
+  script, so Gradle receives `bundleRelease assembleRelease -PbuildNumber=N`. Outputs:
+  `android/app/build/outputs/bundle/release/app-release.aab` and `.../apk/release/app-release.apk`.
+- `CAPACITOR_ENV` is `release` when missing or unknown. Release: `allowMixedContent=false`,
+  `webContentsDebuggingEnabled=false`, `loggingBehavior=none`, `allowNavigation=[API host]`.
+  `capacitor.config.ts` imports no local module (the Capacitor CLI loads it outside Vite).
+- Gradle checks (`app/build.gradle`): `versionName` = `frontend/package.json` `version`; `versionCode` =
+  `buildNumber`, a positive integer up to 2100000000, from `-PbuildNumber=N` or `buildNumber=N` in
+  `android/gradle.properties`. A release task (`assembleRelease`, `bundleRelease`, `packageRelease`, and the
+  bundle signing tasks) fails without it, because Play rejects a reused `versionCode`. Debug defaults to 1.
+  An invalid value fails every build. Bump it for every build you upload.
+- Lint and the full set: `cd android && ./gradlew lint assembleDebug bundleRelease assembleRelease -PbuildNumber=N`.
+  Native unit tests: `./gradlew testDebugUnitTest` (`SecureWindowPolicyTest`).
+
+### Upload keystore and signing
+
+```bash
+mkdir -p ~/keys
+keytool -genkeypair -v -keystore ~/keys/project-money-upload.jks -alias upload \
+        -keyalg RSA -keysize 2048 -validity 10000
+```
+
+`frontend/android/keystore.properties` (gitignored; template `keystore.properties.example`):
+
+```properties
+storeFile=/absolute/path/to/project-money-upload.jks
+storePassword=<store password>
+keyAlias=upload
+keyPassword=<key password>
+```
+
+- `storeFile` is absolute or relative to `frontend/android`. A missing file, a missing or empty key, or a
+  `storeFile` that does not exist fails the release task with a message naming the problem. The release build
+  is never signed with the debug key.
+- **Never commit** the keystore or `keystore.properties` (`*.jks`, `*.keystore`, `keystore.properties` are in
+  `.gitignore` and `frontend/android/.gitignore`). **Keep two offline copies** of the keystore and passwords in
+  separate places (encrypted drive, password manager). Do not put them in the repo, a chat, or an unencrypted cloud folder.
+- **Play App Signing**: enrol on the first upload. Google keeps the app signing key; this keystore is the upload
+  key only. A lost upload key can be reset through Play Console support. Without enrolment, a lost signing key
+  means the app can never be updated.
+
+### Verify
+
+`npm run android:verify` (optionally `-- --build-number N`, or `BUILD_NUMBER=N`; otherwise it reads
+`buildNumber` from `android/gradle.properties`, and when neither exists it only checks that a `versionCode` is present).
+Steps, in order, stopping at the first failure and naming it:
+
+1. `auditManifest.mjs` on `app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml`.
+2. `apksigner verify --verbose --print-certs` on the APK (a debug certificate is rejected).
+3. `jarsigner -verify` on the AAB (a debug certificate is rejected).
+4. `aapt2 dump badging`: package, `versionName`, `versionCode`, target 36, min 24, not debuggable, permissions exactly the allowed set.
+5. The same audit on the manifest decoded from the APK.
+6. Web bundle: no `accounts.google.com` (one known literal in a JS chunk is reported as a note), no `localhost:4000`,
+   no `10.0.2.2`, no `http://` API URL, no `console.*` call (one known `console.error` in `@capacitor/core` is allowed),
+   the API origin is present, and the CSP meta is present with `connect-src` limited to `'self'` and the API origin.
+
+`node scripts/android/auditManifest.mjs <AndroidManifest.xml>` runs the audit alone; it prints every violation and
+exits non-zero if there is one. Other `verify.mjs` flags: `--apk`, `--aab`, `--manifest`, `--web-dir`, `--api-base`,
+`--help`, `--self-test`.
+
+**Emulator smoke (`scripts/android/smoke.sh`).** `scripts/android/smoke.sh [apk]` uses AVD `Pixel_7_2` on emulator
+port 5584 (so it does not collide with another emulator), boots it if needed, then: `adb install -r`, launch,
+`MainActivity` resumed, no `FATAL EXCEPTION`, package not `DEBUGGABLE` and no `ALLOW_BACKUP`, `run-as` refused,
+secure flag check through `dumpsys window`, and back on the first screen minimises the app. Env: `AVD_NAME`,
+`SMOKE_EMULATOR_PORT`, `SMOKE_API_LEVEL` (34 or 37), `SMOKE_HEADLESS=1`, `SMOKE_BUILD_TYPE=debug`,
+`SMOKE_STOP_EMULATOR=1`, `ANDROID_SERIAL`. It refuses a physical device unless `SMOKE_ALLOW_PHYSICAL_DEVICE=1`.
+**Screenshots from a release build are blank because of `FLAG_SECURE`.** That is expected and counts as evidence
+the flag works. For visual checks use `adb shell uiautomator dump` or a debug build.
+
+Manual checklist, on API 34 and API 37: install and launch; OTP sign-up; sign-in; add an expense; export CSV and
+account JSON through the share sheet; back button on Home, in a dialog, and on `/agreement`; rotate; dark mode;
+airplane mode (offline banner, Retry); kill and reopen (shows sign-in). Confirm the export files are gone from the
+cache about 60 seconds after sharing.
+
+### Security posture
+
+- **Cleartext off.** No `usesCleartextTraffic`; `network_security_config.xml` has `cleartextTrafficPermitted="false"`
+  and trusts system CAs only (no user CAs). Only the debug overlay allows `10.0.2.2` and `localhost`.
+- **Backup off.** `allowBackup="false"`, with `data_extraction_rules.xml` (Android 12+) and `backup_rules.xml`
+  (Android 11 and lower) excluding every domain.
+- **No certificate pinning, on purpose.** Render rotates certificates on its own schedule. A pin would lock every
+  installed app out of the API after a rotation until users updated. Protection is system trust anchors, HSTS on the
+  API, and cleartext being denied.
+- **`FLAG_SECURE`** in release builds, set in `MainActivity` before `super.onCreate` when
+  `SecureWindowPolicy.shouldSetSecureFlag` says the app is not debuggable. Hides screenshots, recording, and the
+  recents thumbnail. No setting turns it off.
+- **Permissions** (checked by the audit and by `aapt2 badging`): `android.permission.INTERNET`,
+  `android.permission.ACCESS_NETWORK_STATE` (normal, no prompt; without it the Android WebView always reports
+  `navigator.onLine === true`, so the offline banner never shows), `android.permission.VIBRATE`
+  (from `@capacitor/haptics`), and
+  `online.projectmoney.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (from `androidx.core`; declared with
+  `protectionLevel="signature"`). Anything else fails the audit. No storage permission: exports use the FileProvider
+  over the cache directory.
+- **Exported components**: only `MainActivity`. `androidx.profileinstaller.ProfileInstallReceiver` (exported by a
+  library) is removed in `AndroidManifest.xml` with `tools:node="remove"`. The FileProvider is `exported="false"`.
+  `file_paths.xml` declares a `cache-path` only.
+- **R8**: release has `minifyEnabled true`, `shrinkResources true`, `debuggable false`. `proguard-rules.pro` keeps
+  Capacitor plugins and `@JavascriptInterface` members. `MainActivity` uses `android:windowSoftInputMode="adjustResize"`.
+- Navigation is restricted with `server.allowNavigation`. The generated `res/xml/config.xml` (`<access origin="*"/>`)
+  is Cordova compatibility output and is not edited.
+- No analytics, ad, or crash-reporting SDK.
+- Edge-to-edge: `MainActivity` calls `EdgeToEdge.enable(this)`; `SystemBars.insetsHandling` is `css`. The emulator
+  runs at API 34 and 37 may switch it to `native`; record the result with the emulator notes.
+
+### Behaviour notes
+
+- **Sign-in ends when the app process ends.** Same as web: the 30-minute JWT is in `sessionStorage` (`pm_token`;
+  user in `pm_user`), read only through `frontend/src/tokenStore.ts`. Nothing is stored in `localStorage`, cookies,
+  or native storage. Killing the app means signing in again. Minimising keeps the process, and the session, while
+  Android keeps the process alive.
+- **Google Sign-In is hidden on native** (`GoogleSignInButton` and `AuthDivider` render nothing when
+  `isNativePlatform()`; the GSI script never loads). Email and password and OTP registration work.
+- **Export** (`frontend/src/native/exportFile.ts`): on native, the CSV and account JSON are written to the app cache
+  and handed to the system share sheet, then deleted after 60 seconds; a start-up sweep removes leftovers named
+  `project-money-(account|expenses)-*`. The toast says "Shared". On web the old anchor download is unchanged.
+- **Back button** (`frontend/src/native/backButton.ts`): closes the top dialog (a locked dialog swallows it), on
+  `/agreement` while the agreement is required it minimises the app (never navigates, so the notice cannot be skipped),
+  on `/` and `/login` it minimises, elsewhere it goes back in history, and minimises when there is none. It uses
+  `App.minimizeApp()`, never `exitApp()`. The web registers no listener.
+- **Offline**: `OfflineBanner` (native only) shows a status notice with Retry and refetches on reconnect. After 5 seconds
+  with no first response the Home page shows the "free server may be waking up" hint (up to a minute on Render's free tier).
+- **Haptics**: one light impulse on Quick Add save, a different one on undo; none under reduced motion or on web.
+
+### Render step: add the app origin to `CORS_ORIGIN`
+
+The app's origin is `https://localhost`. On Render, `project-money-api`, Environment: append it to `CORS_ORIGIN` and redeploy.
+The value is a comma-separated list; append `,https://localhost` to what is already there, for example:
+
+```
+CORS_ORIGIN=https://project-money.online,https://www.project-money.online,https://project-money-web.onrender.com,https://localhost
+```
+
+`resolveCorsOrigin` in `backend/src/app.js` splits on commas, trims, and accepts an origin only on an exact string match.
+No wildcard, no trailing slash, no scheme or port variants (`http://localhost` and `https://localhost:3000` are rejected).
+`credentials` stays `false`. Tests: `backend/test/api/corsAllowlist.test.js` and
+`backend/test/property/corsAllowlist.property.test.js`. Check after the deploy (the first request may take up to a minute):
+
+```bash
+curl -s -I -H "Origin: https://localhost" https://project-money-api.onrender.com/api/health | grep -i access-control-allow-origin
+curl -s -i -X OPTIONS https://project-money-api.onrender.com/api/health \
+  -H "Origin: https://localhost" -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: authorization" | grep -i access-control-allow-origin
+```
+
+Both should print `access-control-allow-origin: https://localhost`. No output means the new value has not deployed or
+does not match exactly.
+
+### Flag order for Quick Add in the app
+
+The first release has Quick Add and Financial Clarity off. To turn Quick Add on: (1) set `QUICK_ADD_ENABLED=true` on the
+API and let it deploy (server first); (2) set `VITE_FINANCIAL_CLARITY_ENABLED=true` and `VITE_QUICK_ADD_ENABLED=true` in
+`frontend/.env.android`; (3) rebuild with a higher `-PbuildNumber`, run `android:verify`, and upload the new AAB. Installed
+apps keep the old flags until updated. Rollback: set `VITE_QUICK_ADD_ENABLED=false` and ship a new build; the server flag can
+be flipped alone (see the Quick Add rollout section of `README.md`).
+
+### Known limits
+
+- Sessions end when the app process ends.
+- No Google Sign-In on Android in version 1.
+- The first release ships with Quick Add and Financial Clarity off.
+- **"Stay signed in" is deferred.** It needs a backend refresh-token endpoint, revocation on password change and account
+  deletion, secure storage (Android Keystore), an optional biometric gate, and a threat model for a long-lived credential on
+  a device. Version 1 stores no credential outside `sessionStorage`.
+- Release screenshots are blank (`FLAG_SECURE`); there is no toggle.
+- Free-tier Render cold start of up to a minute on the first request.
+- Without a network the app shows the offline notice; figures on screen may be out of date.
+- `insetsHandling` (`css` now) is subject to the emulator evaluation.
+
+### Out of scope
+
+iOS; biometric or app lock; native Google Sign-In (after v1); certificate pinning; root, jailbreak, or emulator detection;
+a screenshot setting; analytics or crash SDKs; Android CI; backend changes beyond the exported `resolveCorsOrigin`
+and its tests; and the Play Console submission (the owner does it, using the checklist above).
+
+---
+
 ## 11. Deferred / planned
 
 Already shipped (ignore if you were about to add them):
@@ -403,7 +631,7 @@ Already shipped (ignore if you were about to add them):
 - Google Sign-In (web) — `POST /api/auth/google`, auto-link by verified email, no OTP for Google signups
 
 Still open:
-1. **Google Sign-In on Android** — needs `@codetrix-studio/capacitor-google-auth` + Android client ID + SHA-1 fingerprint registered.
+1. **Google Sign-In on Android (after v1)** — hidden on native in version 1; the Android release section above describes what ships. Native sign-in (Credential Manager) needs an Android OAuth client ID with the app's SHA-1 fingerprints registered (upload key and Play App Signing key) and a backend path that accepts the native ID token.
 2. **Weekly digest email** — reuse the monthlyReview pattern (`backend/src/jobs/weeklyReview.js` + a second cron-job.org trigger).
 3. **Trip chat (polling v1)** — `trip_messages` table + 4-s poll + unread badge on the Trips tab.
 4. **Receipt photo upload / OCR** — needs object storage (Cloudinary / S3).

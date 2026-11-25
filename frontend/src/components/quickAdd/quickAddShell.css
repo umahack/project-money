@@ -22,7 +22,7 @@
 .qa-dialog-foot:empty { display: none; }
 /* A wider dialog than the standard modal, and at the top of a phone screen so the on-screen keyboard leaves it in view. */
 .modal:has(.qa-dialog-body) { width: min(600px, 100%); overscroll-behavior: contain; }
-.modal-backdrop:has(.qa-dialog-body) { align-items: start; overflow: auto; }
+.modal-backdrop:has(.qa-dialog-body) { align-items: start; overflow: auto; padding-top: max(1rem, env(safe-area-inset-top, 0px)); padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 900px) {
   .modal-backdrop:has(.qa-dialog-body) { align-items: center; }
 }

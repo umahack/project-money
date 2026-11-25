@@ -26,6 +26,8 @@ import { QuickAddPanel } from '../components/quickAdd/QuickAddPanel';
 import { FiveYearProjection } from '../components/FiveYearProjection';
 import { DEMO_PLAN, DEMO_SAMPLE_NAME } from '../demoData';
 import { readCachedPlan, writeCachedPlan } from '../hooks/useCachedPlan';
+import { useColdStartHint } from '../native/useColdStartHint';
+import { isNativePlatform } from '../platform';
 
 /** Compact progress pill — "₹X of ₹Y" with a gradient fill clamped to 100%. */
 function SpendBar({ spent, budget, color }: { spent: number; budget: number; color: string }) {
@@ -125,6 +127,8 @@ function ClarityDashboard() {
   // The newest confirmed snapshot with pending patches. The query result covers the
   // moment between a response arriving and the store installing it.
   const snapshot = view.snapshot ?? query.data;
+  // The "free host is waking up" hint appears only after the first request has been pending for 5 seconds.
+  const showColdStartHint = useColdStartHint(!snapshot && !query.isError && query.isFetching);
   const model = useMemo(() => (snapshot ? selectHomeSummary(snapshot) : null), [snapshot]);
   const { refetch } = query;
   const retry = useCallback(async (outcomeId?: string) => {
@@ -195,9 +199,15 @@ function ClarityDashboard() {
           />
         )}
       </RegionBoundary>
-      {!snapshot && !query.isError && (
+      {showColdStartHint && (
         <p className="muted small center" style={{ marginTop: '0.8rem' }} aria-live="polite">
           If this takes a few seconds, the free API host is waking up.
+          {isNativePlatform() && (
+            <>
+              {' '}
+              <button type="button" className="btn" onClick={() => void retry()}>Retry</button>
+            </>
+          )}
         </p>
       )}
 

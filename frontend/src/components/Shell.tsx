@@ -15,6 +15,7 @@ import { DataUseGate } from './clarity/DataUseGate';
 import { RenderErrorBoundary } from './clarity/RenderErrorBoundary';
 import { QuickAddFailedStatus } from './quickAdd/QuickAddFailedStatus';
 import { QuickAddShellHost } from './quickAdd/QuickAddShellHost';
+import { applySystemBarStyle } from '../native/systemBars';
 
 export function Background() {
   return (
@@ -90,6 +91,8 @@ export function Shell() {
     document.documentElement.dataset.theme = theme;
     if (userPickedTheme) localStorage.setItem('theme', theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0b1a' : '#faf7f2');
+    // Keep the Android status/navigation bar icons readable against the new theme (no-op on the web).
+    void applySystemBarStyle(theme);
   }, [theme, userPickedTheme]);
 
   // Warm-minimal is the default experience; we no longer auto-follow the OS.

@@ -1,5 +1,72 @@
 apply plugin: 'com.android.application'
 
+import groovy.json.JsonSlurper
+
+// ---------------------------------------------------------------------------
+// Versioning (Requirement 11.6 - 11.8)
+//
+//   versionName = "version" field of frontend/package.json
+//   versionCode = Gradle property `buildNumber` (a positive integer <= 2100000000)
+//
+// Pass the build number on the command line:   ./gradlew bundleRelease -PbuildNumber=7
+// or set it in frontend/android/gradle.properties:   buildNumber=7
+// Debug builds default versionCode to 1 when `buildNumber` is not set. A RELEASE build
+// (assembleRelease, bundleRelease, packageRelease, or any other task that signs a release
+// artifact) FAILS when `buildNumber` was not provided, because Google Play rejects an upload
+// whose versionCode was already used: increase it for every build you upload.
+// An invalid value (not a positive integer, or above 2100000000) fails every build.
+// ---------------------------------------------------------------------------
+def maxVersionCode = 2100000000L
+def defaultBuildNumber = '1'
+def buildNumberProvided = String.valueOf(project.findProperty('buildNumber') ?: '').trim() != ''
+
+def packageJsonFile = rootProject.file('../package.json')
+if (!packageJsonFile.isFile()) {
+    throw new GradleException("Cannot derive versionName: ${packageJsonFile} does not exist.")
+}
+def packageVersion = new JsonSlurper().parse(packageJsonFile).version
+if (!(packageVersion instanceof String) || packageVersion.trim().isEmpty()) {
+    throw new GradleException("Cannot derive versionName: no \"version\" field in ${packageJsonFile}.")
+}
+
+def buildNumberText = buildNumberProvided ?
+    String.valueOf(project.findProperty('buildNumber')).trim() : defaultBuildNumber
+def buildNumberValue = null
+if (buildNumberText ==~ /\d{1,10}/) {
+    buildNumberValue = Long.parseLong(buildNumberText)
+}
+if (buildNumberValue == null || buildNumberValue < 1L || buildNumberValue > maxVersionCode) {
+    throw new GradleException(
+        "Invalid Gradle property buildNumber='${buildNumberText}': it must be a positive integer " +
+        "no greater than ${maxVersionCode}. Pass it as -PbuildNumber=<n> or set buildNumber=<n> in android/gradle.properties.")
+}
+
+// ---------------------------------------------------------------------------
+// Release signing (Requirement 11.3 - 11.4)
+//
+// The upload keystore is described by the gitignored frontend/android/keystore.properties
+// (see keystore.properties.example): storeFile, storePassword, keyAlias, keyPassword.
+// The release build never falls back to the debug key: if the file or a key is missing,
+// any task that signs a release artifact fails before the build starts (see below).
+// ---------------------------------------------------------------------------
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProblems = []
+def keystoreProperties = new Properties()
+if (!keystorePropertiesFile.isFile()) {
+    keystoreProblems << "the file ${keystorePropertiesFile} is missing"
+} else {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { key ->
+        if (!keystoreProperties.getProperty(key)?.trim()) {
+            keystoreProblems << "the property '${key}' is missing or empty in ${keystorePropertiesFile}"
+        }
+    }
+    if (keystoreProperties.getProperty('storeFile')?.trim() &&
+            !rootProject.file(keystoreProperties.getProperty('storeFile').trim()).isFile()) {
+        keystoreProblems << "storeFile '${keystoreProperties.getProperty('storeFile').trim()}' in ${keystorePropertiesFile} does not point to an existing keystore"
+    }
+}
+
 android {
     namespace = "online.projectmoney.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +74,8 @@ android {
         applicationId "online.projectmoney.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode buildNumberValue.intValue()
+        versionName packageVersion.trim()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +83,51 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Only configured when keystore.properties is complete. When it is not, the release
+            // build type has no signing config and the check below stops release builds.
+            if (keystoreProblems.isEmpty()) {
+                storeFile rootProject.file(keystoreProperties.getProperty('storeFile').trim())
+                storePassword keystoreProperties.getProperty('storePassword')
+                keyAlias keystoreProperties.getProperty('keyAlias')
+                keyPassword keystoreProperties.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystoreProblems.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
         }
+    }
+}
+
+// Fail fast, with a clear message, when a release artifact would be built without an explicit
+// buildNumber or without a usable keystore. Debug builds and tasks that do not sign (for example lint) are unaffected.
+def releaseSigningTasks = [
+    'assembleRelease', 'bundleRelease', 'packageRelease', 'packageReleaseBundle',
+    'signReleaseBundle', 'validateSigningRelease'
+] as Set
+gradle.taskGraph.whenReady { graph ->
+    def requested = graph.allTasks.find { it.project == project && releaseSigningTasks.contains(it.name) }
+    if (requested != null && !buildNumberProvided) {
+        throw new GradleException(
+            "Cannot build a release (${requested.path}): the Gradle property buildNumber was not provided. " +
+            "Pass -PbuildNumber=<n> or set buildNumber=<n> in frontend/android/gradle.properties. " +
+            "Google Play rejects an upload whose versionCode was already used, so use a number higher than any build you uploaded before.")
+    }
+    if (requested != null && !keystoreProblems.isEmpty()) {
+        throw new GradleException(
+            "Cannot build a release (${requested.path}): " + keystoreProblems.join('; ') + ". " +
+            "Create frontend/android/keystore.properties from keystore.properties.example " +
+            "(storeFile, storePassword, keyAlias, keyPassword). " +
+            "The release build is never signed with the debug key.")
     }
 }
 

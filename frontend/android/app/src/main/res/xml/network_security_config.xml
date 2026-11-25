@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release network policy: HTTPS only, system certificate authorities only.
+  No user-installed CAs and no certificate pins (Render rotates certificates).
+  The debug source set overlays this file to allow cleartext to the emulator host.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

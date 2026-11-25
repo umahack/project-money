@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { clearAuth } from '../api';
+import { getToken } from '../tokenStore';
+import { saveAndShare } from '../native/exportFile';
 import { Card } from './ui';
 import { errText, useToast } from '../state';
 
@@ -12,7 +14,7 @@ export function ExportData() {
     try {
       // Build the same URL the api client would build, but we need the raw blob response.
       const base = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '');
-      const token = sessionStorage.getItem('pm_token') ?? '';
+      const token = getToken() ?? '';
       const res = await fetch(`${base}/api/finance/export.csv`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) {
         clearAuth();
@@ -22,15 +24,10 @@ export function ExportData() {
       if (!res.ok) throw new Error(`Download failed (${res.status})`);
       const blob = await res.blob();
       const stamp = new Date().toISOString().slice(0, 10);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `project-money-expenses-${stamp}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast('ok', 'Downloaded');
+      const result = await saveAndShare(blob, `project-money-expenses-${stamp}.csv`);
+      if (result.outcome === 'failed') throw new Error('Could not save the export');
+      if (result.outcome === 'cancelled') return;
+      toast('ok', result.outcome === 'shared' ? 'Shared' : 'Downloaded');
     } catch (err) {
       toast('err', errText(err));
     } finally {

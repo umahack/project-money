@@ -1,0 +1,3 @@
+# Android release build mode (vite build --mode android). Copy .env.android.example to .env.android.
+.env.android
+.env.android.local

@@ -14,26 +14,21 @@ import { MutationStatusProvider } from './clarity/MutationStatusProvider';
 import { QuickAddProvider } from './clarity/quickAdd/QuickAddProvider';
 import { RenderErrorBoundary } from './components/clarity/RenderErrorBoundary';
 import { MotionPreferences } from './components/MotionPreferences';
-import { Capacitor } from '@capacitor/core';
+import { applySystemBarStyle } from './native/systemBars';
+import { sweepStaleExportFiles } from './native/exportFile';
+import { isNativePlatform } from './platform';
 
-// Capacitor native-only setup. On Android 15 (API 35+) the system enables
-// edge-to-edge by default — the status bar and camera cutout sit on top of
-// the WebView unless we explicitly turn overlay off at runtime.
-if (Capacitor.isNativePlatform()) {
-  (async () => {
-    try {
-      const { StatusBar, Style } = await import('@capacitor/status-bar');
-      await StatusBar.setOverlaysWebView({ overlay: false });
-      await StatusBar.setBackgroundColor({ color: '#faf7f2' });
-      await StatusBar.setStyle({ style: Style.Light });
-    } catch (e) {
-      console.warn('[capacitor] StatusBar setup skipped:', e);
-    }
-  })();
-}
+// Delete export files left in the app cache by an earlier run (native only).
+if (isNativePlatform()) void sweepStaleExportFiles();
 
 // Default to warm-minimal (light) on first visit; honor stored preference otherwise.
 document.documentElement.dataset.theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+
+// Android 15+ (targetSdk 36) enforces edge-to-edge: the app draws behind the status and navigation
+// bars, and StatusBar.setOverlaysWebView / setBackgroundColor are ignored. Layout is handled by the
+// env(safe-area-inset-*) CSS; only the bar icon style is set here, and Shell sets it again on every
+// theme change. No-op on the web.
+void applySystemBarStyle(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
 
 // Fire-and-forget: wake the Render free-tier API as early as possible so the
 // Dashboard's parallel fetches aren't the thing waiting on cold-start.

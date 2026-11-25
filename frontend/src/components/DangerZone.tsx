@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../api';
+import { getToken } from '../tokenStore';
+import { saveAndShare } from '../native/exportFile';
 import { Card, Field } from './ui';
 import { useAuth, useToast } from '../state';
 
@@ -93,7 +95,7 @@ export function DangerZone() {
     setExportBusy(true);
     setExportFailure(null);
     try {
-      const token = sessionStorage.getItem('pm_token') ?? '';
+      const token = getToken() ?? '';
       const res = await fetch(`${apiBase()}/api/auth/export`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -117,15 +119,10 @@ export function DangerZone() {
 
       const blob = await res.blob();
       const stamp = new Date().toISOString().slice(0, 10);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `project-money-account-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast('ok', 'Account data downloaded');
+      const result = await saveAndShare(blob, `project-money-account-${stamp}.json`);
+      if (result.outcome === 'failed') throw new Error('Account export could not be saved');
+      if (result.outcome === 'cancelled') return;
+      toast('ok', result.outcome === 'shared' ? 'Account data shared' : 'Account data downloaded');
     } catch {
       const failure = {
         message: 'Account export was unsuccessful. Your records are unchanged.',
@@ -148,7 +145,7 @@ export function DangerZone() {
     setDeletionBusy(true);
     setDeletionFailure(null);
     try {
-      const token = sessionStorage.getItem('pm_token') ?? '';
+      const token = getToken() ?? '';
       const res = await fetch(`${apiBase()}/api/auth/account`, {
         method: 'DELETE',
         headers: {

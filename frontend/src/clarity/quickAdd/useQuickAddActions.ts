@@ -41,6 +41,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useMemo, useRef } from 'react';
 import { REQUEST_TIMEOUT_CODE, clarityApi } from '../../api';
 import { useMeasurement } from '../../hooks/useMeasurement';
+import { fireHaptic } from '../../native/haptics';
 import { useMutationRunner } from '../MutationStatusProvider';
 import {
   CLARITY_SCHEMA_VERSION,
@@ -577,6 +578,8 @@ export function createQuickAddActions(deps: QuickAddActionDeps): QuickAddActions
       answer,
       announcement: { text: buildSaveAnnouncement({ amountMinor, category, answer }) },
     });
+    // One haptic impulse per confirmed save, including a confirmed same-key retry. Never for pending or failed rows.
+    if (entryOf(cid)?.phase === 'saved') void fireHaptic('save');
     // Only a confirmed result is published and reported (Requirements 7.17, 14.6).
     if (isUsableExpenseId(recordId)) publishConfirmed('create', recordId, mutation, entry);
     if (Number.isSafeInteger(mutation.changeId)) reportChange(mutation.changeId);
@@ -763,6 +766,8 @@ export function createQuickAddActions(deps: QuickAddActionDeps): QuickAddActions
     // The answer shows the server's values after the deletion (Requirement 8.5).
     const answer = buildEntryAnswer(envelope, answerInput(entry), deps.today());
     store.dispatch({ type: 'entry/undone', cid, answer, announcement: { text: REMOVED_TEXT } });
+    // One distinct impulse per confirmed undo. The already-removed (404) path is not a completed undo.
+    if (entryOf(cid)?.phase === 'undone') void fireHaptic('undo');
     if (isUsableExpenseId(entry.expenseId)) publishConfirmed('delete', entry.expenseId, envelope.mutation, entry);
     if (Number.isSafeInteger(envelope.mutation.changeId)) reportChange(envelope.mutation.changeId);
     await restoreMemory(cid);

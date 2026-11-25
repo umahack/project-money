@@ -1,0 +1,1024 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create `frontend/src/platform.ts`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192525
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588199767
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588283224
+      }
+    ],
+    "1.2 Create `frontend/src/tokenStore.ts`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192557
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588200579
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588284004
+      }
+    ],
+    "1.3 Route `api.ts`, `useSessionWarning.ts`, `DangerZone.tsx`, and `ExportData.tsx` through the Token_Store": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192599
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588288403
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588404291
+      }
+    ],
+    "1.4 Write the property test for the token round trip": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192624
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588408002
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588487313
+      }
+    ],
+    "1.5 Write unit tests for the token store edge case and the source scan": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192650
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588408470
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588488146
+      }
+    ],
+    "2.1 Gate `GoogleSignInButton` and `AuthDivider` on `isNativePlatform()`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192681
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588492398
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588707765
+      }
+    ],
+    "2.2 Write the property test for the Google button visibility": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192745
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588712689
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588926427
+      }
+    ],
+    "2.3 Write the example test for the GSI script not loading on native": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192784
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588713498
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588926888
+      }
+    ],
+    "2.4 Narrow the Content-Security-Policy and strip console output for the Android build mode": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192809
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588493086
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588708545
+      }
+    ],
+    "2.5 Write the property test for Android-mode build validation": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192834
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588714309
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588927748
+      }
+    ],
+    "2.6 Write the property test for the Android-mode CSP": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192857
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588715089
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588928563
+      }
+    ],
+    "2.7 Write the example test for non-android build behaviour staying unchanged": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192882
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588715705
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588929369
+      }
+    ],
+    "3. Checkpoint — ensure all tests pass": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192905
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588934804
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795589780165
+      }
+    ],
+    "4.1 Create the pure back-button decision function and overlay registry": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192931
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795589784562
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795589849000
+      }
+    ],
+    "4.2 Add `useBackButtonHandler` and wire it into `App.tsx`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192957
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795589855049
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590018201
+      }
+    ],
+    "4.3 Register the Quick Add dialog as a closable overlay": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588192987
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590022567
+      }
+    ],
+    "4.4 Write the property test for the back-button decision": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193012
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590026909
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590362361
+      }
+    ],
+    "4.5 Write unit tests for overlay wiring, the web no-listener case, and minimize semantics": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193037
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590027549
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590363107
+      }
+    ],
+    "5.1 Create the export/share wrapper": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193074
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590368941
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590812609
+      }
+    ],
+    "5.2 Wire `DangerZone.tsx` and `ExportData.tsx` to `saveAndShare`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193097
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590820274
+      }
+    ],
+    "5.3 Restrict `file_paths.xml` to a cache path and call the startup sweep": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193120
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590821330
+      }
+    ],
+    "5.4 Write the property test for export write-then-share-then-cleanup": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193143
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590842468
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591162162
+      }
+    ],
+    "5.5 Write unit tests for the sweep, the web path, write failure, and the 401 path": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193165
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590843129
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591162951
+      }
+    ],
+    "5.6 Create the haptics wrapper and wire it into Quick Add save/undo": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193187
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590369725
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590813320
+      }
+    ],
+    "5.7 Write the property test for haptic feedback": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193209
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590837938
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591163757
+      }
+    ],
+    "5.8 Write the unit test for haptics plugin rejection and the `navigator.vibrate` non-call": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193230
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590838732
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591173928
+      }
+    ],
+    "5.9 Create the system-bars wrapper and update `MainActivity`/`main.tsx`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193251
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590370773
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590814125
+      }
+    ],
+    "5.10 Write the unit test for the system-bars wiring": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193272
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590839508
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591173999
+      }
+    ],
+    "5.11 Create the network-status module and the offline banner": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193292
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590371283
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590815162
+      }
+    ],
+    "5.12 Write the property tests for network failure description and the stale-data notice": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193314
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590840551
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591174116
+      }
+    ],
+    "5.13 Write unit tests for the offline banner, retry, and the cold-start hint timing": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193337
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590841360
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591174168
+      }
+    ],
+    "6. Checkpoint — ensure all tests pass": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193360
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591179809
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591376165
+      }
+    ],
+    "7.1 Add network security config, backup rules, and manifest hardening": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193384
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591383498
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592043836
+      }
+    ],
+    "7.2 Add the `keystore.properties`-driven release signing config, minification, and ProGuard rules": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193406
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591384508
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592044630
+      }
+    ],
+    "7.3 Derive `versionName`/`versionCode` from `package.json` and a `buildNumber` property": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193430
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591385309
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592045416
+      }
+    ],
+    "7.4 Implement `SecureWindowPolicy` and wire `FLAG_SECURE` into `MainActivity`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193451
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591386402
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591761775
+      }
+    ],
+    "7.5 Remove the stale example tests and add real native tests": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193474
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592052140
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592284065
+      }
+    ],
+    "7.6 Run the native unit test task and record the result": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193497
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592289337
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592418717
+      }
+    ],
+    "8. Checkpoint — ensure all tests pass": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193522
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592891208
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593133595
+      }
+    ],
+    "9.1 Add `frontend/.env.android.example` and the android npm scripts": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193553
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591387208
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591762551
+      }
+    ],
+    "9.2 Make `capacitor.config.ts` a function of `CAPACITOR_ENV`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193575
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591388174
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591763645
+      }
+    ],
+    "9.3 Write a unit test for the Capacitor config branching": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193606
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592052716
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592284890
+      }
+    ],
+    "10.1 Implement `auditManifest.mjs`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193638
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592289954
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592419456
+      }
+    ],
+    "10.2 Write the property test for the manifest audit": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193660
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592425288
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592884788
+      }
+    ],
+    "10.3 Write example tests for a clean fixture and a violating fixture": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193687
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592426005
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592885540
+      }
+    ],
+    "10.4 Implement `verify.mjs` and `smoke.sh`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193712
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592426430
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592886093
+      }
+    ],
+    "11. Checkpoint — ensure all tests pass": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193733
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593138372
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593648168
+      }
+    ],
+    "12.1 Export `resolveCorsOrigin` for testing and add the allowlist test": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193779
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593653366
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593789322
+      }
+    ],
+    "12.2 Write the property test for the CORS allowlist": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193800
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593790079
+      }
+    ],
+    "12.3 Run the full backend test suite and confirm no other file changed": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193824
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593795207
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593967542
+      }
+    ],
+    "13.1 Add the `Android release` section to `README.md` and `HANDOFF.md`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193847
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593972880
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795594646591
+      }
+    ],
+    "13.2 Write `docs/android-play-store-checklist.md`": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193867
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593973507
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795594647190
+      }
+    ],
+    "14.1 Build the Release_Web_Bundle and run the Gradle release tasks": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193890
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795594655994
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795598159595
+      }
+    ],
+    "14.2 Run `npm run android:verify` and resolve any failure": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193909
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795598166845
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795598457146
+      }
+    ],
+    "14.3 Boot the `Pixel_7_2` AVD at API 34 and run the smoke checklist": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193931
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795598468816
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795599322308
+      }
+    ],
+    "14.4 Boot the `Pixel_7_2` AVD at API 37 and run the smoke checklist": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193955
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795599337036
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795604787083
+      }
+    ],
+    "15. Final checkpoint — ensure all tests pass": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588193978
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795604830156
+      },
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795608902989
+      }
+    ],
+    "1. Add the platform module and token store": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588488183
+      }
+    ],
+    "2. Hide the Google sign-in affordance on native": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795588929428
+      }
+    ],
+    "4. Implement the back-button policy and wire it in": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795590363156
+      }
+    ],
+    "5. Implement export/share, haptics, system bars, and network status": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795591174229
+      }
+    ],
+    "9. Add the Android build mode scripts and the Capacitor per-build configuration": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592284946
+      }
+    ],
+    "7. Harden the Android manifest, backup, and network security configuration": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592418791
+      }
+    ],
+    "10. Add the manifest audit script and the verification pipeline": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795592886141
+      }
+    ],
+    "12. Add the backend CORS allowlist test": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795593967618
+      }
+    ],
+    "13. Write the documentation and the Play Store checklist": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795594647229
+      }
+    ],
+    "14. Emulator build and verification": [
+      {
+        "executionId": "7f3a886c-0102-483c-a8c5-b2cc3b57c72a",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795604787209
+      }
+    ]
+  }
+}

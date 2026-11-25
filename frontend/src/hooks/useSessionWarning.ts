@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { getToken } from '../tokenStore';
 
 /** Decode the 'exp' claim of a JWT without a library. Null if unparseable. */
 function expOf(token: string | null): number | null {
@@ -30,7 +31,7 @@ export function useSessionWarning(warnBeforeMs = 5 * 60 * 1000) {
     const schedule = () => {
       if (timer.current) clearTimeout(timer.current);
       setWarn(false);
-      const token = sessionStorage.getItem('pm_token');
+      const token = getToken();
       const exp = expOf(token);
       if (!exp) return;
       const expMs = exp * 1000;

@@ -31,6 +31,8 @@ import { postAuthDestination } from './clarity/journeys';
 import { selectFinancialClarityRollout } from './clarity/rollout';
 import { useAuth } from './state';
 import { useVisitTracker } from './hooks/useVisitTracker';
+import { useBackButtonHandler } from './native/useBackButtonHandler';
+import { OfflineBanner } from './components/OfflineBanner';
 import { wantsUserView } from './userViewPref';
 
 /**
@@ -100,6 +102,13 @@ function RequireSession({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Attaches the hardware back-button handler (native only) with the live Agreement_Gate state. */
+function BackButtonHandler() {
+  const { mustAgree } = useAgreementGate();
+  useBackButtonHandler(mustAgree);
+  return null;
+}
+
 export default function App() {
   useVisitTracker();
   // With the rollout off there is no /start or /agreement route at all, so each falls through to the catch-all.
@@ -107,6 +116,8 @@ export default function App() {
   return (
     <DataUseGateProvider>
       <AgreementGateProvider>
+      <BackButtonHandler />
+      <OfflineBanner />
       <Routes>
         <Route path="/login" element={<Guest mode="login"><AuthPage mode="login" /></Guest>} />
         <Route path="/register" element={<Guest mode="register"><AuthPage mode="register" /></Guest>} />

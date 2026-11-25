@@ -24,7 +24,7 @@ import { createRequestContext } from './middleware/requestContext.js';
 import { createErrorBoundary } from './middleware/errorBoundary.js';
 import { operationalLogger } from './observability/operationalLog.js';
 
-function resolveCorsOrigin(rawOrigin, isProduction) {
+export function resolveCorsOrigin(rawOrigin, isProduction) {
   if (!rawOrigin || rawOrigin === '*') {
     if (isProduction) {
       throw new Error('CORS_ORIGIN must be set to a specific allowlist in production. Refusing to boot.');

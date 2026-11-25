@@ -11,6 +11,9 @@ frontend/android/.idea
 frontend/android/app/release
 *.keystore
 *.jks
+keystore.properties
+.env.android
+.env.android.local
 # iOS build output (when we add iOS later)
 frontend/ios/App/App.xcworkspace/xcuserdata
 frontend/ios/App/Pods

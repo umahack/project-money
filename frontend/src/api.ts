@@ -14,12 +14,12 @@ import {
   type VersionedClarityResponse,
 } from './clarity/contracts';
 import { observeResponseTime } from './clarity/quickAdd/kolkata';
+import { clearToken, getToken as readToken, setToken } from './tokenStore';
 
 const BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/+$/, '') + '/api';
 export const DATA_NOTICE_REQUIRED_CODE = 'DATA_NOTICE_REQUIRED';
 /** Dispatched on `window` when a command is rejected with 428 `DATA_NOTICE_REQUIRED`. */
 export const DATA_NOTICE_REQUIRED_EVENT = 'clarity:data-notice-required';
-const TOKEN_KEY = 'pm_token';
 const USER_KEY = 'pm_user';
 
 type ApiErrorDetails = Partial<Omit<StructuredApiError, 'message'>>;
@@ -58,7 +58,7 @@ export function registerQueryCacheClearer(clearer: () => void): () => void {
   };
 }
 
-export const getToken = (): string | null => sessionStorage.getItem(TOKEN_KEY);
+export const getToken = (): string | null => readToken();
 
 export function getUser(): User | null {
   try {
@@ -74,14 +74,14 @@ export function getUser(): User | null {
 }
 
 export function setAuth(token: string, user: User): void {
-  sessionStorage.setItem(TOKEN_KEY, token);
+  setToken(token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
   // Signal to any hook watching session expiry (e.g. "stay signed in" toast).
   window.dispatchEvent(new Event('auth:changed'));
 }
 
 export function clearAuth(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
+  clearToken();
   sessionStorage.removeItem(USER_KEY);
   // Also wipe both generations of financial cache so a later account in this
   // tab cannot read the previous account's data. The clarity cache is memory-only.

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
 import { inr } from '../money';
+import { popOverlay, pushOverlay } from '../native/backButton';
 
 /** Glass card with a cursor-following spotlight and a gentle 3D tilt on hover. */
 export function Card({ children, className = '', tilt = false, ...rest }: HTMLAttributes<HTMLDivElement> & { tilt?: boolean }) {
@@ -185,6 +186,22 @@ export function Modal({ open, onClose, children, title, locked = false }: { open
   // CSS cannot stop Framer Motion, which writes the transform inline. With reduced motion the box only fades, so nothing
   // scales or slides (Requirement 12.10 of Quick Add, which opens in this dialog).
   const reduceMotion = useReducedMotion();
+  // While open, every Modal is an entry in the back-button overlay registry (a no-op on the web, where nothing reads it),
+  // so the hardware back button closes the top modal, or does nothing while it is `locked`, before any navigation.
+  // `onClose` is read through a ref so a caller that passes a new function each render does not re-register the entry
+  // and change its place in the stack. It is the same function Escape and the backdrop call.
+  const overlayId = useId();
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return undefined;
+    return () => popOverlay(overlayId);
+  }, [open, overlayId]);
+  useEffect(() => {
+    if (!open) return;
+    // An entry with the same id replaces the old one in place, so a change of `locked` keeps the stack order.
+    pushOverlay({ id: overlayId, closable: !locked, onClose: () => onCloseRef.current() });
+  }, [open, locked, overlayId]);
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;

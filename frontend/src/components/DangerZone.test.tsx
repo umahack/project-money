@@ -1,12 +1,15 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DangerZone } from './DangerZone';
 import {
   axe,
   queueApiResponses,
   renderAuthenticated,
 } from '../test/test-utils';
+
+const exporter = vi.hoisted(() => ({ saveAndShare: vi.fn() }));
+vi.mock('../native/exportFile', () => exporter);
 
 const SUPPORT = {
   email: 'hello@project-money.online',
@@ -129,6 +132,27 @@ describe('DangerZone failure containment', () => {
     await waitFor(() => expect(sessionStorage.getItem('pm_token')).toBeNull());
     expect(sessionStorage.getItem('pm_user')).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DangerZone export session expiry', () => {
+  it('clears the session and announces expiry on a 401 before saveAndShare is reached', async () => {
+    exporter.saveAndShare.mockReset();
+    const expired = vi.fn();
+    window.addEventListener('auth:expired', expired as EventListener);
+    const fetchMock = queueApiResponses({ status: 401, body: { error: 'Your session expired.' } });
+    renderAuthenticated(<DangerZone />);
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /download my data/i }));
+
+    await waitFor(() => expect(expired).toHaveBeenCalledTimes(1));
+    window.removeEventListener('auth:expired', expired as EventListener);
+    expect((expired.mock.calls[0]?.[0] as CustomEvent).detail).toBe('Your session expired.');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionStorage.getItem('pm_token')).toBeNull();
+    expect(sessionStorage.getItem('pm_user')).toBeNull();
+    expect(exporter.saveAndShare).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert', { name: 'Export unsuccessful' })).toBeNull();
   });
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isNativePlatform } from '../platform';
 
 // Minimal GSI types — the library isn't on npm, so we just declare what we
 // use. See https://developers.google.com/identity/gsi/web/reference/js-reference.
@@ -55,17 +56,30 @@ function loadGsi(): Promise<void> {
 
 const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? '';
 
-export function GoogleSignInButton({
-  onCredential,
-  onError,
-  mode = 'login',
-  disabled = false,
-}: {
+type GoogleSignInButtonProps = {
   onCredential: (credential: string) => void | Promise<void>;
   onError?: (message: string) => void;
   mode?: 'login' | 'register';
   disabled?: boolean;
-}) {
+};
+
+/**
+ * Google sign-in is web-only: on a native (Capacitor) runtime this renders
+ * nothing and never mounts the inner component, so the GSI script is never
+ * requested. The check lives in this wrapper so the inner component's hooks
+ * always run in the same order.
+ */
+export function GoogleSignInButton(props: GoogleSignInButtonProps) {
+  if (isNativePlatform()) return null;
+  return <WebGoogleSignInButton {...props} />;
+}
+
+function WebGoogleSignInButton({
+  onCredential,
+  onError,
+  mode = 'login',
+  disabled = false,
+}: GoogleSignInButtonProps) {
   const host = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -138,6 +152,7 @@ export function GoogleSignInButton({
 
 /** Divider — "or" between the Google button and the email form. */
 export function AuthDivider() {
+  if (isNativePlatform()) return null;
   if (!CLIENT_ID) return null;
   return (
     <div

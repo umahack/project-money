@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { prefersReducedMotion } from '../reducedMotion';
 import { emptyActionContext, parseActionContext, type ActionContext, type ActionPage } from './actionContext';
 import { selectFinancialClarityRollout } from './rollout';
 
@@ -7,10 +8,6 @@ import { selectFinancialClarityRollout } from './rollout';
 export const ARRIVAL_FALLBACK_MS = 1500;
 /** How long to wait for any target before giving up. */
 export const ARRIVAL_GIVE_UP_MS = 5000;
-
-function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 function reveal(element: HTMLElement): void {
   // Headings and forms are not focusable by default; this lets them take programmatic focus only.

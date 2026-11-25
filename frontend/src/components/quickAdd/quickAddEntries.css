@@ -54,7 +54,7 @@
 
 /* The Undo toast sits above the regular toast area and above the floating action while one is shown. */
 .qa-undo-toasts {
-  position: fixed; z-index: 101; right: 1rem;
+  position: fixed; z-index: 101; right: max(1rem, env(safe-area-inset-right, 0px));
   bottom: calc(var(--bottom-nav-h, 90px) + 5.5rem + var(--quick-add-fab-h, 0px) + env(safe-area-inset-bottom));
   display: grid; gap: 0.5rem; max-width: min(380px, calc(100vw - 2rem));
 }
