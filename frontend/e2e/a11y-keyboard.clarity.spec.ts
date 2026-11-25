@@ -44,7 +44,8 @@ const SWEEP_LIMIT = 160;
 const SWEPT_SCENARIOS = [
   'Home: full outcomes with a seven-digit pay and long bill names',
   'Home: calculation_failed, refresh_failed, invalid_input, and stale regions side by side',
-  'Home: data-use notice not yet acknowledged, notice expanded',
+  'Agreement: data-use notice required, full details open',
+  'Home: entries paused after "Not now, just look around"',
   'Plan: full plan with a seven-digit pay and long bill names',
   'Plan: bill form with validation errors',
   'Spending: full list with seven-digit amounts and long notes',

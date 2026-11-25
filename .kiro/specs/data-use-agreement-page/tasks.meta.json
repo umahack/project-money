@@ -1,0 +1,544 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Move `DataUseGateProvider` out of `Shell` and into `App.tsx`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640213
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512652460
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512998964
+      }
+    ],
+    "1.2 Add `AgreementGateProvider`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640356
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512654170
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513107825
+      }
+    ],
+    "1.3 Write the property test for the user-change reset": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640419
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513112231
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513354501
+      }
+    ],
+    "1.4 Write the property test for entries never enabled while required": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640530
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513112701
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513354953
+      }
+    ],
+    "2.1 Implement `isExemptRoute` and `AgreementRedirect`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640590
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513113175
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513357138
+      }
+    ],
+    "2.2 Write the property test for the redirect decision": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640648
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513361742
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513551413
+      }
+    ],
+    "2.3 Write example tests for the rollout-off and acknowledged/disabled cases": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640700
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513552724
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513784737
+      }
+    ],
+    "3.1 Add `summarizeNotice` to `dataUseLabels.ts`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640750
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513113487
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513357388
+      }
+    ],
+    "3.2 Create `frontend/src/pages/Agreement.tsx`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640813
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513361976
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513552060
+      }
+    ],
+    "3.3 Register the `/agreement` route": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512640930
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513552359
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513783947
+      }
+    ],
+    "3.4 Write the property test for the Agreement page's required elements": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512641680
+      },
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513789520
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543188596
+      }
+    ],
+    "3.5 Write the property test for \"Read full details\"": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512641928
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543189064
+      }
+    ],
+    "3.6 Write the property test for agreeing to the recorded destination": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512641978
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543189724
+      }
+    ],
+    "3.7 Write the property test for the no-destination fallback": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642032
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543190429
+      }
+    ],
+    "3.8 Write the property test for \"Not now\"": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642088
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543190945
+      }
+    ],
+    "3.9 Write example tests for loading, error, and sizing": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642133
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543191547
+      }
+    ],
+    "4. Checkpoint - Ensure the agreement page and routing tests pass": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642180
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543196861
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543290501
+      }
+    ],
+    "5.1 Remove the `required`-branch full notice and acknowledge button from `DataUseGate`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642236
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543294873
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543572385
+      }
+    ],
+    "5.2 Write the property test for the paused-entries link": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642306
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543579149
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543953733
+      }
+    ],
+    "5.3 Update existing `DataUseGate` tests for the trimmed markup": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642364
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543579381
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543954332
+      }
+    ],
+    "6.1 Render the banner in `Settings.tsx`": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642423
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543295506
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543573158
+      }
+    ],
+    "6.2 Write example tests for the Settings banner and the always-reachable controls": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642769
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543579724
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543954688
+      }
+    ],
+    "7. Checkpoint - Ensure the compact gate and Settings tests pass": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642926
+      },
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543975051
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795544337726
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795545635851
+      }
+    ],
+    "8.1 Write the property test for no persistent storage or console writes": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512642985
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795545642366
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546404422
+      }
+    ],
+    "8.2 Write the property test for live-region roles": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512643032
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795545653781
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546405032
+      }
+    ],
+    "8.3 Write the reduced-motion example test and the analytics-event source scan": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512643098
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795545655012
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546406304
+      }
+    ],
+    "9.1 Update Shell and Quick Add component tests": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512643158
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795545646552
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546406721
+      }
+    ],
+    "9.2 Update accessibility, responsive, journey, and rollback end-to-end specs": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512643207
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546414028
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795548960030
+      }
+    ],
+    "9.3 Update the Quick Add Playwright fixtures": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512643256
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546414737
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795547813115
+      }
+    ],
+    "10. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795512643303
+      },
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795548964883
+      },
+      {
+        "executionId": "02a24f16-fd68-4f12-a278-fe043a968a8f",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795586170890
+      }
+    ],
+    "1. Lift the data-use gate and add the agreement gate provider": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513356719
+      }
+    ],
+    "2. Add the Exempt_Route redirect guard": [
+      {
+        "executionId": "e3c1c9b9-8572-4b43-b5b3-86b5f0d5fc45",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795513785291
+      }
+    ],
+    "3. Build the Agreement page": [
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543191735
+      }
+    ],
+    "5. Trim `DataUseGate` to its compact form and add the paused-entries link": [
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543954485
+      }
+    ],
+    "6. Add the Settings paused-entries banner": [
+      {
+        "executionId": "bce3ec6e-36eb-4a64-b04b-a0d448762314",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795543954819
+      }
+    ],
+    "8. Cover storage, console, and messaging guarantees": [
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795546406466
+      }
+    ],
+    "9. Update end-to-end and integration coverage for the moved notice": [
+      {
+        "executionId": "b3c0608c-27ee-4527-be2d-c37515ea2383",
+        "chatSessionId": "sess_009682b4-26d8-4245-884c-cb06efd01228",
+        "timestamp": 1795548960253
+      }
+    ]
+  }
+}

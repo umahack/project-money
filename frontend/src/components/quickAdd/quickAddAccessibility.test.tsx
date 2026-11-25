@@ -19,7 +19,7 @@ import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROMISE_RENDERED_KEY } from '../../clarity/DataUseGateProvider';
+import { DataUseGateProvider, PROMISE_RENDERED_KEY } from '../../clarity/DataUseGateProvider';
 import { FinancialClarityProvider } from '../../clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from '../../clarity/MutationStatusProvider';
 import { BUILT_IN_CATEGORIES } from '../../clarity/quickAdd/keywordRules';
@@ -110,7 +110,7 @@ function mount(layout: Layout, prepare?: (backend: A11yBackend, net: SpendingFet
       <MutationStatusProvider>
         <QuickAddProvider store={store}>
           <Routes>
-            <Route element={<Shell />}>
+            <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
               <Route path="/" element={<Dashboard />} />
               <Route
                 path="/spending"

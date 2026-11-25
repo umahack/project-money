@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { buildSettings, mockSettingsApi } from '../test/dataUseFixtures';
 import { createTestUser, renderAuthenticated } from '../test/test-utils';
+import { DataUseGateProvider } from '../clarity/DataUseGateProvider';
 import { Shell } from './Shell';
 
 const USER_LABELS = ['Home', 'Spending', 'Plan', 'Goals', 'Trips', 'Settings'];
@@ -13,7 +14,7 @@ function renderShell(route = '/', { admin = false }: { admin?: boolean } = {}) {
   mockSettingsApi(buildSettings());
   return renderAuthenticated(
     <Routes>
-      <Route element={<Shell />}>
+      <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
         <Route path="/" element={<h1>Home page</h1>} />
         <Route path="/plan" element={<h1>Plan page</h1>} />
         <Route path="/trips" element={<h1>Trips page</h1>} />

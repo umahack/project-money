@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DataUseNotice } from '../components/clarity/DataUseNotice';
 import { buildSettings } from '../test/claritySettingsBuilder';
 import { axe } from '../test/test-utils';
-import { categoryLabel, outcomeLabel } from './dataUseLabels';
+import { categoryLabel, outcomeLabel, summarizeNotice } from './dataUseLabels';
 import type { DataUseNoticeContent } from './settings';
 
 const ACCESS = ['account_user', 'authorized_administrators', 'service_operators_and_processors'];
@@ -26,6 +26,33 @@ function versionTwoNotice(): DataUseNoticeContent {
   });
   return notice;
 }
+
+describe('summarizeNotice', () => {
+  it('summarizes the notice using only its own categories, defaults, retention, and controls', () => {
+    const summary = summarizeNotice(buildSettings().dataUseNotice);
+    expect(summary.categoriesSentence).toBe('What we keep: Salary, Expenses, Trips, Product Analytics (optional).');
+    expect(summary.sharingSentence).toBe(
+      'Your financial data: private to you. Public trip links: off until you confirm a public link. '
+      + 'A separate confirmation is required before any public trip link exists.',
+    );
+    expect(summary.retentionSentence).toContain('Kept until you delete your account');
+    expect(summary.controlsSentence).toBe(
+      'Your controls: correct records, export your data, delete your account and data. '
+      + 'Product Analytics is optional and off by default. You can turn it off at any time.',
+    );
+  });
+
+  it('reports unavailable controls and an on-by-default analytics setting as the notice states them', () => {
+    const notice = structuredClone(buildSettings().dataUseNotice);
+    notice.controls.export.available = false;
+    notice.controls.productAnalytics.enabledByDefault = true;
+    notice.controls.productAnalytics.canDisable = false;
+    const { controlsSentence } = summarizeNotice(notice);
+    expect(controlsSentence).toContain('Export is not available right now.');
+    expect(controlsSentence).toContain('Product Analytics is optional and on by default.');
+    expect(controlsSentence).not.toContain('turn it off');
+  });
+});
 
 describe('notice version 2 labels', () => {
   it('names the new data category and results in plain language, not as humanized keys', () => {

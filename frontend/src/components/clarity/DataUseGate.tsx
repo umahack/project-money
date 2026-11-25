@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { prohibitedFieldLabel } from '../../clarity/dataUseLabels';
 import { useDataUseGate } from '../../clarity/DataUseGateProvider';
@@ -23,26 +23,23 @@ function formatAcknowledgedAt(value: string | null, timeZone: string): string | 
 }
 
 /**
- * Shows the versioned Data Use Notice before new financial inputs are enabled
- * (Requirements 1.1, 11.1, 11.3). While gated, existing data stays readable and
- * correction, export, deletion, and the Product Analytics control stay visible.
+ * Compact data-use control shown above signed-in pages. The full notice and the acknowledge action
+ * live on the Agreement page (`/agreement`). While the notice is required this shows a short line
+ * linking there, plus the paused-entries reason (DATA_USE_REASON_ID). Existing data stays readable,
+ * and correction, export, deletion, and the Product Analytics control stay visible.
  * Product Analytics never changes whether financial inputs are enabled.
  *
  * Once the current notice is acknowledged and entries are on, the card collapses to a small
  * "Your data" control. It is a disclosure: it opens the full notice, the correction, export and
- * deletion links, and the Product Analytics control. Before acknowledgement, while settings load
- * or fail to load, and whenever entries are paused, the full card stays visible with its reason.
+ * deletion links, and the Product Analytics control. While settings load or fail to load, and
+ * whenever entries are paused, the card stays open with its reason.
  */
 export function DataUseGate() {
   const gate = useDataUseGate();
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const toggleRef = useRef<HTMLButtonElement>(null);
   const detailsId = useId();
   const [announcement, setAnnouncement] = useState('');
   const [reviewOpen, setReviewOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // Set after the acknowledge button is replaced, so focus moves to the control that took its place.
-  const [focusToggle, setFocusToggle] = useState(false);
 
   const { settings, status } = gate;
   // The control exists only while the notice is acknowledged and nothing is paused. Entries paused
@@ -54,12 +51,6 @@ export function DataUseGate() {
     if (!collapsible && detailsOpen) setDetailsOpen(false);
   }, [collapsible, detailsOpen]);
 
-  useEffect(() => {
-    if (focusToggle && collapsible && toggleRef.current) {
-      toggleRef.current.focus();
-      setFocusToggle(false);
-    }
-  }, [focusToggle, collapsible]);
 
   if (status === 'disabled') return null;
 
@@ -71,15 +62,6 @@ export function DataUseGate() {
   const prohibited = notice?.controls.productAnalytics.prohibitedFields.map(prohibitedFieldLabel).join(', ');
   const acknowledgedOn = notice ? formatAcknowledgedAt(notice.acknowledgedAt, settings?.timeZone ?? 'Asia/Kolkata') : null;
 
-  const acknowledge = async () => {
-    if (gate.acknowledging) return;
-    if (await gate.acknowledge()) {
-      setAnnouncement('Data-use notice acknowledged. Adding financial entries is on.');
-      // The button is replaced by the collapsed "Your data" control, so keep focus in this region.
-      setFocusToggle(true);
-      headingRef.current?.focus();
-    }
-  };
 
   const toggleAnalytics = async (next: boolean) => {
     if (gate.analyticsPending) return;
@@ -90,7 +72,7 @@ export function DataUseGate() {
 
   return (
     <section
-      className={`clarity-gate${collapsible ? ' clarity-gate-compact' : ''}`}
+      className={`clarity-gate${collapsible || status === 'required' ? ' clarity-gate-compact' : ''}`}
       aria-labelledby="clarity-gate-title"
       data-gate-status={status}
       data-inputs-enabled={gate.financialInputsEnabled}
@@ -99,7 +81,6 @@ export function DataUseGate() {
       <div className="clarity-gate-head">
         <h2
           id="clarity-gate-title"
-          ref={headingRef}
           tabIndex={-1}
           className={`clarity-gate-title${collapsed ? ' sr-only' : ''}`}
         >
@@ -107,7 +88,6 @@ export function DataUseGate() {
         </h2>
         {collapsible && (
           <button
-            ref={toggleRef}
             type="button"
             className="btn ghost sm clarity-gate-toggle"
             aria-expanded={detailsOpen}
@@ -132,33 +112,12 @@ export function DataUseGate() {
           </div>
         )}
 
-        {status === 'required' && notice && (
-          <>
-            <p>
-              Before you add new financial entries, review how Project Money uses your data.
-              {notice.acknowledgedVersion > 0
-                ? ' The notice changed since you last acknowledged it.'
-                : ''}
-            </p>
-            <DataUseNotice notice={notice} />
-            <div className="clarity-gate-actions">
-              <button
-                type="button"
-                className="btn primary"
-                aria-disabled={gate.acknowledging}
-                onClick={acknowledge}
-              >
-                {gate.acknowledging ? 'Saving…' : `I have read this. Acknowledge version ${notice.version}`}
-              </button>
-            </div>
-            {gate.acknowledgeError && (
-              <p role="alert" className="clarity-gate-error">
-                {gate.acknowledgeError} Your acknowledgement was not saved, so try again.
-              </p>
-            )}
-          </>
+        {status === 'required' && (
+          <p className="clarity-gate-agreement">
+            <Link className="link" to="/agreement">Review and agree to the data-use notice</Link>
+            {' '}to add new financial entries.
+          </p>
         )}
-
         {status === 'acknowledged' && notice && (
           <>
             <p>

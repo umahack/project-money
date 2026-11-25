@@ -1,0 +1,76 @@
+@import '../components/clarity/dataUse.css';
+
+/* Data use agreement page. Reuses the app theme tokens (--text, --muted, --border, --glass, --radius), so the
+   light and dark themes both apply. It renders outside Shell: no top navigation, bottom navigation, or promise strip. */
+
+.agreement {
+  width: min(46rem, 100%);
+  margin: 0 auto;
+  padding: clamp(0.8rem, 4vw, 2.5rem) clamp(0.8rem, 3vw, 2rem) calc(2rem + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  color: var(--text);
+  min-width: 0;
+}
+
+.agreement-card {
+  background: var(--glass);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: clamp(1rem, 3vw, 1.75rem);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agreement-title { margin: 0 0 0.5rem; font-size: clamp(1.3rem, 4.5vw, 1.8rem); line-height: 1.25; }
+.agreement-title:focus-visible,
+.agreement :focus-visible {
+  outline: 3px solid var(--clarity-focus, var(--accent));
+  outline-offset: 2px;
+}
+
+.agreement-status { margin: 0.25rem 0; color: var(--muted); }
+.agreement-status:empty { display: none; }
+.agreement-lead { margin: 0.5rem 0; }
+
+.agreement-summary { margin: 0.5rem 0 1rem; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+
+.agreement-details { margin: 0.5rem 0 1rem; }
+.agreement-details-toggle { white-space: normal; text-align: left; }
+.agreement-details-title { margin: 0.75rem 0 0; font-size: 1.1rem; }
+
+.agreement-analytics { margin-top: 1rem; }
+.agreement-legal { margin: 1rem 0 0; }
+
+.agreement-error,
+.agreement-error-text {
+  border-left: 4px solid var(--clarity-danger, var(--danger));
+  background: color-mix(in srgb, var(--clarity-danger, var(--danger)) 8%, transparent);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin: 0.7rem 0;
+  color: var(--text);
+}
+.agreement-error p { margin: 0.2rem 0 0.5rem; }
+
+.agreement-actions { margin-top: 1.25rem; display: flex; flex-direction: column; align-items: stretch; gap: 0.6rem; }
+.agreement-note { margin: 0.2rem 0 0; }
+
+/* The primary control has at least a 44 by 44 CSS pixel hit area. */
+.agreement-primary,
+.agreement-secondary {
+  min-width: 44px;
+  min-height: 44px;
+  white-space: normal;
+  text-align: center;
+}
+.agreement-primary[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+
+@media (min-width: 640px) {
+  .agreement-actions { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .agreement-note { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agreement, .agreement * { transition: none !important; animation: none !important; }
+}

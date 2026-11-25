@@ -592,17 +592,31 @@ test.describe('less clutter above the page', () => {
     await expect(page.getByRole('checkbox', { name: /Product Analytics/ })).toBeHidden();
   });
 
-  test('before acknowledgement the full notice stays on screen and new entries are paused with the reason', async ({ page, api }) => {
+  test('before acknowledgement Home opens the Agreement page, and the compact notice on Settings links back to it with entries paused', async ({ page, api }) => {
     stubHome(api);
     api.stub('GET', '/api/clarity/settings', { json: buildSettings({ acknowledgedVersion: 0 }) });
+    api.stub('GET', '/api/auth/email-change-pending', { json: { pending: null } });
+    api.stub('GET', '/api/auth/sessions', { json: { current_sid: 1, sessions: [] } });
+    api.stub('GET', '/api/finance/categories', { json: { defaults: ['Food'], custom: [] } });
     await signIn(page, '/');
     await resize(page, 1366);
-
+    await expect(page).toHaveURL(/\/agreement$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Review how Project Money uses your data' })).toBeVisible();
+    // The full notice and the acknowledge action live on the Agreement page, not in an expanded card above the page.
+    await expect(page.getByRole('button', { name: 'I agree and continue' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Acknowledge version/ })).toHaveCount(0);
+    await expect(page.locator('header.topbar')).toHaveCount(0);
+    // Settings is never redirected. Its compact notice names the pause and links to the Agreement page.
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/settings$/);
+    const gate = page.locator('section.clarity-gate');
+    await expect(gate).toHaveAttribute('data-inputs-enabled', 'false');
     await expect(page.getByRole('button', { name: 'Your data' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Your data, your control' })).toBeVisible();
-    await expect(page.getByText('New entries are paused.')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Acknowledge version/ })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: /Product Analytics/ })).toBeVisible();
+    await expect(gate.getByText('New entries are paused.')).toBeVisible();
+    await expect(gate.getByRole('link', { name: 'Review and agree to the data-use notice' })).toHaveAttribute('href', '/agreement');
+    await expect(gate.getByRole('button', { name: /Acknowledge version/ })).toHaveCount(0);
+    await expect(gate.getByRole('checkbox', { name: /Product Analytics/ })).toBeVisible();
   });
 });
 

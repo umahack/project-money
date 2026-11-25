@@ -3,12 +3,13 @@ import { Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { buildSettings, mockSettingsApi } from '../test/dataUseFixtures';
 import { createTestUser, renderAuthenticated } from '../test/test-utils';
+import { DataUseGateProvider } from '../clarity/DataUseGateProvider';
 import { Shell } from './Shell';
 
 function renderShell(route: string, { admin = false }: { admin?: boolean } = {}) {
   return renderAuthenticated(
     <Routes>
-      <Route element={<Shell />}>
+      <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
         <Route path="/" element={<><h1>Home page</h1><button type="button">Add expense</button></>} />
         <Route path="/admin" element={<h1>Admin overview</h1>} />
       </Route>

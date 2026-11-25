@@ -6,6 +6,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildSettings, mockSettingsApi } from '../../test/dataUseFixtures';
 import { axe, createTestQueryClient, createTestUser, renderAuthenticated } from '../../test/test-utils';
+import { DataUseGateProvider } from '../../clarity/DataUseGateProvider';
 import { Shell } from '../Shell';
 import { RegionBoundary } from './RegionBoundary';
 import { RENDER_FAILURE_CODE, RenderErrorBoundary } from './RenderErrorBoundary';
@@ -159,7 +160,7 @@ describe('RenderErrorBoundary in the app shell', () => {
     }
     return renderAuthenticated(
       <Routes>
-        <Route element={<Shell />}>
+        <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
           <Route path="/" element={<><h1>Home page</h1><Link to="/spending">Go to spending</Link></>} />
           <Route path="/broken" element={<Broken />} />
           <Route path="/spending" element={<Fine />} />

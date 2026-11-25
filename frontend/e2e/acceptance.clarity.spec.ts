@@ -3,7 +3,8 @@
 // One connected first-session story, played in one document through the real UI against one in-memory
 // world (helpers/worldApi.ts, which composes the per-page fakes behind the full clarity contract):
 //
-//   register hand-off to /start -> core promise and data-use notice (entries paused) -> acknowledge ->
+//   register hand-off to /start -> redirected to /agreement (entries paused) -> agree -> back on /start ->
+//   core promise and the compact data-use control ->
 //   guided journey "Plan the month" (pay, then the optional bill) -> first outcome -> Home shows the
 //   personalised summary before any generic content -> Plan: the pay is corrected while its calculation
 //   explanation is open, and the explanation updates in place -> Spending: a Wants expense that exceeds its
@@ -253,30 +254,34 @@ async function playStory(page: Page, api: DeterministicApiFixtures, timed: boole
   await page.getByRole('button', { name: 'Send verification code' }).click();
   await page.getByLabel(/6-digit code/).fill('123456');
   await page.getByRole('button', { name: 'Create account' }).click();
+
+  // ---- The account has to agree to the data-use notice first, so the hand-off lands on the Agreement page ----
+  const agreementHeading = heading(page, 'Review how Project Money uses your data', 1);
+  await expect(agreementHeading).toBeVisible();
+  await expect(page).toHaveURL(/\/agreement$/);
+  await expect(agreementHeading).toBeFocused();
+  await expect(
+    page.locator('nav.primary-nav, nav.bottom-tabs, .clarity-promise, section.clarity-gate'),
+    'the Agreement page renders outside the shell',
+  ).toHaveCount(0);
+  expect(world.noticeAcknowledged).toBe(false);
+  await expectStable(story, { layout: true, focus: false });
+  // ---- Agreeing continues to the guided journey; the promise and the compact notice come before any entry ----
+  await page.getByRole('button', { name: 'I agree and continue' }).click();
   await expect(heading(page, 'Guided journey', 1)).toBeVisible();
   await expect(page).toHaveURL(/\/start$/);
-  // The sign-up form that had focus is replaced by the journey page, so there is no active control to keep yet;
-  // the first Tab starts at the top of the app. Every step after this one keeps focus on a control.
-  await expectStable(story, { layout: true, focus: false });
-
-  // ---- The promise and the data-use notice come before any entry can be made ----
   const promise = heading(page, 'See what is safe to spend, what to save, and what to do next.');
   await expect(promise).toBeVisible();
   const gate = page.locator('section.clarity-gate');
-  await expect(gate).toHaveAttribute('data-inputs-enabled', 'false');
-  await expect(gate).toContainText('New entries are paused.');
+  await expect(gate).toHaveAttribute('data-inputs-enabled', 'true');
+  await expect(gate).toContainText('You acknowledged the data-use notice (version 1)');
   const choices = page.getByRole('list', { name: 'Desired outcomes' });
   await expect(choices.getByRole('button')).toHaveCount(4);
   await expectOrder(page.locator('.clarity-promise'), gate, 'the promise comes before the notice');
   await expectOrder(gate, choices, 'the notice comes before the first choice');
-
-  await page.getByRole('button', { name: /Acknowledge version 1/ }).click();
-  await expect(gate).toHaveAttribute('data-inputs-enabled', 'true');
-  await expect(gate).toContainText('You acknowledged the data-use notice (version 1)');
-  // The acknowledge button is replaced by the collapsed "Your data" control, which takes focus so it stays in this region.
-  await expect(gate.getByRole('button', { name: 'Your data' })).toBeFocused();
   expect(world.noticeAcknowledged).toBe(true);
-  await expectStable(story, { layout: true });
+  // The Agreement page that had focus is replaced by the journey, so there is no control to keep until the next step.
+  await expectStable(story, { layout: true, focus: false });
 
   // ---- Guided journey: choose, pay (the one required step), first outcome, then the optional bill ----
   await choices.getByRole('button', { name: 'Plan the month' }).click();

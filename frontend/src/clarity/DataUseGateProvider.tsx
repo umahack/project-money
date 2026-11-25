@@ -123,6 +123,13 @@ export function DataUseGateProvider({ children, enabled }: DataUseGateProviderPr
   const active = rolloutEnabled && userId !== undefined && !!getToken();
 
   const [promiseShown, setPromiseShown] = useState(() => readPromiseFlag(userId));
+  // This provider stays mounted across sign-in, sign-out, and a change of user, so
+  // re-read the session flag for the new user instead of keeping the previous one.
+  const [promiseUserId, setPromiseUserId] = useState(userId);
+  if (promiseUserId !== userId) {
+    setPromiseUserId(userId);
+    setPromiseShown(readPromiseFlag(userId));
+  }
   const markPromiseShown = useCallback(() => {
     writePromiseFlag(userId);
     setPromiseShown(true);

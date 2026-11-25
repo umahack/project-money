@@ -24,7 +24,8 @@ const TOP_NAV_FROM = 900;
 const REPRESENTATIVE = [
   'Home: full outcomes with a seven-digit pay and long bill names',
   'Home: calculation_failed, refresh_failed, invalid_input, and stale regions side by side',
-  'Home: data-use notice not yet acknowledged, notice expanded',
+  'Agreement: data-use notice required, full details open',
+  'Home: entries paused after "Not now, just look around"',
   'Plan: full plan with a seven-digit pay and long bill names',
   'Plan: bill form with validation errors',
   'Plan: pay save failed with its retry',

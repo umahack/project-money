@@ -9,7 +9,6 @@ import { AnnouncementBanner } from './AnnouncementBanner';
 import { TopbarClock } from './TopbarClock';
 import { WhatWeStoreLink } from './WhatWeStore';
 import { markUserViewPreferred, clearUserViewPreference } from '../userViewPref';
-import { DataUseGateProvider } from '../clarity/DataUseGateProvider';
 import { selectFinancialClarityRollout, selectQuickAddEnabled } from '../clarity/rollout';
 import { CorePromiseStrip } from './clarity/CorePromiseStrip';
 import { DataUseGate } from './clarity/DataUseGate';
@@ -128,7 +127,7 @@ export function Shell() {
   };
 
   return (
-    <DataUseGateProvider>
+    <>
       <Background />
       <header className="topbar">
         {/* The name starts with what the link shows (the wordmark and the BETA badge's own label), so speech-input users can say what they see. */}
@@ -271,6 +270,6 @@ export function Shell() {
       )}
 
       <FeedbackModal open={feedback} onCancel={() => setFeedback(false)} onDone={finishLogout} />
-    </DataUseGateProvider>
+    </>
   );
 }

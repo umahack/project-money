@@ -2,6 +2,8 @@
 // The server sends stable keys; this file turns them into reader-facing text.
 // Unknown keys fall back to a readable form of the key, rendered as plain text.
 
+import type { DataUseNoticeContent } from './settings';
+
 function humanize(key: string): string {
   const text = key.replace(/[_-]+/g, ' ').trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : key;
@@ -99,4 +101,60 @@ export const prohibitedFieldLabel = (key: string): string => lookup(PROHIBITED_F
 export function outcomeLabel(key: string): OutcomeLabel {
   return (Object.hasOwn(OUTCOME_LABELS, key) ? OUTCOME_LABELS[key] : undefined)
     ?? { label: humanize(key), definition: '' };
+}
+
+/** Short plain-language summary of a data-use notice, one sentence group per topic. */
+export interface NoticeSummary {
+  categoriesSentence: string;
+  sharingSentence: string;
+  retentionSentence: string;
+  controlsSentence: string;
+}
+
+/**
+ * Builds the short summary shown above the full notice. It uses only the notice's
+ * own categories, sharing defaults, retention keys, and controls, run through the
+ * same label lookups `DataUseNotice` uses, so it adds no claim the full notice lacks.
+ */
+export function summarizeNotice(notice: DataUseNoticeContent): NoticeSummary {
+  const { categories, sharingDefaults, controls } = notice;
+
+  const categoriesSentence = categories.length
+    ? `What we keep: ${categories.map((category) => categoryLabel(category.key)).join(', ')}.`
+    : '';
+
+  const sharingParts = [
+    `Your financial data: ${sharingLabel(sharingDefaults.financialData).toLowerCase()}.`,
+    `Public trip links: ${sharingLabel(sharingDefaults.publicTripLinks).toLowerCase()}.`,
+  ];
+  if (sharingDefaults.publicTripConfirmationRequired) {
+    sharingParts.push('A separate confirmation is required before any public trip link exists.');
+  }
+
+  const retentionLabels = [...new Set(categories.map((category) => retentionLabel(category.retention)))];
+  const retentionSentence = retentionLabels.length ? `How long: ${retentionLabels.join('; ')}.` : '';
+
+  const available: string[] = [];
+  const unavailable: string[] = [];
+  if (controls.correction.available) available.push('correct records'); else unavailable.push('Correction');
+  if (controls.export.available) available.push('export your data'); else unavailable.push('Export');
+  if (controls.deletion.available) available.push('delete your account and data'); else unavailable.push('Deletion');
+  const analytics = controls.productAnalytics;
+  const controlsParts: string[] = [];
+  if (available.length) controlsParts.push(`Your controls: ${available.join(', ')}.`);
+  if (unavailable.length) {
+    controlsParts.push(`${unavailable.join(' and ')} ${unavailable.length > 1 ? 'are' : 'is'} not available right now.`);
+  }
+  controlsParts.push(
+    analytics.available
+      ? `Product Analytics is optional and ${analytics.enabledByDefault ? 'on' : 'off'} by default.${analytics.canDisable ? ' You can turn it off at any time.' : ''}`
+      : 'Product Analytics is not available right now.',
+  );
+
+  return {
+    categoriesSentence,
+    sharingSentence: sharingParts.join(' '),
+    retentionSentence,
+    controlsSentence: controlsParts.join(' '),
+  };
 }

@@ -122,6 +122,16 @@ export async function signIn(page: Page, path: string): Promise<void> {
   await expect(page.locator('main h1').first()).toBeVisible();
 }
 
+/** The scenarios whose notice is required, so signed-in navigation is redirected to the Agreement page. */
+export const AGREEMENT_SCENARIO = 'Agreement: data-use notice required, full details open';
+export const PAUSED_HOME_SCENARIO = 'Home: entries paused after "Not now, just look around"';
+export const AGREEMENT_HEADING = 'Review how Project Money uses your data';
+/** Signs in at `path` while the notice is required and waits for the redirect to the Agreement page. */
+export async function openAgreement(page: Page, path: string): Promise<void> {
+  await signIn(page, path);
+  await expect(page).toHaveURL(/\/agreement$/);
+  await expect(page.getByRole('heading', { level: 1, name: AGREEMENT_HEADING })).toBeVisible();
+}
 /** The retry control of an outcome that failed to calculate, refresh, or is stale. */
 export const RETRY_OUTCOME = /^(Recalculate|Retry refresh|Refresh) /;
 
@@ -188,15 +198,34 @@ const HOME: Scenario[] = [
     },
   },
   {
-    name: 'Home: data-use notice not yet acknowledged, notice expanded',
+    // The notice is required, so Home opens the Agreement page (outside the shell) with the full details expanded.
+    name: AGREEMENT_SCENARIO,
     async open(page, api) {
       stubStreak(api);
       installClarityBackend(api, MONTH, { salaryMinor: 8_000_000 });
       api.stub('GET', '/api/clarity/settings', { json: buildSettings({ acknowledgedVersion: 0 }) });
-      await signIn(page, '/');
-      await expect(page.getByRole('heading', { name: /data/i }).first()).toBeVisible();
-      const review = page.getByRole('button', { name: /Review the data-use notice/ });
-      if (await review.count()) await review.click();
+      await openAgreement(page, '/');
+      const details = page.getByRole('button', { name: 'Read full details' });
+      await details.click();
+      await expect(details).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByRole('heading', { level: 2, name: 'Full notice' })).toBeVisible();
+    },
+  },
+  {
+    // "Not now, just look around" returns to Home with new entries paused, and the compact notice links back.
+    name: PAUSED_HOME_SCENARIO,
+    async open(page, api) {
+      stubStreak(api);
+      installClarityBackend(api, MONTH, { salaryMinor: 8_000_000 });
+      api.stub('GET', '/api/clarity/settings', { json: buildSettings({ acknowledgedVersion: 0 }) });
+      await openAgreement(page, '/');
+      await page.getByRole('button', { name: 'Not now, just look around' }).click();
+      await expect(page).toHaveURL(/\/$/);
+      const gate = page.locator('section.clarity-gate');
+      await expect(gate).toHaveAttribute('data-inputs-enabled', 'false');
+      await expect(gate.getByText('New entries are paused.')).toBeVisible();
+      await expect(gate.getByRole('link', { name: 'Review and agree to the data-use notice' })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Remaining to spend' })).toBeVisible();
     },
   },
 ];

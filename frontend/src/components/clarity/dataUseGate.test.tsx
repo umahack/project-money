@@ -1,11 +1,17 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { DataUseGateProvider, PROMISE_RENDERED_KEY, useDataUseGate } from '../../clarity/DataUseGateProvider';
 import { DATA_NOTICE_REQUIRED_EVENT } from '../../clarity/settings';
 import { buildSettings, mockSettingsApi } from '../../test/dataUseFixtures';
 import { axe, createApiResponse, createTestUser, renderAuthenticated } from '../../test/test-utils';
 import { CorePromiseStrip, DATA_USE_REASON_ID, DataUseGate } from './index';
+
+// The full notice and the acknowledge action moved to the Agreement page (`/agreement`). This file covers
+// the compact gate that stays in Shell. What the page now owns (full notice content, plain-text rendering,
+// the failed-acknowledgement text, the "notice changed" wording, keyboard acknowledgement) is covered in
+// src/pages/Agreement.notice.test.tsx, and the page's own behaviour in src/pages/Agreement.test.tsx.
 
 function Probe() {
   const gate = useDataUseGate();
@@ -20,18 +26,43 @@ function Probe() {
   );
 }
 
-function Harness({ enabled = true }: { enabled?: boolean }) {
+/**
+ * Stands in for the Agreement page, which owns the acknowledge action. It calls the same provider
+ * `acknowledge()` the page calls and shows the provider's error, so the gate can be checked before and
+ * after an acknowledgement without the page.
+ */
+function AcknowledgeDriver() {
+  const gate = useDataUseGate();
+  return (
+    <div>
+      <button type="button" onClick={() => { void gate.acknowledge(); }}>Agree through the provider</button>
+      <p data-testid="acknowledge-error">{gate.acknowledgeError ?? ''}</p>
+    </div>
+  );
+}
+
+/** Shows where a link in the gate led. */
+function LocationProbe() {
+  const loc = useLocation();
+  return <p data-testid="location">{loc.pathname}</p>;
+}
+
+function Harness({ enabled = true, driver = false }: { enabled?: boolean; driver?: boolean }) {
   return (
     <DataUseGateProvider enabled={enabled}>
       <CorePromiseStrip />
       <DataUseGate />
       <Probe />
+      <LocationProbe />
+      {driver && <AcknowledgeDriver />}
     </DataUseGateProvider>
   );
 }
 
 const inputsState = () => screen.getByTestId('inputs-state');
 const gateStatus = () => document.querySelector('.clarity-gate-status');
+const agreementLink = () => screen.findByRole('link', { name: /Review and agree to the data-use notice/ });
+const agreeThroughProvider = () => screen.getByRole('button', { name: 'Agree through the provider' });
 const reviewButton = () => screen.getByRole('button', { name: /Review the data-use notice/ });
 /** After acknowledgement the card is collapsed to this control, which opens the notice and the analytics control. */
 const yourDataButton = () => screen.getByRole('button', { name: 'Your data' });
@@ -42,7 +73,7 @@ async function openYourData(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged', () => {
-  it('shows the connected promise and the full notice, and pauses new entries with a reason', async () => {
+  it('shows the connected promise and a compact line to /agreement, and pauses new entries with a reason', async () => {
     mockSettingsApi(buildSettings());
     renderAuthenticated(<Harness />);
 
@@ -50,24 +81,19 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
     for (const word of ['Plan', 'Spending', 'Saving', 'Trips']) {
       expect(within(promise).getByText(`${word}:`)).toBeInTheDocument();
     }
-    // Before acknowledgement there is no collapsed control: the whole notice is on screen.
+    // Before acknowledgement there is no collapsed control: the compact card is on screen.
     expect(screen.queryByRole('button', { name: 'Your data' })).toBeNull();
 
+    // The full notice and the acknowledge button live on the Agreement page, not in the gate.
     const gate = await screen.findByRole('region', { name: 'Your data, your control' });
-    expect(within(gate).getByRole('heading', { name: /How Project Money uses your data/ })).toBeInTheDocument();
-    // Categories, outcomes (with a first-use definition), access roles, retention, sharing.
-    expect(within(gate).getByRole('heading', { name: 'Salary' })).toBeInTheDocument();
-    expect(within(gate).getByText(/Disposable income: the pay left after your monthly bills/)).toBeInTheDocument();
-    expect(within(gate).getAllByText('Disposable income')).toHaveLength(1); // defined once, then named only
-    expect(within(gate).getAllByText('You, the account owner').length).toBeGreaterThan(0);
-    expect(within(gate).getByText('Accepted trip members, for shared trip fields only')).toBeInTheDocument();
-    expect(within(gate).getAllByText('Kept until you delete your account').length).toBeGreaterThan(0);
-    expect(within(gate).getByText(/A separate confirmation, after you review the disclosed fields/)).toBeInTheDocument();
-    // Correction, export, deletion, and Product Analytics controls are listed.
-    expect(within(gate).getByText(/Your earlier confirmed value stays until the correction succeeds/)).toBeInTheDocument();
-    expect(within(gate).getByRole('link', { name: 'Export your data' })).toHaveAttribute('href', '/settings');
-    expect(within(gate).getByRole('link', { name: 'Delete your account and data' })).toHaveAttribute('href', '/settings');
-    expect(within(gate).getAllByText(/It never includes financial amounts, free-text notes/).length).toBeGreaterThan(0);
+    expect(gate).toHaveClass('clarity-gate-compact');
+    const link = await agreementLink();
+    expect(link).toHaveAttribute('href', '/agreement');
+    expect(gate).toHaveTextContent('Review and agree to the data-use notice to add new financial entries.');
+    expect(within(gate).queryByRole('heading', { name: /How Project Money uses your data/ })).toBeNull();
+    expect(within(gate).queryByRole('heading', { name: 'Salary' })).toBeNull();
+    expect(within(gate).queryByRole('button', { name: /Acknowledge version/ })).toBeNull();
+    expect(within(gate).queryByRole('button', { name: /I have read this/ })).toBeNull();
 
     // Existing data stays readable. New entries are paused with a visible reason.
     expect(screen.getByText('Saved salary: visible to you')).toBeInTheDocument();
@@ -79,33 +105,33 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
     expect(addExpense).toHaveAccessibleDescription(/New entries are paused/);
     expect(reason).toHaveTextContent(/viewing everything you have saved, correcting records/);
     expect(within(reason as HTMLElement).getByRole('link', { name: /exporting your data/ })).toBeVisible();
+    expect(within(reason as HTMLElement).getByRole('link', { name: /deleting your account and data/ })).toHaveAttribute('href', '/settings');
   });
 
-  it('renders server-provided notice text as plain text, never as markup', async () => {
-    const settings = buildSettings();
-    settings.dataUseNotice.categories[0]!.purposes = ['<img src=x onerror=alert(1)> and <b>bold</b>'];
-    mockSettingsApi(settings);
+  it('leads to /agreement from the compact line', async () => {
+    const user = userEvent.setup();
+    mockSettingsApi(buildSettings());
     renderAuthenticated(<Harness />);
 
-    await screen.findByRole('heading', { name: 'Salary' });
-    expect(screen.getByText('<img src=x onerror=alert(1)> and <b>bold</b>')).toBeInTheDocument();
-    expect(document.querySelector('.clarity-gate img, .clarity-gate b')).toBeNull();
+    await user.click(await agreementLink());
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/agreement');
   });
 
-  it('acknowledges only the notice version, enables entries, and keeps focus in the region', async () => {
+  it('enables entries and collapses to "Your data" once the provider records an acknowledgement of only the notice version', async () => {
     const user = userEvent.setup();
     const api = mockSettingsApi(buildSettings());
-    renderAuthenticated(<Harness />);
+    renderAuthenticated(<Harness driver />);
 
-    await user.click(await screen.findByRole('button', { name: /Acknowledge version 1/ }));
+    await agreementLink();
+    await user.click(agreeThroughProvider());
 
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
     expect(api.patches()).toHaveLength(1);
     expect(api.patches()[0]?.body).toEqual({ acknowledgedNoticeVersion: 1 });
-    expect(gateStatus()).toHaveTextContent('Data-use notice acknowledged');
-    // The card collapses to the "Your data" control, and focus moves to it so it is not lost.
-    await waitFor(() => expect(yourDataButton()).toHaveFocus());
+    // The card collapses to the "Your data" control and the compact line is gone.
     expect(yourDataButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: /Review and agree to the data-use notice/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Add expense' })).toBeEnabled();
     expect(document.getElementById(DATA_USE_REASON_ID)).toBeNull();
     // Acknowledging never turns Product Analytics on.
@@ -113,34 +139,38 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
     expect(screen.getByRole('checkbox', { name: /Product Analytics/ })).not.toBeChecked();
   });
 
-  it('keeps the gate and shows a text error when the acknowledgement cannot be saved', async () => {
+  it('keeps the compact gate and entries paused when the acknowledgement cannot be saved', async () => {
     const user = userEvent.setup();
     mockSettingsApi(buildSettings());
-    renderAuthenticated(<Harness />);
-    const button = await screen.findByRole('button', { name: /Acknowledge version 1/ });
+    renderAuthenticated(<Harness driver />);
+    await agreementLink();
 
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       createApiResponse({ status: 500, body: { error: { code: 'SERVER', message: 'The server had a problem.' } } }),
     );
-    await user.click(button);
+    await user.click(agreeThroughProvider());
 
-    expect(await screen.findByText(/Your acknowledgement was not saved/)).toBeInTheDocument();
+    // The provider reports the failure. The Agreement page shows it as text and offers "Try again"
+    // (pages/Agreement.notice.test.tsx).
+    await waitFor(() => expect(screen.getByTestId('acknowledge-error')).toHaveTextContent('The server had a problem.'));
     expect(inputsState()).toHaveTextContent('inputs paused');
-    expect(screen.getByRole('button', { name: /Acknowledge version 1/ })).toBeEnabled();
+    expect(screen.getByRole('link', { name: /Review and agree to the data-use notice/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add expense' })).toBeDisabled();
+    expect(agreeThroughProvider()).toBeEnabled();
   });
 
   it('explains why Product Analytics cannot be turned on yet', async () => {
     mockSettingsApi(buildSettings());
     renderAuthenticated(<Harness />);
 
-    await screen.findByRole('button', { name: /Acknowledge version 1/ });
+    await agreementLink();
     const toggle = screen.getByRole('checkbox', { name: /Product Analytics/ });
     expect(toggle).toBeDisabled();
     expect(toggle).not.toBeChecked();
     expect(toggle).toHaveAccessibleDescription(/Acknowledge the data-use notice to turn it on/);
   });
 
-  it('shows the notice when a command is rejected with 428 after an acknowledged state', async () => {
+  it('shows the compact line when a command is rejected with 428 after an acknowledged state', async () => {
     const state = buildSettings({ acknowledgedVersion: 1 });
     const api = mockSettingsApi(state);
     renderAuthenticated(<Harness />);
@@ -154,7 +184,10 @@ describe('CorePromiseStrip and DataUseGate when the notice is not acknowledged',
     act(() => { window.dispatchEvent(new Event(DATA_NOTICE_REQUIRED_EVENT)); });
 
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs paused'));
-    expect(screen.getByText(/The notice changed since you last acknowledged it/)).toBeInTheDocument();
+    // The gate points to /agreement. The "notice changed" wording is on that page
+    // (pages/Agreement.notice.test.tsx).
+    expect(await agreementLink()).toHaveAttribute('href', '/agreement');
+    expect(document.getElementById(DATA_USE_REASON_ID)).toHaveTextContent(/acknowledge the data-use notice/i);
     expect(api.patches()).toHaveLength(0);
   });
 });
@@ -213,6 +246,7 @@ describe('DataUseGate when the notice is acknowledged', () => {
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
     expect(document.getElementById(DATA_USE_REASON_ID)).toBeNull();
     expect(screen.queryByRole('button', { name: /Acknowledge version/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Review and agree to the data-use notice/ })).toBeNull();
 
     // Collapsed: only a small "Your data" control is on screen. The full card is not.
     const gate = screen.getByRole('region', { name: 'Your data, your control' });
@@ -272,7 +306,7 @@ describe('Product Analytics independence', () => {
     const settings = buildSettings({ acknowledgedVersion: 0, analyticsEnabled: true });
     const api = mockSettingsApi(settings);
     renderAuthenticated(<Harness />);
-    await screen.findByRole('button', { name: /Acknowledge version 1/ });
+    await agreementLink();
     const toggle = screen.getByRole('checkbox', { name: /Product Analytics/ });
 
     expect(toggle).toBeChecked();
@@ -341,28 +375,42 @@ describe('failure and rollout states', () => {
 });
 
 describe('keyboard operation', () => {
-  it('reaches and operates every control in reading order without a pointer', async () => {
+  it('reaches every control of the compact required state in reading order, and follows the link', async () => {
     const user = userEvent.setup();
     mockSettingsApi(buildSettings());
     renderAuthenticated(<Harness />);
-    await screen.findByRole('button', { name: /Acknowledge version 1/ });
+    await agreementLink();
 
-    // Reading order: the promise's "How it works" control, notice controls, acknowledge, still-available links.
+    // Reading order: the promise's "How it works" control, the link to /agreement, then the
+    // still-available links. The analytics checkbox and "Add expense" are disabled, so they are skipped.
     await user.tab();
     expect(screen.getByRole('button', { name: 'How it works' })).toHaveFocus();
     await user.tab();
-    expect(screen.getByRole('link', { name: 'Export your data' })).toHaveFocus();
+    const link = screen.getByRole('link', { name: /Review and agree to the data-use notice/ });
+    expect(link).toHaveFocus();
     await user.tab();
-    expect(screen.getByRole('link', { name: 'Delete your account and data' })).toHaveFocus();
+    expect(screen.getByRole('link', { name: /exporting your data/ })).toHaveFocus();
     await user.tab();
-    const acknowledge = screen.getByRole('button', { name: /Acknowledge version 1/ });
-    expect(acknowledge).toHaveFocus();
+    expect(screen.getByRole('link', { name: /deleting your account and data/ })).toHaveFocus();
 
+    // Enter on the link goes to the Agreement page, where the acknowledge flow is operated by keyboard
+    // (pages/Agreement.notice.test.tsx).
+    link.focus();
     await user.keyboard('{Enter}');
+    expect(screen.getByTestId('location')).toHaveTextContent('/agreement');
+  });
+
+  it('reaches and operates every control of the acknowledged state in reading order without a pointer', async () => {
+    const user = userEvent.setup();
+    mockSettingsApi(buildSettings({ acknowledgedVersion: 1 }));
+    renderAuthenticated(<Harness />);
     await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
-    // The acknowledge button is gone; focus moves to the "Your data" control that replaced the card.
-    await waitFor(() => expect(yourDataButton()).toHaveFocus());
     expect(yourDataButton()).toHaveAttribute('aria-expanded', 'false');
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'How it works' })).toHaveFocus();
+    await user.tab();
+    expect(yourDataButton()).toHaveFocus();
 
     // Enter opens it and focus stays on it. The next stops are the notice disclosure, then the
     // Product Analytics checkbox. Nothing traps focus.
@@ -388,17 +436,17 @@ describe('keyboard operation', () => {
 });
 
 describe('accessibility', () => {
-  it.each(['light', 'dark'] as const)('has no axe violations in %s theme (gated and acknowledged)', async (theme) => {
+  it.each(['light', 'dark'] as const)('has no axe violations in %s theme (compact required and acknowledged)', async (theme) => {
     document.documentElement.dataset.theme = theme;
     try {
       const user = userEvent.setup();
       mockSettingsApi(buildSettings());
-      const view = renderAuthenticated(<Harness />);
+      const view = renderAuthenticated(<Harness driver />);
 
-      await screen.findByRole('button', { name: /Acknowledge version 1/ });
+      await agreementLink();
       expect(await axe(view.container)).toHaveNoViolations();
 
-      await user.click(screen.getByRole('button', { name: /Acknowledge version 1/ }));
+      await user.click(agreeThroughProvider());
       await waitFor(() => expect(inputsState()).toHaveTextContent('inputs enabled'));
       // Collapsed to the "Your data" control.
       expect(await axe(view.container)).toHaveNoViolations();

@@ -3,12 +3,13 @@ import { Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildSettings, mockSettingsApi } from '../test/dataUseFixtures';
 import { createTestUser, renderAuthenticated } from '../test/test-utils';
+import { DataUseGateProvider } from '../clarity/DataUseGateProvider';
 import { Shell } from './Shell';
 
 function renderShell() {
   return renderAuthenticated(
     <Routes>
-      <Route element={<Shell />}>
+      <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
         <Route path="/" element={<h1>Home page</h1>} />
       </Route>
     </Routes>,

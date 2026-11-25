@@ -142,6 +142,11 @@ test('flag off serves the legacy UI and read path from the same records, deletes
   await expect(page.locator('nav.primary-nav, nav.bottom-tabs').first()).toBeAttached();
   await expect(page.getByRole('heading', { level: 1, name: 'Guided journey' })).toHaveCount(0);
   await expect(page.getByRole('list', { name: 'Desired outcomes' })).toHaveCount(0);
+  // ---- The Agreement page is not routed either: it falls through to the same catch-all and nothing redirects to it ----
+  await page.goto('/agreement');
+  await expect(page.locator('nav.primary-nav, nav.bottom-tabs').first()).toBeAttached();
+  await expect(page.getByRole('heading', { level: 1, name: 'Review how Project Money uses your data' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'I agree and continue' })).toHaveCount(0);
 
   // ---- Plan: the legacy form, and the documented legacy reload when the pay is saved ----
   await page.goto('/plan');

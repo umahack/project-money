@@ -20,7 +20,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROMISE_RENDERED_KEY } from '../clarity/DataUseGateProvider';
+import { DataUseGateProvider, PROMISE_RENDERED_KEY } from '../clarity/DataUseGateProvider';
 import type { FinancialSnapshot, MoneyValue, TodayAllowanceOutcome, TodayAllowanceValue } from '../clarity/contracts';
 import { FinancialClarityProvider } from '../clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from '../clarity/MutationStatusProvider';
@@ -129,7 +129,7 @@ function mount(options: MountOptions = {}): Harness {
       <MutationStatusProvider>
         <QuickAddProvider store={store}>
           <Routes>
-            <Route element={<Shell />}>
+            <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
               <Route path="/" element={<Dashboard />} />
             </Route>
           </Routes>

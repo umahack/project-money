@@ -13,6 +13,7 @@ import {
   type JourneyRevealKind,
   type JourneyTransition,
 } from '../clarity/journeys';
+import { useDataUseGate } from '../clarity/DataUseGateProvider';
 import { skipEffectText } from '../clarity/purposeRegistry';
 import { useGuidedJourney, type JourneyFailure } from '../clarity/useGuidedJourney';
 import { useMeasurement } from '../hooks/useMeasurement';
@@ -75,6 +76,7 @@ export function GuidedJourneyPage() {
   const state = useGuidedJourney();
   const { journey, finished, failure, busy, run, retry, dismissFailure, clearFinished } = state;
   const measurement = useMeasurement();
+  const gate = useDataUseGate();
   useFirstOutcomeReport(journey);
   const [params, setParams] = useSearchParams();
   const [announcement, setAnnouncement] = useState('');
@@ -146,8 +148,10 @@ export function GuidedJourneyPage() {
   }, [announceResult, run]);
 
   // Registration handoff. A valid intent starts (or resumes) that journey once, then leaves the URL.
+  // It waits for the data-use gate: a user who must agree is redirected to /agreement with this URL in `from`, so
+  // the intent has to still be here, and no journey may be started (the server answers 428), until that is known.
   useEffect(() => {
-    if (handoffHandled.current || journey === undefined) return;
+    if (handoffHandled.current || journey === undefined || gate.status === 'loading') return;
     handoffHandled.current = true;
     if (!params.has(JOURNEY_START_PARAM)) return;
     const intent = parseJourneyIntent(params);
@@ -166,7 +170,7 @@ export function GuidedJourneyPage() {
         `Your “${outcomeCopy(journey.desiredOutcome).title}” journey is still open, so “${outcomeCopy(intent).title}” was not started. Finish that journey first.`,
       );
     }
-  }, [journey, params, setParams, start, transition]);
+  }, [gate.status, journey, params, setParams, start, transition]);
 
   const advance = useCallback(async (stepKey: string, changeId?: number) => {
     if (!journey) return;

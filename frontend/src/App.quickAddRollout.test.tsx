@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FinancialSnapshot, TodayAllowanceOutcome } from './clarity/contracts';
-import { PROMISE_RENDERED_KEY } from './clarity/DataUseGateProvider';
+import { DataUseGateProvider, PROMISE_RENDERED_KEY } from './clarity/DataUseGateProvider';
 import { FinancialClarityProvider } from './clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from './clarity/MutationStatusProvider';
 import { resetExpenseEventsForTests } from './clarity/quickAdd/expenseEvents';
@@ -346,7 +346,7 @@ function load(backend: FakeSpendingBackend, route: '/' | '/spending', quickAdd: 
       <MutationStatusProvider>
         <QuickAddProvider store={store}>
           <Routes>
-            <Route element={<Shell />}>
+            <Route element={<DataUseGateProvider><Shell /></DataUseGateProvider>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/spending" element={<Spending />} />
             </Route>

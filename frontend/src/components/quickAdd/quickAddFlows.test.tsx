@@ -19,7 +19,8 @@ import { readFileSync } from 'node:fs';
 import { Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FinancialSnapshot } from '../../clarity/contracts';
-import { PROMISE_RENDERED_KEY } from '../../clarity/DataUseGateProvider';
+import { AgreementGateProvider } from '../../clarity/AgreementGateProvider';
+import { DataUseGateProvider, PROMISE_RENDERED_KEY } from '../../clarity/DataUseGateProvider';
 import { FinancialClarityProvider } from '../../clarity/FinancialClarityProvider';
 import { MutationStatusProvider } from '../../clarity/MutationStatusProvider';
 import { BUILT_IN_CATEGORIES } from '../../clarity/quickAdd/keywordRules';
@@ -27,6 +28,7 @@ import { resetServerTimeOffset } from '../../clarity/quickAdd/kolkata';
 import { QuickAddProvider } from '../../clarity/quickAdd/QuickAddProvider';
 import { createQuickAddStore, type QuickAddStore } from '../../clarity/quickAdd/quickAddStore';
 import { REMOVED_TEXT, SAVE_FAILED_TEXT } from '../../clarity/quickAdd/useQuickAddActions';
+import { Agreement } from '../../pages/Agreement';
 import { buildSettings } from '../../test/claritySettingsBuilder';
 import { FakeQuickAddBackend } from '../../test/fakeQuickAddBackend';
 import { installSpendingFetch, type SpendingFetch } from '../../test/fakeSpendingFetch';
@@ -88,8 +90,12 @@ class FlowBackend extends FakeQuickAddBackend {
     if (get && request.path === '/finance/categories') {
       return { status: 200, body: { defaults: [...BUILT_IN_CATEGORIES], custom: [] } };
     }
-    if (get && request.path === '/clarity/settings') {
-      return { status: 200, body: buildSettings({ acknowledgedVersion: this.noticeAcknowledged ? 1 : 0 }) };
+    if (request.path === '/clarity/settings') {
+      // Agreeing on the Agreement page sends the PATCH that acknowledges the notice.
+      if (request.method.toUpperCase() === 'PATCH') this.noticeAcknowledged = true;
+      if (get || request.method.toUpperCase() === 'PATCH') {
+        return { status: 200, body: buildSettings({ acknowledgedVersion: this.noticeAcknowledged ? 1 : 0 }) };
+      }
     }
     return super.handle(request);
   }
@@ -173,12 +179,18 @@ function mount(options: MountOptions = {}): Harness {
     <FinancialClarityProvider>
       <MutationStatusProvider>
         <QuickAddProvider store={store}>
-          <Routes>
-            <Route element={<Shell />}>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/spending" element={<SpendingPage />} />
-            </Route>
-          </Routes>
+          {/* The gate providers sit above the routes, as in App, so the Shell and the Agreement page share one gate. */}
+          <DataUseGateProvider>
+            <AgreementGateProvider>
+              <Routes>
+                <Route path="/agreement" element={<Agreement />} />
+                <Route element={<Shell />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/spending" element={<SpendingPage />} />
+                </Route>
+              </Routes>
+            </AgreementGateProvider>
+          </DataUseGateProvider>
         </QuickAddProvider>
       </MutationStatusProvider>
     </FinancialClarityProvider>,
@@ -514,7 +526,7 @@ describe('data-use gated state', () => {
   it('keeps the input and preview working, pauses saving with the reason, and sends nothing on Enter', async () => {
     const h = mount({ noticeAcknowledged: false });
     await ready(h);
-    await screen.findByRole('button', { name: /I have read this/ });
+    await screen.findByRole('link', { name: /Review and agree to the data-use notice/ });
     const reasons = await screen.findAllByText(/Review and acknowledge the data-use notice/);
     expect(input()).toBeEnabled();
     await h.user.type(input(), '120 coffee');
@@ -530,6 +542,28 @@ describe('data-use gated state', () => {
     // The shortcut is left to the browser while the notice is waiting to be read.
     expect(fireEvent.keyDown(document.body, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
     expect(dialog()).toBeNull();
+  });
+
+  it('saves again once the User agrees on the Agreement page, and sends only the notice acknowledgement before that', async () => {
+    const h = mount({ noticeAcknowledged: false });
+    await ready(h);
+    const link = await screen.findByRole('link', { name: /Review and agree to the data-use notice/ });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(h.net.to('POST', EXPENSES)).toHaveLength(0);
+
+    await h.user.click(link);
+    await h.user.click(await screen.findByRole('button', { name: 'I agree and continue' }));
+    // Agreeing returns to Home, where the gate is acknowledged and Quick Add saves.
+    await screen.findByRole('heading', { name: 'Home page' });
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Review and agree to the data-use notice/ })).toBeNull());
+    expect(h.net.to('PATCH', '/clarity/settings')).toHaveLength(1);
+    expect(h.net.to('POST', EXPENSES)).toHaveLength(0);
+
+    await h.user.type(input(), '120 coffee');
+    await h.user.keyboard('{Enter}');
+    await waitForPhase(h, 'saved');
+    expect(h.net.to('POST', EXPENSES)).toHaveLength(1);
+    expect(h.backend.expenses).toHaveLength(1);
   });
 });
 
